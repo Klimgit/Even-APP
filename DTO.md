@@ -62,12 +62,15 @@ erDiagram
 | email | TEXT UNIQUE NOT NULL | |
 | password_hash | TEXT NOT NULL | bcrypt |
 | display_name | TEXT | |
-| role | TEXT NOT NULL DEFAULT 'student' | `student` \| `teacher` \| `admin` |
+| role | TEXT NOT NULL DEFAULT 'student' | `student` \| `teacher` |
+| is_admin | BOOLEAN NOT NULL DEFAULT false | доступ к `/platform/*` |
 | created_at | TIMESTAMPTZ | DEFAULT now() |
 
 ```sql
-CHECK (role IN ('student', 'teacher', 'admin'))
+CHECK (role IN ('student', 'teacher'))
 ```
+
+`is_admin` не зависит от `role`: учитель с `is_admin = true` получает и `/teacher/*`, и `/platform/*` в одной сессии. Назначает существующий platform admin через API; при регистрации всегда `false`.
 
 ---
 
@@ -75,7 +78,7 @@ CHECK (role IN ('student', 'teacher', 'admin'))
 
 | Колонка | Тип | Описание |
 |---------|-----|----------|
-| teacher_id | UUID FK → users | role ∈ {teacher, admin} |
+| teacher_id | UUID FK → users | `role = teacher` |
 | student_id | UUID FK → users | role = student |
 | assigned_at | TIMESTAMPTZ | |
 | assigned_by | UUID FK → users | |
@@ -458,7 +461,12 @@ PK: `(user_id, lexeme_id)`
 
 ```typescript
 // POST /auth/register
-RegisterRequest { email: string; password: string; display_name?: string }
+RegisterRequest {
+  email: string
+  password: string
+  display_name?: string
+  role?: "student" | "teacher"  // default: "student"; is_admin нельзя задать при регистрации
+}
 AuthResponse { access_token: string; refresh_token: string; user: UserDTO }
 
 // POST /auth/login
@@ -471,8 +479,15 @@ UserDTO {
   id: string
   email: string
   display_name?: string
-  role: "student" | "teacher" | "admin"
+  role: "student" | "teacher"
+  is_admin: boolean
   created_at: string  // ISO8601
+}
+
+// PATCH /platform/users/{userId}
+UpdateUserRequest {
+  role?: "student" | "teacher"
+  is_admin?: boolean
 }
 ```
 

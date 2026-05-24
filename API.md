@@ -26,8 +26,8 @@ DTO описаны в [DTO.md](./DTO.md).
 |------------|-----|
 | `RequireAuth` | все кроме auth, public alphabet |
 | `RequireEnrollment(course_id)` | ученик читает уроки курса |
-| `RequireTeacher()` | `/teacher/*` — role ∈ {teacher, admin} |
-| `RequirePlatformAdmin()` | `/platform/*` — role = admin |
+| `RequireTeacher()` | `/teacher/*` — `role = teacher` |
+| `RequirePlatformAdmin()` | `/platform/*` — `is_admin = true` |
 | `RequireTeacherOfStudent(id)` | прогресс ученика |
 | `RequireCourseOwner()` | CRUD курса/урока |
 
@@ -37,18 +37,26 @@ DTO описаны в [DTO.md](./DTO.md).
 
 ### POST /auth/register
 
-Регистрация ученика (`role = student`).
+Регистрация ученика или учителя. `is_admin` всегда `false`.
 
 **Body:**
 ```json
 {
   "email": "student@example.com",
   "password": "secret123",
-  "display_name": "Аня"
+  "display_name": "Аня",
+  "role": "student"
 }
 ```
 
+Правила:
+- `role` опционально, default `"student"`.
+- Допустимые значения: `"student"` | `"teacher"`.
+- Поле `is_admin` в body → **400 Bad Request**.
+
 **Response 201:** `AuthResponse`
+
+JWT claims: `{ sub, role, is_admin }`.
 
 ---
 
@@ -591,16 +599,28 @@ Query: `?course_id=...`
 
 ---
 
-## Platform — пользователи и роли
+## Platform — пользователи
 
-### POST /platform/users/{userId}/role
+### PATCH /platform/users/{userId}
 
 **RequirePlatformAdmin**
 
-**Body:**
+Назначение platform admin, смена роли student ↔ teacher.
+
+**Body:** `UpdateUserRequest`
+```json
+{ "is_admin": true }
+```
+
 ```json
 { "role": "teacher" }
 ```
+
+Правила:
+- `{ "is_admin": true }` — выдать доступ к `/platform/*`.
+- `{ "is_admin": false }` — снять.
+- `{ "role": "student" | "teacher" }` — смена роли (поддержка).
+- Нельзя назначить себе `is_admin`, если текущий пользователь не platform admin.
 
 **Response 200:** `UserDTO`
 
@@ -608,9 +628,9 @@ Query: `?course_id=...`
 
 ### GET /platform/users
 
-Список пользователей (admin).
+**RequirePlatformAdmin**
 
-Query: `?role=teacher|student|admin`
+Query: `?role=student|teacher`, `?is_admin=true|false`, `?page=`, `?limit=`
 
 **Response 200:** `{ items: UserDTO[], total }`
 
@@ -916,14 +936,16 @@ Query: `?role=teacher|student|admin`
 
 ## Матрица доступа (кратко)
 
-| Endpoint group | student | teacher | admin |
-|----------------|---------|---------|-------|
+| Endpoint group | student | teacher | is_admin |
+|----------------|---------|---------|----------|
 | /auth/* | ✓ | ✓ | ✓ |
 | /courses, /lessons, /progress, /review, /dictionary | ✓ | ✓* | ✓* |
-| /teacher/* | | ✓ | ✓ |
-| /platform/* | | | ✓ |
+| /teacher/* | | ✓ | ✓** |
+| /platform/* | ✓*** | ✓*** | ✓ |
 
-\* если enrolled как ученик
+\* если enrolled на курс (любой role)  
+\** `/teacher/*` только при `role = teacher`; `is_admin` без `teacher` не даёт доступ  
+\*** `/platform/*` при `is_admin = true` (любой role)
 
 ---
 
