@@ -28,7 +28,7 @@ DTO описаны в [DTO.md](./DTO.md).
 | `RequireEnrollment(course_id)` | ученик читает уроки курса |
 | `RequireTeacher()` | `/teacher/*` — `role = teacher` |
 | `RequirePlatformAdmin()` | `/platform/*` — `is_admin = true` |
-| `RequireTeacherOfStudent(id)` | прогресс ученика |
+| `RequireTeacherOfStudent(id)` | прогресс ученика на курсе owner |
 | `RequireCourseOwner()` | CRUD курса/урока |
 
 ---
@@ -114,6 +114,26 @@ JWT claims: `{ sub, role, is_admin }`.
 
 ---
 
+## Public — ученик: запись на курс
+
+### POST /courses/join
+
+**RequireAuth** (любой role)
+
+Запись на Course по invite code. Единственный способ Enrollment в MVP.
+
+**Body:** `JoinCourseRequest`
+```json
+{ "invite_code": "EVNA1X7K" }
+```
+
+**Response 201:** `JoinCourseResponse`
+
+**Response 404:** код не найден  
+**Response 409:** уже записан на этот курс
+
+---
+
 ## Public — ученик: курсы и уроки
 
 ### GET /courses
@@ -157,11 +177,11 @@ JWT claims: `{ sub, role, is_admin }`.
 
 ### GET /lessons/{lessonId}/flow
 
-Playbook прохождения: блоки + review-injection.
+Playbook прохождения: блоки + review-injection. UI: **один item flow на экран**.
 
 **Response 200:** `LessonFlowDTO`
 
-**Логика injection:** после каждых 3 gradable-блоков — 1 item из `user_review_items` где `due_at <= now()`.
+**Логика injection:** после каждых 3 gradable-блоков — 1 due **Review item** (`sub_item_index`) из `user_review_items` где `due_at <= now()`.
 
 ---
 
@@ -185,10 +205,10 @@ Playbook прохождения: блоки + review-injection.
 **Response 200:** `BlockAttemptResponse`
 
 **Side effects:**
-- insert `block_attempts`
+- insert `block_attempts` (с `sub_item_index`)
 - upsert `user_block_progress`
-- при провале → upsert `user_review_items`
-- при успехе → update `user_vocabulary`
+- при провале → upsert `user_review_items` для `(lesson_block_id, sub_item_index)`
+- при успехе → upsert `user_vocabulary` (Personal dictionary)
 
 ---
 
@@ -210,7 +230,7 @@ Playbook прохождения: блоки + review-injection.
 
 ### GET /review
 
-Очередь проваленных блоков (`status = pending`).
+Очередь Review items (`status = pending`), привязка к `lesson_block_id` + `sub_item_index`.
 
 **Response 200:** `ReviewListResponse`
 
@@ -235,7 +255,7 @@ Query: `?status=pending|mastered`, `?due_only=true`
 
 ### GET /dictionary
 
-Личный словарь ученика.
+Personal dictionary — Lexeme после **успешных** gradable-ответов.
 
 **Response 200:** `VocabularyEntryDTO[]`
 
@@ -332,7 +352,9 @@ Query: `?course_id=...` (required)
 }
 ```
 
-**Response 201:** `CourseDTO`
+**Response 201:** `CourseDTO` (включая `invite_code`)
+
+При создании курса генерируется `invite_code` (8 символов, уникальный).
 
 ---
 
@@ -340,11 +362,13 @@ Query: `?course_id=...` (required)
 
 **RequireCourseOwner**
 
-**Response 200:** `CourseDTO`
+**Response 200:** `CourseDTO` (owner видит `invite_code`)
 
 ---
 
 ### PATCH /teacher/courses/{courseId}
+
+**RequireCourseOwner**
 
 **Body:** partial `CourseDTO`
 
@@ -391,6 +415,8 @@ Query: `?course_id=...` (required)
 
 ### GET /teacher/courses/{courseId}/lexicon/forms-coverage
 
+Отчёт по **всем LexemeForm** курса: introduced / exercised.
+
 **Response 200:** `FormsCoverageDTO[]`
 
 ---
@@ -431,7 +457,7 @@ Query: `?course_id=...` (required)
 **Body:** `{ title?, sort_order? }`
 
 **Response 200:** `LessonDTO`  
-**Response 409:** version conflict
+**Response 409:** version conflict — урок изменён другим редактором; клиент refetch и merge/retry. Lesson lock — Phase 2.
 
 ---
 
@@ -444,6 +470,8 @@ Query: `?course_id=...` (required)
 ### POST /teacher/lessons/{lessonId}/publish
 
 Draft → published. Запускает `LexiconIndexer`.
+
+**Republish** (урок уже `published`): `version++`, пересборка lexicon refs, **сброс всего прогресса** Student по этому уроку (`user_block_progress`, связанные `user_review_items`).
 
 **Response 200:** `LessonDTO`
 
@@ -528,54 +556,23 @@ Draft → published. Запускает `LexiconIndexer`.
 
 ---
 
-## Teacher — ученики
+## Teacher — ученики курса
 
-### GET /teacher/students
+### GET /teacher/courses/{courseId}/students
 
-Список учеников из `teacher_students`.
+**RequireCourseOwner**
 
-**Response 200:** `StudentDTO[]`
+Список Student, записанных на курс через invite code.
 
----
-
-### POST /teacher/students
-
-Привязать ученика по email.
-
-**Body:** `AssignStudentRequest`
-
-**Response 201:** `StudentDTO`
+**Response 200:** `EnrolledStudentDTO[]`
 
 ---
 
-### DELETE /teacher/students/{studentId}
+### GET /teacher/courses/{courseId}/students/{studentId}/progress
 
-**Response 204**
+**RequireCourseOwner**
 
----
-
-### POST /teacher/courses/{courseId}/enrollments
-
-**Body:** `EnrollmentRequest`
-
-**Response 201:**
-```json
-{ "user_id": "...", "course_id": "...", "status": "active" }
-```
-
----
-
-### DELETE /teacher/courses/{courseId}/enrollments/{userId}
-
-**Response 204**
-
----
-
-### GET /teacher/students/{studentId}/progress
-
-**RequireTeacherOfStudent**
-
-Query: `?course_id=...`
+Query: `?course_id=` (должен совпадать с `{courseId}`)
 
 **Response 200:** `StudentProgressDTO`
 
@@ -951,24 +948,26 @@ Query: `?role=student|teacher`, `?is_admin=true|false`, `?page=`, `?limit=`
 
 ## Примеры flow
 
-### Учитель создаёт урок
+### Ученик записывается на курс
 
 ```
+POST /courses/join  { "invite_code": "EVNA1X7K" }
+GET  /courses
+GET  /lessons/{id}/flow
+POST /progress/blocks/{id}/attempt  (repeat per gradable sub_item)
+```
+
+### Учитель создаёт курс и урок
+
+```
+POST /teacher/courses
 POST /teacher/courses/{id}/lessons
 POST /teacher/lessons/{id}/sections
 POST /teacher/lessons/{id}/blocks  { block_type: "vocabulary_set", config: {...} }
 POST /teacher/lessons/{id}/publish
 ```
 
-### Ученик проходит урок
-
-```
-GET  /courses
-GET  /lessons/{id}/flow
-POST /progress/blocks/{id}/attempt  (repeat per gradable block)
-```
-
-### Админ добавляет слово
+### Platform administrator добавляет слово
 
 ```
 POST /platform/media/presign

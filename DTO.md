@@ -7,8 +7,6 @@
 
 ```mermaid
 erDiagram
-    users ||--o{ teacher_students : teaches
-    users ||--o{ teacher_students : learns_from
     users ||--o{ course_enrollments : enrolled
     users ||--o{ courses : owns
     users ||--o{ user_block_progress : tracks
@@ -70,21 +68,7 @@ erDiagram
 CHECK (role IN ('student', 'teacher'))
 ```
 
-`is_admin` не зависит от `role`: учитель с `is_admin = true` получает и `/teacher/*`, и `/platform/*` в одной сессии. Назначает существующий platform admin через API; при регистрации всегда `false`.
-
----
-
-### teacher_students
-
-| Колонка | Тип | Описание |
-|---------|-----|----------|
-| teacher_id | UUID FK → users | `role = teacher` |
-| student_id | UUID FK → users | role = student |
-| assigned_at | TIMESTAMPTZ | |
-| assigned_by | UUID FK → users | |
-
-PK: `(teacher_id, student_id)`  
-CHECK: `teacher_id != student_id`
+`is_admin` не зависит от `role`. Первые platform administrators назначаются **seed в БД**; далее — `PATCH /platform/users/{id}`. При регистрации `is_admin` всегда `false`.
 
 ---
 
@@ -234,8 +218,11 @@ PK: `(lexeme_id, sound_id)`
 | title | TEXT NOT NULL | |
 | target_language_id | UUID FK → languages | чему учим |
 | ui_language_id | UUID FK → languages | язык UI / переводов |
-| owner_id | UUID FK → users | учитель-владелец |
+| owner_id | UUID FK → users | teacher (owner) |
+| invite_code | TEXT UNIQUE NOT NULL | код записи; генерируется при создании курса |
 | is_published | BOOLEAN DEFAULT false | |
+
+Один `invite_code` на курс: бессрочный, без лимита использований. Формат: 8 символов A–Z, 0–9 (например `EVNA1X7K`).
 
 ---
 
@@ -243,13 +230,15 @@ PK: `(lexeme_id, sound_id)`
 
 | Колонка | Тип | Описание |
 |---------|-----|----------|
-| user_id | UUID FK → users | |
+| user_id | UUID FK → users | student (или teacher, учится на курсе) |
 | course_id | UUID FK → courses | |
 | status | TEXT DEFAULT 'active' | `active` \| `completed` \| `suspended` |
 | enrolled_at | TIMESTAMPTZ | |
-| enrolled_by | UUID FK → users | |
+| invite_code_used | TEXT | код, по которому записались |
 
 PK: `(user_id, course_id)`
+
+Создаётся **только** через `POST /courses/join` с invite code. Ручная запись teacher по email — не MVP.
 
 ---
 
@@ -263,8 +252,8 @@ PK: `(user_id, course_id)`
 | sort_order | INT NOT NULL | |
 | version | INT DEFAULT 1 | optimistic locking |
 | status | TEXT DEFAULT 'draft' | `draft` \| `published` |
-| locked_by | UUID FK → users | v2 |
-| locked_at | TIMESTAMPTZ | v2 |
+| locked_by | UUID FK → users | Phase 2 (не MVP) |
+| locked_at | TIMESTAMPTZ | Phase 2 |
 | published_at | TIMESTAMPTZ | |
 | updated_at | TIMESTAMPTZ | |
 
@@ -278,7 +267,7 @@ PK: `(user_id, course_id)`
 | lesson_id | UUID FK → lessons ON DELETE CASCADE | |
 | title | TEXT NOT NULL | |
 | sort_order | INT NOT NULL | |
-| section_kind | TEXT DEFAULT 'content' | `content` \| `homework` \| `results` |
+| section_kind | TEXT DEFAULT 'content' | `content` \| `homework` \| `results` (homework — Phase 2) |
 
 ---
 
@@ -413,9 +402,22 @@ PK: `(user_id, lesson_block_id, sub_item_index)`
 
 PK: `(user_id, lexeme_id)`
 
+Lexeme добавляется **после успешного** gradable-ответа (автоматически, не вручную).
+
 ---
 
-## BlockType enum (42 типа)
+## Правила (бизнес-логика)
+
+| Событие | Эффект |
+|---------|--------|
+| Провал gradable (sub_item) | upsert `user_review_items` для `(lesson_block_id, sub_item_index)` |
+| Успех gradable | update `user_vocabulary`; Review item → `consecutive_ok++` |
+| Publish lesson | `status = published`, `version++`, `LexiconIndexer` |
+| Republish lesson | то же + **delete** `user_block_progress`, `user_review_items` (source lesson) для всех students |
+
+---
+
+## BlockType enum (42 типа, все — MVP)
 
 ### Изображения
 `images_stacked` | `images_carousel` | `gif_animation`
@@ -620,6 +622,17 @@ CourseDTO {
   ui_language_id: string
   owner_id: string
   is_published: boolean
+  invite_code?: string        // только owner (teacher)
+}
+
+// POST /courses/join
+JoinCourseRequest {
+  invite_code: string
+}
+
+JoinCourseResponse {
+  course_id: string
+  enrollment: { user_id: string; course_id: string; status: "active" }
 }
 
 CourseListItemDTO {
@@ -751,22 +764,15 @@ VocabularyEntryDTO {
 
 ---
 
-### Teacher — students
+### Teacher — enrolled students
 
 ```typescript
-StudentDTO {
+EnrolledStudentDTO {
   id: string
   email: string
   display_name?: string
-  enrolled_courses: CourseListItemDTO[]
-}
-
-AssignStudentRequest {
-  email: string             
-}
-
-EnrollmentRequest {
-  user_id: string
+  enrolled_at: string
+  status: "active" | "completed" | "suspended"
 }
 
 StudentProgressDTO {
