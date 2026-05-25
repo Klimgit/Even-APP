@@ -89,46 +89,7 @@ if (user.isPlatformAdmin) PlatformTab()  // хранилище, клавиату
 ProfileTab()
 ```
 
-## Go Backend — структура
+## Go Backend 
 
-```
-backend/
-├── cmd/api/main.go
-├── internal/
-│   ├── auth/              # JWT, RequireTeacher, RequirePlatformAdmin, RequireEnrollment
-│   ├── domain/
-│   ├── repository/
-│   ├── service/
-│   │   ├── review/        # ReviewScheduler, flow injection
-│   │   └── lexicon/       # LexiconIndexer
-│   ├── handler/
-│   │   ├── public/
-│   │   ├── teacher/
-│   │   └── platform/
-│   ├── blocks/            # BlockValidatorRegistry
-│   └── storage/           # S3 presign
-└── migrations/
-```
-
-## Публикация контента
-
-1. Учитель редактирует урок в статусе `draft`.
-2. `POST /teacher/lessons/{id}/publish` → `status = published`, `version++`.
-3. `LexiconIndexer` пересобирает `course_lexeme_usage` и `block_lexeme_refs`.
-4. Ученики видят только `published`; клиент refetch по `version` / ETag.
-
-## MVP — фазы
-
-Детальный scope, 17 BlockType и критерии приёмки: **[MVP.md](./MVP.md)**.
-
-**Фаза 1 (MVP):** auth, invite code, lexicon (platform), lesson editor + player для 17 block types, progress, review, урок «Знакомство».
-
-**Фаза 2:** оставшиеся 25 block types, офлайн-кэш, homework/essay, reading, grammar, тесты, ProgressMe-шаблоны «Слова и пропуски».
-
-## Связанные документы
-
-- [MVP.md](./MVP.md) — scope MVP и минимальный набор block types
-- [DTO.md](./DTO.md) — таблицы БД и DTO
-- [Even app.txt](./Even%20app.txt) — исходное ТЗ
-- [lesson_example.pdf](./lesson_example.pdf) — эталон урока
+Будем делать микросервисики с апи гейтвеем, за флаттер не шарю, но как минимум у него будет единая точка входа
 
