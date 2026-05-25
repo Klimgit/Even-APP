@@ -4,8 +4,6 @@ Base URL: `/api/v1`
 
 Формат: **JSON**. Auth: **Bearer JWT** (`Authorization: Bearer <access_token>`), кроме `/auth/`*.
 
-DTO описаны в [DTO.md](./DTO.md).
-
 ---
 
 ## Общие соглашения
@@ -987,5 +985,3 @@ POST /platform/lexemes/{id}/media
 ```
 
 ---
-
-См. также: [APP.md](./APP.md), [DTO.md](./DTO.md)
