@@ -1,130 +1,172 @@
-# Even App — общее устройство
-
-Приложение для изучения языков (первый курс — эвенский). Клиент на **Flutter**, бэкенд на **Go**, данные в **PostgreSQL**, медиа в **S3**. MVP — **только online**.
-
-Глоссарий доменных терминов: [CONTEXT.md](./CONTEXT.md).
-
-## Стек
-
-| Слой | Технология |
-|------|------------|
-| Клиент | Flutter (iOS, Android, Web, Desktop) |
-| API | Go, REST JSON |
-| БД | PostgreSQL 16 |
-| Медиа | S3 (AWS) |
-| Auth | JWT access + refresh, bcrypt |
-
-Офлайн-кэш (SQLite / Drift) — **Phase 2**, не MVP.
-
-## Пользователи и доступ
-
-Два независимых измерения:
-
-| | `users.role` | `users.is_admin` |
-|--|--|--|
-| **Назначение** | student или teacher | доступ к платформе (`/platform/*`) |
-| **При регистрации** | student (default) или teacher | всегда `false` |
-| **Кто меняет** | platform administrator | platform administrator или seed в БД |
-
-| Участник | role | is_admin | Возможности |
-|----------|------|----------|-------------|
-| **Student** | student | false | Уроки, прогресс, повторение, словарь |
-| **Teacher** | teacher | false | Курсы, редактор уроков, coverage лексики, invite-код |
-| **Platform administrator** | любой | true | Lexeme repository, алфавит, звуки, языки, пользователи |
-
-Teacher с `is_admin = true` видит **Преподавание** и **Платформа** в одной сессии, без перелогина.
-
-\* `TeacherTab` — `role = teacher`  
-\** `PlatformTab` — `is_admin = true`
-
-UI приложения в MVP — **всегда на русском**. Поле `courses.ui_language_id` — задел на будущее.
-
-## Запись на курс
-
-Единственный способ попасть на Course в MVP — **Invite code**:
-
-- Teacher создаёт Course → система генерирует один код (бессрочный, без лимита).
-- Student вводит код → создаётся `course_enrollment`.
-- Ручная запись по email **не поддерживается** в MVP.
-
-Teacher с `role = teacher` может одновременно быть enrolled на Course и учиться как Student.
-
-## Два уровня данных
-
-### Scope: язык (Lexeme repository)
-
-Принадлежит `language_id`. Создание и правка — **platform administrator** (`is_admin = true`).
-
-- Lexeme, LexemeForm, переводы
-- Медиа к словам (`lexeme_media`)
-- Алфавит / клавиатура (`alphabet_letters`)
-- Фонемы (`sounds`)
-
-Teacher при редактировании урока выбирает слова через **read-only picker**.
-
-### Scope: курс
-
-Принадлежит `course_id`. Ведёт **Teacher** (owner).
-
-- Уроки, разделы, блоки
-- Enrollments (через invite code)
-- `course_lexeme_usage` — какие Lexeme и **LexemeForm** introduced / exercised / referenced
-
-Курс **не копирует** слова — только ссылается на `lexeme_id` из хранилища.
-
-## Иерархия контента
-
-```
-Course
- └── Lesson (draft | published)
-      └── LessonSection          ← sidebar «Разделы»
-           └── LessonBlock       ← block_type + config (JSONB)
-```
-
-Контент и упражнения — **одна сущность** `lesson_blocks` (LessonBlock). Тип блока — enum из **42 значений** (все реализуются в MVP). См. [DTO.md](./DTO.md).
-
-## Прохождение урока (Lesson flow)
-
-- Student идёт по `GET /lessons/{id}/flow` — **один шаг на экран**.
-- После каждых **3 gradable-блоков** — injection одного due **Review item** (если есть).
-- Grable-блоки проверяются на сервере (`BlockValidatorRegistry`).
-
-## Блоки урока
-
-- Каждый `block_type` — свой editor, player и validator.
-- Config хранит ссылки на `lexeme_id`, `media_asset_id`, не дублирует медиа.
-- `section_kind = homework` и блоки essay — **Phase 2**, не MVP.
-
-## Клавиатура
-
-`CustomLanguageKeyboard` — буквы из `GET /languages/{code}/alphabet`. Для эвенского: `Ӈ`, `ӈ` и т.д.
-
-## Прогресс, словарь и повторение
-
-1. **Прогресс** — `user_block_progress` по gradable-блокам.
-2. **Провал** → `user_review_items` на уровне **sub_item** (не всего блока).
-3. **Успех** → Lexeme попадает в **Personal dictionary** (`user_vocabulary`).
-4. **Повторение:**
-   - вкладка «Повторение»;
-   - injection в Lesson flow (каждые 3 gradable).
-
-Интервалы Review: 4ч → 1д → 3д → 7д (по `failure_count`).
-
-## Публикация и republish
-
-1. Teacher редактирует Lesson в `draft`.
-2. `POST /teacher/lessons/{id}/publish` → `published`, `version++`, `LexiconIndexer`.
-3. **Republish** (повторный publish) → **сброс всего прогресса** Student по этому Lesson.
-4. Student видит только `published`; клиент refetch по `version` / ETag.
-5. Конфликты параллного редактирования — **409 version conflict** (`If-Match`); lesson lock — Phase 2.
-
-## MVP scope (кратко)
-
-| В MVP | Phase 2 |
-|-------|---------|
-| Все 42 BlockType | Офлайн-кэш |
-| Invite code enrollment | Homework / essay |
-| Forms coverage | Lesson lock |
-| Online-only | Локализация UI |
-
-См. также: [API.md](./API.md), [DTO.md](./DTO.md)
+# Even App — общее устройство
+
+Приложение для изучения языков (первый курс — эвенский). Клиент на **Flutter**, бэкенд на **Go**, данные в **PostgreSQL**, медиа в **S3**.
+
+## Стек
+
+
+| Слой          | Технология                                           |
+| ------------- | ---------------------------------------------------- |
+| Клиент        | Flutter (iOS, Android, Web, Desktop)                 |
+| Локальный кэш | Drift (SQLite) — офлайн-чтение опубликованных уроков |
+| API           | Go (chi/gin), REST JSON                              |
+| БД            | PostgreSQL 16                                        |
+| Медиа         | S3-совместимое хранилище (MinIO / AWS / Yandex)      |
+| Auth          | JWT access + refresh, bcrypt                         |
+
+
+## Структура монорепо
+
+```
+Even-APP/
+├── apps/mobile/       # Flutter
+├── backend/           # Go API
+├── migrations/        # SQL migrations
+├── shared/            # block_types.yaml → codegen Go + Dart
+├── APP.md             # этот файл
+├── API.md             # контракты REST API
+└── DTO.md             # модель данных, таблицы, DTO
+```
+
+## Роли пользователей
+
+
+| Роль        | `users.role` | Возможности                                                 |
+| ----------- | ------------ | ----------------------------------------------------------- |
+| **Ученик**  | `student`    | Уроки, прогресс, повторение, словарь                        |
+| **Учитель** | `teacher`    | Курсы, редактор уроков, ученики, coverage лексики курса     |
+| **Админ**   | `admin`      | Языковое хранилище, алфавит, звуки, языки, назначение ролей |
+
+
+Регистрация создаёт только `student`. Роли `teacher` / `admin` назначает админ платформы.
+
+## Архитектура (высокий уровень)
+
+```
+┌─────────────────────────────────────────────────────────┐
+│                    Flutter App                          │
+│  LessonTab │ ReviewTab │ DictionaryTab │ TeacherTab*   │
+│            │           │               │ PlatformTab** │
+└────────────────────────┬────────────────────────────────┘
+                         │ REST /api/v1
+┌────────────────────────▼────────────────────────────────┐
+│                     Go Backend                          │
+│  public │ teacher/* │ platform/* │ auth │ validators   │
+└─────────┬───────────────────────┬───────────────────────┘
+          │                       │
+    PostgreSQL                  S3 (+ CDN)
+```
+
+ `TeacherTab` — `role ∈ {teacher, admin}`  
+* `PlatformTab` — только `role = admin`
+
+## Два уровня данных
+
+### Scope: язык (общее хранилище)
+
+Принадлежит `language_id`. Наполняет **админ**.
+
+- Лексемы, формы, переводы
+- Картинки и аудио к словам (`lexeme_media`)
+- Алфавит / клавиатура (`alphabet_letters`)
+- Фонемы (`sounds`)
+
+Используется **всеми курсами** этого языка. Загрузил один раз — переиспользуй везде.
+
+### Scope: курс
+
+Принадлежит `course_id`. Ведёт **учитель**.
+
+- Уроки, разделы, блоки
+- Запись учеников (`course_enrollments`)
+- Учёт лексики (`course_lexeme_usage`) — что выдано, где использовано, какие формы тренировались
+
+Курс **не копирует** слова — только ссылается на `lexeme_id` из хранилища.
+
+## Иерархия контента
+
+```
+Course
+ └── Lesson (draft | published)
+      └── LessonSection          ← sidebar «Разделы»
+           └── LessonBlock       ← block_type + config (JSONB)
+```
+
+Контент и упражнения — **одна сущность** `lesson_blocks`. Тип блока — фиксированный enum из **42 значений** (см. DTO.md / `shared/block_types.yaml`).
+
+## Блоки урока
+
+- Каждый `block_type` — свой виджет редактора, player и валидатор на бэкенде.
+- Grable-блоки проверяются сервером (`BlockValidatorRegistry`).
+- Config хранит ссылки на `lexeme_id`, `media_asset_id`, не дублирует медиа.
+
+Категории типов: Изображения, Аудио/видео, Слова и пропуски, Базовые задания, Аудирование, Чтение, Грамматика, Тесты, Расставить, Текст, Прочее.
+
+## Клавиатура
+
+Для блоков с вводом текста на целевом языке — `CustomLanguageKeyboard`, буквы из `alphabet_letters` API. Для эвенского: `Ӈ`, `ӈ` и т.д.
+
+## Прогресс и повторение
+
+1. **Прогресс** — `user_block_progress` по каждому gradable-блоку.
+2. **Провал** → `user_review_items` (очередь повторения).
+3. **Два канала повторения:**
+  - вкладка «Повторение» (явно);
+  - автоподстановка в урок через `GET /lessons/{id}/flow` (playbook с `review_injection`).
+
+Интервалы автоподстановки: 4ч → 1д → 3д → 7д (по `failure_count`).
+
+## Flutter — вкладки
+
+```dart
+LessonTab()       // все роли (если enrolled)
+ReviewTab()       // все
+DictionaryTab()   // все
+if (user.isTeacher)  TeacherTab()   // курсы, редактор, ученики
+if (user.isPlatformAdmin) PlatformTab()  // хранилище, клавиатура, звуки
+ProfileTab()
+```
+
+## Go Backend — структура
+
+```
+backend/
+├── cmd/api/main.go
+├── internal/
+│   ├── auth/              # JWT, RequireTeacher, RequirePlatformAdmin, RequireEnrollment
+│   ├── domain/
+│   ├── repository/
+│   ├── service/
+│   │   ├── review/        # ReviewScheduler, flow injection
+│   │   └── lexicon/       # LexiconIndexer
+│   ├── handler/
+│   │   ├── public/
+│   │   ├── teacher/
+│   │   └── platform/
+│   ├── blocks/            # BlockValidatorRegistry
+│   └── storage/           # S3 presign
+└── migrations/
+```
+
+## Публикация контента
+
+1. Учитель редактирует урок в статусе `draft`.
+2. `POST /teacher/lessons/{id}/publish` → `status = published`, `version++`.
+3. `LexiconIndexer` пересобирает `course_lexeme_usage` и `block_lexeme_refs`.
+4. Ученики видят только `published`; клиент refetch по `version` / ETag.
+
+## MVP — фазы
+
+Детальный scope, 17 BlockType и критерии приёмки: **[MVP.md](./MVP.md)**.
+
+**Фаза 1 (MVP):** auth, invite code, lexicon (platform), lesson editor + player для 17 block types, progress, review, урок «Знакомство».
+
+**Фаза 2:** оставшиеся 25 block types, офлайн-кэш, homework/essay, reading, grammar, тесты, ProgressMe-шаблоны «Слова и пропуски».
+
+## Связанные документы
+
+- [MVP.md](./MVP.md) — scope MVP и минимальный набор block types
+- [DTO.md](./DTO.md) — таблицы БД и DTO
+- [Even app.txt](./Even%20app.txt) — исходное ТЗ
+- [lesson_example.pdf](./lesson_example.pdf) — эталон урока
+

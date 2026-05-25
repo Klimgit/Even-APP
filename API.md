@@ -2,7 +2,7 @@
 
 Base URL: `/api/v1`
 
-Формат: **JSON**. Auth: **Bearer JWT** (`Authorization: Bearer <access_token>`), кроме `/auth/*`.
+Формат: **JSON**. Auth: **Bearer JWT** (`Authorization: Bearer <access_token>`), кроме `/auth/`*.
 
 DTO описаны в [DTO.md](./DTO.md).
 
@@ -10,26 +10,30 @@ DTO описаны в [DTO.md](./DTO.md).
 
 ## Общие соглашения
 
-| Правило | Значение |
-|---------|----------|
-| ID | UUID string |
-| Даты | ISO 8601 UTC |
-| Пагинация | `?page=1&limit=20` → `{ items, total, page, limit }` |
-| Поиск | `?q=ашат` |
-| Сортировка | `?sort=lemma&order=asc` |
-| Ошибки | `{ error, message, details? }` |
-| Версионирование урока | header `If-Match: <version>` при update |
+
+| Правило               | Значение                                             |
+| --------------------- | ---------------------------------------------------- |
+| ID                    | UUID string                                          |
+| Даты                  | ISO 8601 UTC                                         |
+| Пагинация             | `?page=1&limit=20` → `{ items, total, page, limit }` |
+| Поиск                 | `?q=ашат`                                            |
+| Сортировка            | `?sort=lemma&order=asc`                              |
+| Ошибки                | `{ error, message, details? }`                       |
+| Версионирование урока | header `If-Match: <version>` при update              |
+
 
 ### Middleware
 
-| Middleware | Где |
-|------------|-----|
-| `RequireAuth` | все кроме auth, public alphabet |
-| `RequireEnrollment(course_id)` | ученик читает уроки курса |
-| `RequireTeacher()` | `/teacher/*` — `role = teacher` |
-| `RequirePlatformAdmin()` | `/platform/*` — `is_admin = true` |
-| `RequireTeacherOfStudent(id)` | прогресс ученика на курсе owner |
-| `RequireCourseOwner()` | CRUD курса/урока |
+
+| Middleware                     | Где                                    |
+| ------------------------------ | -------------------------------------- |
+| `RequireAuth`                  | все кроме auth, public alphabet        |
+| `RequireEnrollment(course_id)` | ученик читает уроки курса              |
+| `RequireTeacher()`             | `/teacher/*` — role ∈ {teacher, admin} |
+| `RequirePlatformAdmin()`       | `/platform/*` — role = admin           |
+| `RequireTeacherOfStudent(id)`  | прогресс ученика                       |
+| `RequireCourseOwner()`         | CRUD курса/урока                       |
+
 
 ---
 
@@ -37,32 +41,26 @@ DTO описаны в [DTO.md](./DTO.md).
 
 ### POST /auth/register
 
-Регистрация ученика или учителя. `is_admin` всегда `false`.
+Регистрация ученика (`role = student`).
 
 **Body:**
+
 ```json
 {
   "email": "student@example.com",
   "password": "secret123",
-  "display_name": "Аня",
-  "role": "student"
+  "display_name": "Аня"
 }
 ```
 
-Правила:
-- `role` опционально, default `"student"`.
-- Допустимые значения: `"student"` | `"teacher"`.
-- Поле `is_admin` в body → **400 Bad Request**.
-
 **Response 201:** `AuthResponse`
-
-JWT claims: `{ sub, role, is_admin }`.
 
 ---
 
 ### POST /auth/login
 
 **Body:**
+
 ```json
 { "email": "...", "password": "..." }
 ```
@@ -74,6 +72,7 @@ JWT claims: `{ sub, role, is_admin }`.
 ### POST /auth/refresh
 
 **Body:**
+
 ```json
 { "refresh_token": "..." }
 ```
@@ -114,26 +113,6 @@ JWT claims: `{ sub, role, is_admin }`.
 
 ---
 
-## Public — ученик: запись на курс
-
-### POST /courses/join
-
-**RequireAuth** (любой role)
-
-Запись на Course по invite code. Единственный способ Enrollment в MVP.
-
-**Body:** `JoinCourseRequest`
-```json
-{ "invite_code": "EVNA1X7K" }
-```
-
-**Response 201:** `JoinCourseResponse`
-
-**Response 404:** код не найден  
-**Response 409:** уже записан на этот курс
-
----
-
 ## Public — ученик: курсы и уроки
 
 ### GET /courses
@@ -157,6 +136,7 @@ JWT claims: `{ sub, role, is_admin }`.
 Только `status = published`.
 
 **Response 200:**
+
 ```json
 {
   "items": [
@@ -177,11 +157,11 @@ JWT claims: `{ sub, role, is_admin }`.
 
 ### GET /lessons/{lessonId}/flow
 
-Playbook прохождения: блоки + review-injection. UI: **один item flow на экран**.
+Playbook прохождения: блоки + review-injection.
 
 **Response 200:** `LessonFlowDTO`
 
-**Логика injection:** после каждых 3 gradable-блоков — 1 due **Review item** (`sub_item_index`) из `user_review_items` где `due_at <= now()`.
+**Логика injection:** после каждых 3 gradable-блоков — 1 item из `user_review_items` где `due_at <= now()`.
 
 ---
 
@@ -194,6 +174,7 @@ Playbook прохождения: блоки + review-injection. UI: **один i
 **RequireEnrollment**
 
 **Body:** `BlockAttemptRequest`
+
 ```json
 {
   "sub_item_index": 0,
@@ -205,10 +186,11 @@ Playbook прохождения: блоки + review-injection. UI: **один i
 **Response 200:** `BlockAttemptResponse`
 
 **Side effects:**
-- insert `block_attempts` (с `sub_item_index`)
+
+- insert `block_attempts`
 - upsert `user_block_progress`
-- при провале → upsert `user_review_items` для `(lesson_block_id, sub_item_index)`
-- при успехе → upsert `user_vocabulary` (Personal dictionary)
+- при провале → upsert `user_review_items`
+- при успехе → update `user_vocabulary`
 
 ---
 
@@ -217,6 +199,7 @@ Playbook прохождения: блоки + review-injection. UI: **один i
 Прогресс по блокам урока.
 
 **Response 200:**
+
 ```json
 {
   "lesson_id": "...",
@@ -230,7 +213,7 @@ Playbook прохождения: блоки + review-injection. UI: **один i
 
 ### GET /review
 
-Очередь Review items (`status = pending`), привязка к `lesson_block_id` + `sub_item_index`.
+Очередь проваленных блоков (`status = pending`).
 
 **Response 200:** `ReviewListResponse`
 
@@ -243,6 +226,7 @@ Query: `?status=pending|mastered`, `?due_only=true`
 Опционально: создать сессию повторения (фильтр due/all).
 
 **Body:**
+
 ```json
 { "due_only": true, "limit": 20 }
 ```
@@ -255,7 +239,7 @@ Query: `?status=pending|mastered`, `?due_only=true`
 
 ### GET /dictionary
 
-Personal dictionary — Lexeme после **успешных** gradable-ответов.
+Личный словарь ученика.
 
 **Response 200:** `VocabularyEntryDTO[]`
 
@@ -314,6 +298,7 @@ Query: `?q=ашат`, `?page=1&limit=20`
 Query: `?course_id=...` (required)
 
 **Response 200:**
+
 ```json
 {
   "lexeme_id": "...",
@@ -344,6 +329,7 @@ Query: `?course_id=...` (required)
 ### POST /teacher/courses
 
 **Body:**
+
 ```json
 {
   "title": "Эвенский A1",
@@ -352,9 +338,7 @@ Query: `?course_id=...` (required)
 }
 ```
 
-**Response 201:** `CourseDTO` (включая `invite_code`)
-
-При создании курса генерируется `invite_code` (8 символов, уникальный).
+**Response 201:** `CourseDTO`
 
 ---
 
@@ -362,13 +346,11 @@ Query: `?course_id=...` (required)
 
 **RequireCourseOwner**
 
-**Response 200:** `CourseDTO` (owner видит `invite_code`)
+**Response 200:** `CourseDTO`
 
 ---
 
 ### PATCH /teacher/courses/{courseId}
-
-**RequireCourseOwner**
 
 **Body:** partial `CourseDTO`
 
@@ -397,6 +379,7 @@ Query: `?course_id=...` (required)
 Сводка лексики курса.
 
 **Response 200:**
+
 ```json
 {
   "introduced_count": 42,
@@ -415,8 +398,6 @@ Query: `?course_id=...` (required)
 
 ### GET /teacher/courses/{courseId}/lexicon/forms-coverage
 
-Отчёт по **всем LexemeForm** курса: introduced / exercised.
-
 **Response 200:** `FormsCoverageDTO[]`
 
 ---
@@ -434,6 +415,7 @@ Query: `?course_id=...` (required)
 ### POST /teacher/courses/{courseId}/lessons
 
 **Body:**
+
 ```json
 { "title": "Знакомство", "sort_order": 1 }
 ```
@@ -457,21 +439,17 @@ Query: `?course_id=...` (required)
 **Body:** `{ title?, sort_order? }`
 
 **Response 200:** `LessonDTO`  
-**Response 409:** version conflict — урок изменён другим редактором; клиент refetch и merge/retry. Lesson lock — Phase 2.
+**Response 409:** version conflict
 
 ---
 
 ### DELETE /teacher/lessons/{lessonId}
-
-**Response 204**
 
 ---
 
 ### POST /teacher/lessons/{lessonId}/publish
 
 Draft → published. Запускает `LexiconIndexer`.
-
-**Republish** (урок уже `published`): `version++`, пересборка lexicon refs, **сброс всего прогресса** Student по этому уроку (`user_block_progress`, связанные `user_review_items`).
 
 **Response 200:** `LessonDTO`
 
@@ -482,6 +460,7 @@ Draft → published. Запускает `LexiconIndexer`.
 ### POST /teacher/lessons/{lessonId}/sections
 
 **Body:**
+
 ```json
 { "title": "Знакомство. Слова", "sort_order": 1, "section_kind": "content" }
 ```
@@ -507,6 +486,7 @@ Draft → published. Запускает `LexiconIndexer`.
 ### POST /teacher/lessons/{lessonId}/sections/reorder
 
 **Body:**
+
 ```json
 { "section_ids": ["uuid1", "uuid2", "..."] }
 ```
@@ -548,6 +528,7 @@ Draft → published. Запускает `LexiconIndexer`.
 ### POST /teacher/lessons/{lessonId}/blocks/reorder
 
 **Body:**
+
 ```json
 { "block_ids": ["...", "..."] }
 ```
@@ -556,23 +537,55 @@ Draft → published. Запускает `LexiconIndexer`.
 
 ---
 
-## Teacher — ученики курса
+## Teacher — ученики
 
-### GET /teacher/courses/{courseId}/students
+### GET /teacher/students
 
-**RequireCourseOwner**
+Список учеников из `teacher_students`.
 
-Список Student, записанных на курс через invite code.
-
-**Response 200:** `EnrolledStudentDTO[]`
+**Response 200:** `StudentDTO[]`
 
 ---
 
-### GET /teacher/courses/{courseId}/students/{studentId}/progress
+### POST /teacher/students
 
-**RequireCourseOwner**
+Привязать ученика по email.
 
-Query: `?course_id=` (должен совпадать с `{courseId}`)
+**Body:** `AssignStudentRequest`
+
+**Response 201:** `StudentDTO`
+
+---
+
+### DELETE /teacher/students/{studentId}
+
+**Response 204**
+
+---
+
+### POST /teacher/courses/{courseId}/enrollments
+
+**Body:** `EnrollmentRequest`
+
+**Response 201:**
+
+```json
+{ "user_id": "...", "course_id": "...", "status": "active" }
+```
+
+---
+
+### DELETE /teacher/courses/{courseId}/enrollments/{userId}
+
+**Response 204**
+
+---
+
+### GET /teacher/students/{studentId}/progress
+
+**RequireTeacherOfStudent**
+
+Query: `?course_id=...`
 
 **Response 200:** `StudentProgressDTO`
 
@@ -596,28 +609,17 @@ Query: `?course_id=` (должен совпадать с `{courseId}`)
 
 ---
 
-## Platform — пользователи
+## Platform — пользователи и роли
 
-### PATCH /platform/users/{userId}
+### POST /platform/users/{userId}/role
 
 **RequirePlatformAdmin**
 
-Назначение platform admin, смена роли student ↔ teacher.
-
-**Body:** `UpdateUserRequest`
-```json
-{ "is_admin": true }
-```
+**Body:**
 
 ```json
 { "role": "teacher" }
 ```
-
-Правила:
-- `{ "is_admin": true }` — выдать доступ к `/platform/*`.
-- `{ "is_admin": false }` — снять.
-- `{ "role": "student" | "teacher" }` — смена роли (поддержка).
-- Нельзя назначить себе `is_admin`, если текущий пользователь не platform admin.
 
 **Response 200:** `UserDTO`
 
@@ -625,9 +627,9 @@ Query: `?course_id=` (должен совпадать с `{courseId}`)
 
 ### GET /platform/users
 
-**RequirePlatformAdmin**
+Список пользователей (admin).
 
-Query: `?role=student|teacher`, `?is_admin=true|false`, `?page=`, `?limit=`
+Query: `?role=teacher|student|admin`
 
 **Response 200:** `{ items: UserDTO[], total }`
 
@@ -644,6 +646,7 @@ Query: `?role=student|teacher`, `?is_admin=true|false`, `?page=`, `?limit=`
 ### POST /platform/languages
 
 **Body:**
+
 ```json
 {
   "code": "evn",
@@ -674,6 +677,7 @@ Query: `?role=student|teacher`, `?is_admin=true|false`, `?page=`, `?limit=`
 ### POST /platform/languages/{code}/alphabet
 
 **Body:**
+
 ```json
 {
   "character": "ӈ",
@@ -718,6 +722,7 @@ Query: `?role=student|teacher`, `?is_admin=true|false`, `?page=`, `?limit=`
 ### POST /platform/languages/{code}/sounds
 
 **Body:**
+
 ```json
 {
   "ipa": "/ŋ/",
@@ -799,6 +804,7 @@ Query: `?role=student|teacher`, `?is_admin=true|false`, `?page=`, `?limit=`
 ### POST /platform/lexemes/{lexemeId}/forms
 
 **Body:**
+
 ```json
 { "form": "бишни", "tags": { "person": "3sg" } }
 ```
@@ -822,6 +828,7 @@ Query: `?role=student|teacher`, `?is_admin=true|false`, `?page=`, `?limit=`
 ### POST /platform/lexemes/{lexemeId}/translations
 
 **Body:**
+
 ```json
 { "target_language_id": "...", "text": "девочка" }
 ```
@@ -841,6 +848,7 @@ Query: `?role=student|teacher`, `?is_admin=true|false`, `?page=`, `?limit=`
 Привязать медиа к лексеме.
 
 **Body:**
+
 ```json
 {
   "media_asset_id": "...",
@@ -896,6 +904,7 @@ Query: `?role=student|teacher`, `?is_admin=true|false`, `?page=`, `?limit=`
 ### POST /platform/languages/{code}/grammar-topics
 
 **Body:**
+
 ```json
 {
   "title": "Спряжение биш-",
@@ -922,52 +931,52 @@ Query: `?role=student|teacher`, `?is_admin=true|false`, `?page=`, `?limit=`
 
 ## Webhooks / будущее (v2)
 
-| Endpoint | Назначение |
-|----------|------------|
-| `POST /teacher/lessons/{id}/lock` | блокировка при редактировании |
-| `DELETE /teacher/lessons/{id}/lock` | снять блокировку |
-| `GET /health` | healthcheck |
-| `GET /ready` | readiness (DB, S3) |
+
+| Endpoint                            | Назначение                    |
+| ----------------------------------- | ----------------------------- |
+| `POST /teacher/lessons/{id}/lock`   | блокировка при редактировании |
+| `DELETE /teacher/lessons/{id}/lock` | снять блокировку              |
+| `GET /health`                       | healthcheck                   |
+| `GET /ready`                        | readiness (DB, S3)            |
+
 
 ---
 
 ## Матрица доступа (кратко)
 
-| Endpoint group | student | teacher | is_admin |
-|----------------|---------|---------|----------|
-| /auth/* | ✓ | ✓ | ✓ |
-| /courses, /lessons, /progress, /review, /dictionary | ✓ | ✓* | ✓* |
-| /teacher/* | | ✓ | ✓** |
-| /platform/* | ✓*** | ✓*** | ✓ |
 
-\* если enrolled на курс (любой role)  
-\** `/teacher/*` только при `role = teacher`; `is_admin` без `teacher` не даёт доступ  
-\*** `/platform/*` при `is_admin = true` (любой role)
+| Endpoint group                                      | student | teacher | admin |
+| --------------------------------------------------- | ------- | ------- | ----- |
+| /auth/*                                             | ✓       | ✓       | ✓     |
+| /courses, /lessons, /progress, /review, /dictionary | ✓       | ✓*      | ✓*    |
+| /teacher/*                                          |         | ✓       | ✓     |
+| /platform/*                                         |         |         | ✓     |
+
+
+ если enrolled как ученик
 
 ---
 
 ## Примеры flow
 
-### Ученик записывается на курс
+### Учитель создаёт урок
 
 ```
-POST /courses/join  { "invite_code": "EVNA1X7K" }
-GET  /courses
-GET  /lessons/{id}/flow
-POST /progress/blocks/{id}/attempt  (repeat per gradable sub_item)
-```
-
-### Учитель создаёт курс и урок
-
-```
-POST /teacher/courses
 POST /teacher/courses/{id}/lessons
 POST /teacher/lessons/{id}/sections
 POST /teacher/lessons/{id}/blocks  { block_type: "vocabulary_set", config: {...} }
 POST /teacher/lessons/{id}/publish
 ```
 
-### Platform administrator добавляет слово
+### Ученик проходит урок
+
+```
+GET  /courses
+GET  /lessons/{id}/flow
+POST /progress/blocks/{id}/attempt  (repeat per gradable block)
+```
+
+### Админ добавляет слово
 
 ```
 POST /platform/media/presign
