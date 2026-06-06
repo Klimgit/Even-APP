@@ -4,7 +4,7 @@ Base URL: `/api/v1`
 
 Формат: **JSON**. Auth: **Bearer JWT** (`Authorization: Bearer <access_token>`), кроме `/auth/*` и public alphabet.
 
-См. также [MVP.md](./MVP.md). Ниже — полная спека; секции помечены **MVP** / **Phase 2**.
+См. также [MVP.md](./MVP.md), [API_STATUS.md](./API_STATUS.md) (что реализовано vs MVP). Ниже — полная спека; секции помечены **MVP** / **Phase 2**.
 
 ---
 
