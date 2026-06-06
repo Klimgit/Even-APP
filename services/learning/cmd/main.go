@@ -36,11 +36,13 @@ func main() {
 	ready := func(ctx context.Context) error { return pool.Ping(ctx) }
 
 	if err := server.Run(ctx, server.Options{
-		ServiceName: "learning",
-		Port:        cfg.Base.HTTPPort,
-		Logger:      logr,
-		Ready:       ready,
-		OpenAPISpec: apiv1.OpenAPISpec,
+		ServiceName:      "learning",
+		Port:             cfg.Base.HTTPPort,
+		Logger:           logr,
+		Ready:            ready,
+		OpenAPISpec:      apiv1.OpenAPISpec,
+		ExtraHealthPaths: []string{"/api/v1/courses/health"},
+		ExtraReadyPaths:  []string{"/api/v1/courses/ready"},
 	}); err != nil {
 		logr.Error("server stopped", "err", err)
 		os.Exit(1)

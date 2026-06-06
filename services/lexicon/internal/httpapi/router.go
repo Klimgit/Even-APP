@@ -14,8 +14,8 @@ import (
 
 func NewMux(log *slog.Logger, pool *pgxpool.Pool, s3c *libs3.Client, bucket string, userQuotaBytes int64, jwtMgr *libjwt.Manager, openAPI []byte, ready server.ReadyChecker) http.Handler {
 	mux := http.NewServeMux()
-	server.RegisterHealth(mux, "lexicon")
-	server.RegisterReady(mux, ready)
+	server.RegisterHealth(mux, "lexicon", "/api/v1/platform/health")
+	server.RegisterReady(mux, ready, "/api/v1/platform/ready")
 	if len(openAPI) > 0 {
 		spec := openAPI
 		mux.HandleFunc("GET /api/v1/openapi.yaml", func(w http.ResponseWriter, _ *http.Request) {

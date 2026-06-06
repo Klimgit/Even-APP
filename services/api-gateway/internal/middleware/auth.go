@@ -33,6 +33,9 @@ func IsPublic(r *http.Request) bool {
 			"/api/v1/platform/demo/public":
 			return true
 		}
+		if isPublicUpstreamSystemGET(path) {
+			return true
+		}
 		return isPublicLanguageGET(path)
 	case http.MethodPost:
 		switch path {
@@ -41,6 +44,18 @@ func IsPublic(r *http.Request) bool {
 		}
 	}
 	return false
+}
+
+// isPublicUpstreamSystemGET matches proxied service health/ready, e.g. /api/v1/auth/health.
+func isPublicUpstreamSystemGET(path string) bool {
+	if !strings.HasPrefix(path, "/api/v1/") {
+		return false
+	}
+	rest := strings.TrimPrefix(path, "/api/v1/")
+	if rest == "health" || rest == "ready" {
+		return false // gateway's own routes
+	}
+	return strings.HasSuffix(path, "/health") || strings.HasSuffix(path, "/ready")
 }
 
 func isPublicLanguageGET(path string) bool {

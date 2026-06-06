@@ -23,12 +23,14 @@ type ReadyChecker func(ctx context.Context) error
 
 // Options configures the HTTP server.
 type Options struct {
-	ServiceName string
-	Port        int
-	Logger      *slog.Logger
-	Ready       ReadyChecker
-	OpenAPISpec []byte
-	Handler     http.Handler // if set, used instead of built-in mux
+	ServiceName      string
+	Port             int
+	Logger           *slog.Logger
+	Ready            ReadyChecker
+	OpenAPISpec      []byte
+	Handler          http.Handler // if set, used instead of built-in mux
+	ExtraHealthPaths []string     // gateway-prefixed aliases, e.g. /api/v1/auth/health
+	ExtraReadyPaths  []string
 }
 
 // Run starts the HTTP server and blocks until ctx is cancelled, then shuts down gracefully.
@@ -68,19 +70,21 @@ func Run(ctx context.Context, opts Options) error {
 	}
 }
 
-// RegisterHealth mounts GET /health and GET /api/v1/health.
-func RegisterHealth(mux *http.ServeMux, serviceName string) {
+// RegisterHealth mounts GET /health, GET /api/v1/health, and optional extraPaths.
+func RegisterHealth(mux *http.ServeMux, serviceName string, extraPaths ...string) {
 	writeHealth := func(w http.ResponseWriter) {
 		w.Header().Set("Content-Type", "application/json")
 		_ = json.NewEncoder(w).Encode(HealthResponse{Status: "ok", Service: serviceName})
 	}
-	mux.HandleFunc("GET /health", func(w http.ResponseWriter, _ *http.Request) { writeHealth(w) })
-	mux.HandleFunc("GET /api/v1/health", func(w http.ResponseWriter, _ *http.Request) { writeHealth(w) })
+	paths := append([]string{"/health", "/api/v1/health"}, extraPaths...)
+	for _, p := range paths {
+		mux.HandleFunc("GET "+p, func(w http.ResponseWriter, _ *http.Request) { writeHealth(w) })
+	}
 }
 
-// RegisterReady mounts GET /api/v1/ready. checker nil means always ready.
-func RegisterReady(mux *http.ServeMux, checker ReadyChecker) {
-	mux.HandleFunc("GET /api/v1/ready", func(w http.ResponseWriter, r *http.Request) {
+// RegisterReady mounts GET /api/v1/ready and optional extraPaths. checker nil means always ready.
+func RegisterReady(mux *http.ServeMux, checker ReadyChecker, extraPaths ...string) {
+	readyHandler := func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
 		if checker != nil {
 			if err := checker(r.Context()); err != nil {
@@ -93,12 +97,16 @@ func RegisterReady(mux *http.ServeMux, checker ReadyChecker) {
 			}
 		}
 		_, _ = w.Write([]byte(`{"status":"ready"}`))
-	})
+	}
+	paths := append([]string{"/api/v1/ready"}, extraPaths...)
+	for _, p := range paths {
+		mux.HandleFunc("GET "+p, readyHandler)
+	}
 }
 
 func registerSystemRoutes(mux *http.ServeMux, opts Options) {
-	RegisterHealth(mux, opts.ServiceName)
-	RegisterReady(mux, opts.Ready)
+	RegisterHealth(mux, opts.ServiceName, opts.ExtraHealthPaths...)
+	RegisterReady(mux, opts.Ready, opts.ExtraReadyPaths...)
 
 	if len(opts.OpenAPISpec) > 0 {
 		spec := opts.OpenAPISpec
