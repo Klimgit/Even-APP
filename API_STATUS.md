@@ -475,7 +475,7 @@ Side effects attempt: `block_attempts`, `user_block_progress`, `user_review_item
 | `/api/v1/courses/`, `/lessons/`, `/progress/`, `/review/`, `/dictionary/` | learning |
 | `/languages/` | lexicon |
 
-JWT на gateway пока **не** проверяется — только на upstream-сервисах.
+Gateway проверяет JWT на protected маршрутах; public — см. `services/api-gateway/internal/middleware/auth.go`. Upstream-сервисы дублируют проверку на своих handlers.
 
 ---
 

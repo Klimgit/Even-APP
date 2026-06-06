@@ -12,7 +12,9 @@ import (
 	"github.com/even-app/even-app/libs/core/logger"
 	"github.com/even-app/even-app/libs/http/middleware"
 	"github.com/even-app/even-app/libs/http/server"
+	libjwt "github.com/even-app/even-app/libs/jwt"
 	"github.com/even-app/even-app/services/api-gateway/internal/config"
+	gwmw "github.com/even-app/even-app/services/api-gateway/internal/middleware"
 	"github.com/even-app/even-app/services/api-gateway/internal/proxy"
 	gwready "github.com/even-app/even-app/services/api-gateway/internal/ready"
 	"github.com/even-app/even-app/services/api-gateway/internal/swagger"
@@ -84,7 +86,10 @@ func main() {
 		return gwready.CheckBackends(ctx, backends)
 	})
 
-	handler := middleware.CORS(middleware.Recovery(logr, middleware.Logging(logr, mux)))
+	jwtMgr := libjwt.NewManager(cfg.JWTSecret, 0)
+	handler := middleware.CORS(middleware.Recovery(logr, middleware.Logging(logr,
+		gwmw.RequireJWT(jwtMgr)(mux),
+	)))
 
 	if err := server.Run(ctx, server.Options{
 		ServiceName: "api-gateway",

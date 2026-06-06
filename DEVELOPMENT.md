@@ -1,9 +1,5 @@
 # Even-APP — инструкция по разработке
 
-Руководство для backend-разработки: локальный запуск, сборка, миграции, логи, отладка.
-
-Связанные документы: [BACKEND.md](BACKEND.md) (архитектура скелета), [API.md](API.md), [API_STATUS.md](API_STATUS.md) (реализовано / MVP backlog), [DTO.md](DTO.md), [CONTEXT.md](CONTEXT.md), [DEPLOY.md](DEPLOY.md) (деплой на сервер).
-
 ---
 
 ## 1. Требования
@@ -15,9 +11,6 @@
 | [just](https://github.com/casey/just) | любой | команды из `Justfile` |
 | `curl` | — | health-check |
 | `migrate` CLI | опционально | миграции с хоста (`brew install golang-migrate`) |
-
-Миграции **не** запускаются при старте приложений. Перед `just up` они применяются явно (`just migrate` или `just migrate-all`). Так проще откатить, проверить SQL и не получить dirty state при деплое.
-
 ---
 
 ## 2. Первый запуск
@@ -29,6 +22,49 @@ cd Even-APP
 cp .env.example .env   # скрипт just up сделает это сам
 just up
 ```
+
+### Пример .env
+```yaml
+# Copy to .env for local dev: cp .env.example .env
+
+# --- Postgres ---
+POSTGRES_USER=even
+POSTGRES_PASSWORD=even
+POSTGRES_HOST=localhost
+POSTGRES_PORT=5432
+
+# Per-service DSNs (docker hostnames vs localhost)
+AUTH_DATABASE_URL=postgres://even:even@localhost:5432/even_auth?sslmode=disable
+LEXICON_DATABASE_URL=postgres://even:even@localhost:5432/even_lexicon?sslmode=disable
+CONTENT_DATABASE_URL=postgres://even:even@localhost:5432/even_content?sslmode=disable
+LEARNING_DATABASE_URL=postgres://even:even@localhost:5432/even_learning?sslmode=disable
+
+# --- MinIO / S3 ---
+S3_ENDPOINT=http://localhost:9000
+S3_PUBLIC_ENDPOINT=http://localhost:9000
+S3_BUCKET=even-media
+S3_ACCESS_KEY=minio
+S3_SECRET_KEY=minio123
+
+# --- Auth ---
+JWT_SECRET=dev-change-me-in-production
+
+# --- Service ports (local go run) ---
+HTTP_PORT_GATEWAY=8080
+HTTP_PORT_AUTH=8081
+HTTP_PORT_LEXICON=8082
+HTTP_PORT_CONTENT=8083
+HTTP_PORT_LEARNING=8084
+
+# --- Gateway upstreams (local go run; docker-compose overrides to service hostnames) ---
+AUTH_URL=http://localhost:8081
+LEXICON_URL=http://localhost:8082
+CONTENT_URL=http://localhost:8083
+LEARNING_URL=http://localhost:8084
+
+LOG_LEVEL=info
+```
+
 
 `just up` (или `./scripts/up.sh`):
 
@@ -54,9 +90,7 @@ just down
 
 ## 3. Режимы локальной разработки
 
-### 3.1. Всё в Docker (рекомендуется для старта)
-
-Удобно, когда нужно просто поднять стек и не трогать Go на хосте.
+### 3.1. Всё в Docker
 
 | Команда | Действие |
 |---------|----------|
@@ -66,7 +100,7 @@ just down
 | `just compose-logs` | логи всех контейнеров, включая postgres/minio |
 | `just health-check` | smoke-тест всех `/health` и `/ready` |
 
-Порты:
+Порты(можно поменять в .env):
 
 | Сервис | URL |
 |--------|-----|
@@ -241,8 +275,6 @@ just smoke-api         # только HTTP smoke (сервисы уже запу
 
 Файлы: `services/<svc>/database/migrations/`.
 
-**Почему не автомиграции при старте сервиса:** деструктивный SQL без ревью, dirty state при ошибке (как с частично применённой миграцией), гонки при нескольких репликах, сложный откат. Схема меняется отдельным шагом **до** выката новой версии кода.
-
 ### Рекомендуемый порядок (локально и на сервере)
 
 ```bash
@@ -250,7 +282,7 @@ just migrate          # Docker, все четыре БД
 just up               # уже вызывает migrate внутри up.sh
 ```
 
-### Через Docker (без migrate CLI на хосте)
+### Через Docker
 
 ```bash
 just migrate
@@ -260,7 +292,7 @@ docker compose --profile migrate up auth-migrate
 
 Контейнеры `*-migrate` в profile `migrate` — не стартуют с обычным `docker compose up`.
 
-### С хоста (нужен CLI migrate)
+### С хоста
 
 ```bash
 just migrate-all
@@ -377,18 +409,7 @@ docker compose exec postgres psql -U even -d even_auth -c '\dt'
 open http://localhost:9001
 ```
 
-### Частые проблемы
-
-| Симптом | Решение |
-|---------|---------|
-| `port already in use` | `docker compose stop api-gateway auth lexicon content learning` или `just down-local` |
-| gateway `not_ready` | проверь, что все 4 backend подняты: `curl localhost:8081/api/v1/ready` |
-| `required env X is not set` | проверь `.env`, для `go run` используй `just run-*-local` |
-| миграции не применились | `just migrate` и смотри вывод; при dirty: `migrate force <version>` |
-| после смены libs не собирается | `just tidy && just build-all` |
-
 ---
-
 ## 9. Работа над сервисом
 
 ### Структура сервиса
@@ -422,10 +443,9 @@ services/auth/
 
 #### 0. Спроектировать
 
-1. Записать контракт в [API.md](API.md) и [DTO.md](DTO.md).
-2. Выбрать **сервис** по URL-префиксу (см. раздел 10 — Gateway).
-3. Решить **auth**: public / любой JWT / teacher / platform admin (`is_admin`).
-4. Нужна ли новая таблица или колонка → миграция; иначе сразу store.
+1. Выбрать **сервис** по URL-префиксу.
+2. Решить **auth**: public / любой JWT / teacher / platform admin (`is_admin`).
+3. Нужна ли новая таблица или колонка → миграция; иначе сразу store.
 
 #### 1. Миграция (если меняется схема)
 
@@ -443,8 +463,6 @@ docker compose --profile migrate up lexicon-migrate
 ```bash
 docker compose exec postgres psql -U even -d even_lexicon -c '\dt'
 ```
-
-Миграции **не** вешать на старт `main.go` — только явный шаг `just migrate` / `deploy.sh`.
 
 #### 2. Store — SQL и данные
 
@@ -542,6 +560,199 @@ curl -s -H "Authorization: Bearer $TOKEN" http://localhost:8080/api/v1/...
 
 ---
 
+### Пример: `GET /languages` (public, lexicon)
+
+Реальный MVP-endpoint из [API_STATUS.md](API_STATUS.md): список активных языков. Таблица `languages` уже есть (миграция `000002_platform_media`), JWT не нужен.
+
+#### Шаг 0 — контракт
+
+**API.md** (уже описано):
+
+- `GET /languages` → `200`, тело: `LanguageDTO[]`
+- только `is_active = true`
+
+**DTO.md:**
+
+```typescript
+LanguageDTO {
+  id: string
+  code: string
+  name: string
+  native_name: string
+  direction: "ltr" | "rtl"
+  is_active: boolean
+}
+```
+
+Сервис: **lexicon**. Auth: **public** (без JWT на handler и в [gateway IsPublic](services/api-gateway/internal/middleware/auth.go)).
+
+#### Шаг 1 — миграция
+
+**Пропускаем** — таблица и seed (`evn`, `ru`) уже в `000002_platform_media.up.sql`.
+
+Проверить данные:
+
+```bash
+docker compose exec postgres psql -U even -d even_lexicon \
+  -c "SELECT code, name FROM languages WHERE is_active;"
+```
+
+#### Шаг 2 — store
+
+Создать `services/lexicon/internal/store/languages.go`:
+
+```go
+package store
+
+import (
+	"context"
+
+	"github.com/google/uuid"
+	"github.com/jackc/pgx/v5/pgxpool"
+)
+
+type Language struct {
+	ID         uuid.UUID
+	Code       string
+	Name       string
+	NativeName string
+	Direction  string
+	IsActive   bool
+}
+
+type LanguageStore struct {
+	pool *pgxpool.Pool
+}
+
+func NewLanguageStore(pool *pgxpool.Pool) *LanguageStore {
+	return &LanguageStore{pool: pool}
+}
+
+func (s *LanguageStore) ListActive(ctx context.Context) ([]Language, error) {
+	rows, err := s.pool.Query(ctx, `
+		SELECT id, code, name, native_name, direction, is_active
+		FROM languages
+		WHERE is_active = true
+		ORDER BY code
+	`)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var out []Language
+	for rows.Next() {
+		var l Language
+		if err := rows.Scan(&l.ID, &l.Code, &l.Name, &l.NativeName, &l.Direction, &l.IsActive); err != nil {
+			return nil, err
+		}
+		out = append(out, l)
+	}
+	return out, rows.Err()
+}
+```
+
+#### Шаг 3 — handler
+
+Создать `services/lexicon/internal/httpapi/languages.go`:
+
+```go
+package httpapi
+
+import (
+	"net/http"
+
+	"github.com/even-app/even-app/services/lexicon/internal/store"
+)
+
+type LanguagesHandler struct {
+	Store *store.LanguageStore
+}
+
+func (h *LanguagesHandler) Register(mux *http.ServeMux) {
+	// Public — без jwtMW (gateway тоже пропускает GET /languages)
+	mux.HandleFunc("GET /languages", h.list)
+}
+
+func (h *LanguagesHandler) list(w http.ResponseWriter, r *http.Request) {
+	items, err := h.Store.ListActive(r.Context())
+	if err != nil {
+		writeErr(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+	dtos := make([]map[string]any, 0, len(items))
+	for _, l := range items {
+		dtos = append(dtos, map[string]any{
+			"id": l.ID.String(), "code": l.Code, "name": l.Name,
+			"native_name": l.NativeName, "direction": l.Direction, "is_active": l.IsActive,
+		})
+	}
+	writeJSON(w, http.StatusOK, dtos)
+}
+```
+
+`writeJSON` / `writeErr` — скопировать из `platform_media.go` или вынести в `httpapi/response.go` при росте сервиса.
+
+#### Шаг 4 — router
+
+В `services/lexicon/internal/httpapi/router.go` после `MediaStore`:
+
+```go
+langStore := store.NewLanguageStore(pool)
+(&LanguagesHandler{Store: langStore}).Register(mux)
+```
+
+#### Шаг 5 — gateway
+
+Префикс `/languages/` → lexicon уже в `services/api-gateway/cmd/main.go`.
+
+`GET /languages` уже в `IsPublic` — менять gateway не нужно.
+
+Если добавляешь **новый public path** — допиши его в `services/api-gateway/internal/middleware/auth.go` и тест в `auth_test.go`.
+
+#### Шаг 6 — конфиг
+
+Не нужен — `DATABASE_URL` уже есть.
+
+#### Шаг 7 — сборка и проверка
+
+```bash
+docker compose up --build -d lexicon
+
+# напрямую lexicon
+curl -s http://localhost:8082/languages | jq .
+
+# через gateway (как у клиента)
+curl -s http://localhost:8080/languages | jq .
+# ожидаем: [{"code":"evn",...},{"code":"ru",...}]
+
+# без токена — не 401 (public)
+curl -s -o /dev/null -w "%{http_code}\n" http://localhost:8080/languages
+```
+
+Опционально — фрагмент в `scripts/smoke-api.sh`:
+
+```bash
+c=$(code http://localhost:8080/languages)
+[[ "$c" == "200" ]] && pass "GET /languages → $c" || fail "GET /languages → $c"
+```
+
+#### Что если ручка с JWT или admin?
+
+Тот же порядок, отличия:
+
+| Требование | Что менять |
+|------------|------------|
+| Любой JWT | `mux.Handle("GET /path", jwtMW(http.HandlerFunc(h.fn)))` |
+| Platform admin | внутри handler: `if !claims.IsAdmin { writeErr(..., 403, ...) }` |
+| Новый префикс URL | `api-gateway/cmd/main.go` → `routes` |
+| Новая таблица | шаг 1: `migrate create` + `just migrate` |
+| Teacher / owner | фильтр `owner_id = $1` в store + проверка `claims.UserID` |
+
+Пример с admin: `POST /platform/languages` — тот же store/handler/router, но `Register` вешает route через `jwtMW`, в handler первой строкой `requireAdmin(w, r)`.
+
+---
+
 ### OpenAPI / ogen (опционально)
 
 Сейчас **auth** и **platform media** — ручные handlers (см. референсы выше). Ogen можно использовать параллельно:
@@ -571,7 +782,7 @@ just -f services/auth/Justfile swagger         # перегенерация
 
 Merged OpenAPI: `GET http://localhost:8080/api/v1/openapi.yaml` (скелет, полный merge позже).
 
-JWT middleware в gateway — в планах, пока не реализован.
+JWT middleware в gateway проверяет Bearer на всех маршрутах, кроме public (auth register/login/refresh, GET `/languages/*`, health/ready/openapi). Upstream-сервисы по-прежнему валидируют JWT на своих protected routes.
 
 ---
 
@@ -619,22 +830,3 @@ just run-gateway-local
 ```
 
 ---
-
-## 13. Деплой на VPS
-
-См. [DEPLOY.md](DEPLOY.md): bootstrap сервера, `.env`, `./scripts/deploy.sh`, branch preview.
-
----
-
-## 14. Что дальше
-
-Текущий скелет без бизнес-логики. Порядок разработки по [MVP.md](MVP.md):
-
-1. auth — register/login, JWT, `is_admin`
-2. lexicon — языки, алфавит, presign
-3. content — курсы, уроки, invite code
-4. learning — enrollment, flow, progress
-5. gateway — JWT middleware
-6. Flutter `apps/mobile/`
-
-При добавлении фичи: миграция → handler → тест через `just health-check` и curl через gateway `:8080`.
