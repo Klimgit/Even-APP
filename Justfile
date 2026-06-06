@@ -107,9 +107,12 @@ migrate-all:
 smoke-api:
     @./scripts/smoke-api.sh
 
-# Preview on server (SSH): just deploy-preview BRANCH=feature/foo
-deploy-preview BRANCH:
-    @./scripts/deploy-preview.sh "{{BRANCH}}"
+# Branch preview on server: /preview/<slug>/
+deploy-branch BRANCH:
+    @./scripts/deploy-branch-preview.sh "{{BRANCH}}"
+
+cleanup-branch BRANCH:
+    @./scripts/cleanup-branch-preview.sh "{{BRANCH}}"
 
 health-check:
     #!/usr/bin/env bash

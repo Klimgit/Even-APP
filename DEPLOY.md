@@ -2,7 +2,7 @@
 
 Сервер: **91.218.245.136**  
 Стек: Docker Compose (Postgres, MinIO, 5 Go-сервисов).  
-CI/CD: GitHub Actions → SSH → `scripts/deploy.sh`.
+Деплой вручную: SSH → `scripts/deploy.sh`.
 
 ---
 
@@ -11,7 +11,6 @@ CI/CD: GitHub Actions → SSH → `scripts/deploy.sh`.
 Подключитесь по SSH и выполните:
 
 ```bash
-# Скопировать скрипт на сервер или клонировать репо вручную:
 git clone https://github.com/Klimgit/Even-APP.git /opt/even-app
 cd /opt/even-app
 sudo bash scripts/server-bootstrap.sh   # docker + git, если ещё нет
@@ -30,7 +29,7 @@ nano /opt/even-app/.env
 - `S3_ACCESS_KEY` / `S3_SECRET_KEY`
 - `S3_PUBLIC_ENDPOINT` — публичный URL MinIO для presigned media (см. ниже)
 
-Первый деплой вручную:
+Первый деплой:
 
 ```bash
 cd /opt/even-app
@@ -46,15 +45,12 @@ curl http://91.218.245.136:8080/health
 
 ### Firewall
 
-Откройте порты:
-
 | Порт | Назначение |
 |------|------------|
 | 8080 | API Gateway (обязательно) |
-| 22   | SSH (для CI/CD) |
+| 22   | SSH |
+| 80   | nginx для branch preview (опционально) |
 | 9000 | MinIO public URLs для медиа (опционально; лучше nginx) |
-
-Пример (ufw):
 
 ```bash
 sudo ufw allow 22/tcp
@@ -64,89 +60,7 @@ sudo ufw enable
 
 ---
 
-## 2. GitHub Actions — секреты
-
-В репозитории: **Settings → Secrets and variables → Actions**.
-
-| Secret | Пример | Описание |
-|--------|--------|----------|
-| `DEPLOY_HOST` | `91.218.245.136` | IP сервера |
-| `DEPLOY_USER` | `root` или `deploy` | SSH-пользователь |
-| `DEPLOY_SSH_KEY` | содержимое приватного ключа | Ключ **без** passphrase |
-| `DEPLOY_PATH` | `/opt/even-app` | Путь к репозиторию на сервере |
-| `DEPLOY_PORT` | `22` | (опционально) SSH-порт |
-
-### SSH-ключ для CI
-
-На **локальной машине**:
-
-```bash
-ssh-keygen -t ed25519 -f ~/.ssh/even-deploy -N ""
-```
-
-- Публичный ключ → `~/.ssh/authorized_keys` на сервере (для `DEPLOY_USER`)
-- Приватный ключ → GitHub secret `DEPLOY_SSH_KEY`
-
-```bash
-ssh-copy-id -i ~/.ssh/even-deploy.pub DEPLOY_USER@91.218.245.136
-```
-
-### Environment (опционально)
-
-Создайте environment **production** в GitHub для approval перед деплоем.
-
----
-
-## 3. Как работает пайплайн
-
-```mermaid
-flowchart LR
-  push[push_to_main]
-  ci[CI_build]
-  ssh[SSH_to_server]
-  mig[migrate.sh]
-  up[docker_compose_up]
-  ready[health_ready]
-
-  push --> ci --> ssh --> mig --> up --> ready
-```
-
-| Workflow | Триггер | Действие |
-|----------|---------|----------|
-| [ci.yml](.github/workflows/ci.yml) | PR, push в feature-ветки | unit tests → build → integration (smoke-api) |
-| [deploy.yml](.github/workflows/deploy.yml) | push `main`, manual | CI → SSH → `deploy.sh` (production) |
-| [deploy-preview.yml](.github/workflows/deploy-preview.yml) | manual, выбор ветки | CI ветки → SSH → `deploy-preview.sh` |
-
-### Preview (тест отдельных веток)
-
-Отдельный слот на том же сервере — **не трогает production** (`/opt/even-app`).
-
-| | Production | Preview |
-|---|------------|---------|
-| Путь | `/opt/even-app` | `/opt/even-app-preview` |
-| API | `:8080` | `:9080` |
-| Postgres | `127.0.0.1:5432` | `127.0.0.1:5433` |
-| MinIO | `127.0.0.1:9000` | `127.0.0.1:9010` |
-| Compose project | `even-app` | `even-preview` |
-
-**Первичная настройка preview (один раз):**
-
-```bash
-ssh DEPLOY_USER@91.218.245.136
-sudo bash /opt/even-app/scripts/server-bootstrap-preview.sh
-# или после clone:
-cd /opt/even-app-preview && cp deploy/env.preview.example .env && nano .env
-sudo ufw allow 9080/tcp
-```
-
-**Деплой ветки:**
-
-- GitHub: **Actions → Deploy Preview → Run workflow** → указать имя ветки (`feature/foo`)
-- На сервере: `cd /opt/even-app-preview && ./scripts/deploy-preview.sh feature/foo`
-
-Одновременно активна **одна** preview-ветка (новый деплой переключает checkout и пересобирает стек).
-
-Опциональный secret: `DEPLOY_PREVIEW_PATH` (по умолчанию `/opt/even-app-preview`).
+## 2. Production deploy
 
 `deploy.sh`:
 
@@ -155,7 +69,71 @@ sudo ufw allow 9080/tcp
 3. `docker compose up --build -d`
 4. ждёт `/api/v1/ready`
 
-Ручной деплой из GitHub: **Actions → Deploy → Run workflow**.
+**Обновление после merge в `main`:**
+
+```bash
+cd /opt/even-app
+git pull origin main
+./scripts/deploy.sh
+```
+
+**Откат:**
+
+```bash
+cd /opt/even-app
+git checkout <previous-commit>
+./scripts/deploy.sh
+```
+
+Миграции БД откатываются отдельно (`just migrate-down` / `migrate down 1` per service).
+
+---
+
+## 3. Branch preview (опционально)
+
+Изолированные стеки для feature-веток. **Production не затрагивается.**
+
+| | Production | Branch `feature/auth` |
+|---|------------|------------------------|
+| Код | `/opt/even-app` | `/opt/even-app-previews/branches/feature-auth` |
+| URL | `http://IP:8080/...` | `http://IP/preview/feature-auth/...` |
+| Compose | `even-app` | `even-prev-feature-auth` |
+
+Slug: `feature/auth` → `feature-auth`.
+
+### Первичная настройка preview (один раз)
+
+```bash
+ssh DEPLOY_USER@91.218.245.136
+cd /opt/even-app && git pull origin main
+sudo bash /opt/even-app/scripts/server-bootstrap-previews.sh
+sudo ufw allow 80/tcp
+```
+
+Sudo для nginx (если деплой не от root):
+
+```bash
+sudo tee /etc/sudoers.d/even-previews <<'EOF'
+deploy ALL=(ALL) NOPASSWD: /usr/sbin/nginx, /usr/bin/systemctl reload nginx
+EOF
+sudo chmod 440 /etc/sudoers.d/even-previews
+```
+
+### Деплой и очистка ветки
+
+```bash
+/opt/even-app-previews/manager/scripts/deploy-branch-preview.sh feature/auth
+/opt/even-app-previews/manager/scripts/cleanup-branch-preview.sh feature/auth
+```
+
+Проверка:
+
+```bash
+curl http://91.218.245.136/preview/feature-auth/api/v1/ready
+cat /opt/even-app-previews/registry.json
+```
+
+Перед merge в `main` — **cleanup**, чтобы удалить контейнеры, volumes и каталог ветки.
 
 ---
 
@@ -178,31 +156,7 @@ sudo ufw allow 9080/tcp
 
 ---
 
-## 5. Обновление и откат
-
-**Авто:** каждый merge в `main` → деплой.
-
-**Вручную на сервере:**
-
-```bash
-cd /opt/even-app
-git pull origin main
-./scripts/deploy.sh
-```
-
-**Откат:**
-
-```bash
-cd /opt/even-app
-git checkout <previous-commit>
-./scripts/deploy.sh
-```
-
-Миграции БД откатываются отдельно (`just migrate-down` / `migrate down 1` per service).
-
----
-
-## 6. Логи и отладка
+## 5. Логи и отладка
 
 ```bash
 cd /opt/even-app
