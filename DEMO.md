@@ -10,7 +10,7 @@
 
 ## Пошагово: все команды (копируй по порядку)
 
-Шаги 1–6 — подготовка. **Шаг 7** — куда писать код новой ручки (на примере `GET /languages`). Шаги 8–13 — пересборка и проверка.
+Шаги 1–6 — подготовка. **Шаг 7** — dummy-ручка с кодом по файлам. Шаги 8–13 — пересборка и проверка.
 
 ### 0. Один раз: клон и зависимости
 
@@ -147,30 +147,111 @@ curl -s -o /dev/null -w "GET /languages до реализации: %{http_code}\
 - auth: `services/auth/internal/httpapi/auth.go` + `internal/store/users.go`
 - platform media: `services/lexicon/internal/httpapi/platform_media.go` + `internal/store/media.go`
 
-#### Пример: `GET /languages` (lexicon, public)
+#### Пример: dummy `GET /api/v1/platform/demo/ping` (lexicon, JWT)
 
-Миграция **не нужна** — таблица `languages` уже в БД (шаг 6).
+Учебная ручка: отвечает `{"message":"pong","service":"lexicon"}`. БД не трогаем, gateway не меняем — префикс `/api/v1/platform/` уже проксируется на lexicon.
 
-| Что | Куда |
-|-----|------|
-| SQL: выборка активных языков | **новый** `services/lexicon/internal/store/languages.go` |
-| HTTP: `GET /languages` → JSON-массив | **новый** `services/lexicon/internal/httpapi/languages.go` |
-| Подключить handler | **правка** `services/lexicon/internal/httpapi/router.go` — 2 строки: `NewLanguageStore` + `LanguagesHandler.Register` |
-| Public без JWT на gateway | уже в `auth.go` → `IsPublic` для `/languages` |
-| Прокси на lexicon | уже в `api-gateway/cmd/main.go` |
+| Шаг | Файл | Действие |
+|-----|------|----------|
+| 1 | `services/lexicon/internal/httpapi/demo.go` | **создать** — handler |
+| 2 | `services/lexicon/internal/httpapi/router.go` | **дописать** — подключить handler |
+| — | gateway, миграция, `IsPublic` | **не нужны** |
 
-Полный код примера — в [DEVELOPMENT.md § GET /languages](DEVELOPMENT.md).
+---
 
-**Auth в handler:**
+**Файл 1 — создать** `services/lexicon/internal/httpapi/demo.go`:
 
-- **public** — `mux.HandleFunc("GET /path", h.method)` без `jwtMW`
-- **с JWT** — `mux.Handle("GET /path", jwtMW(http.HandlerFunc(h.method)))`
-- **platform admin** — внутри handler: `claims.IsAdmin` (см. `platform_media.go` → `requireAdmin`)
+```go
+package httpapi
+
+import (
+	"net/http"
+)
+
+type DemoHandler struct{}
+
+func (h *DemoHandler) Register(mux *http.ServeMux, jwt func(http.Handler) http.Handler) {
+	mux.Handle("GET /api/v1/platform/demo/ping", jwt(http.HandlerFunc(h.ping)))
+}
+
+func (h *DemoHandler) ping(w http.ResponseWriter, r *http.Request) {
+	writeJSON(w, http.StatusOK, map[string]string{
+		"message": "pong",
+		"service": "lexicon",
+	})
+}
+```
+
+`writeJSON` уже есть в пакете `httpapi` (см. `platform_media.go`).
+
+---
+
+**Файл 2 — дописать** `services/lexicon/internal/httpapi/router.go`
+
+После строк с `PlatformMediaHandler` (перед `return middleware.CORS`):
+
+```go
+	(&DemoHandler{}).Register(mux, jwtMW)
+```
+
+Должно получиться примерно так:
+
+```go
+	jwtMW := middleware.JWT(jwtMgr)
+	ms := store.NewMediaStore(pool)
+	(&PlatformMediaHandler{Store: ms, S3: s3c, Bucket: bucket, UserQuotaBytes: userQuotaBytes}).Register(mux, jwtMW)
+
+	(&DemoHandler{}).Register(mux, jwtMW)
+
+	return middleware.CORS(middleware.Recovery(log, middleware.Logging(log, mux)))
+```
+
+---
+
+**Команды после правок:**
 
 ```bash
-# проверить, что компилируется
+# компиляция на хосте
 go build -o /tmp/lexicon ./services/lexicon/cmd
+
+# пересобрать контейнер
+docker compose up --build -d lexicon
+docker compose ps lexicon   # ждём healthy
 ```
+
+**Проверка** (нужен `$TOKEN` из шага 4):
+
+```bash
+# напрямую на lexicon
+curl -s http://localhost:8082/api/v1/platform/demo/ping \
+  -H "Authorization: Bearer $TOKEN" | jq .
+
+# через gateway — как у клиента
+curl -s http://localhost:8080/api/v1/platform/demo/ping \
+  -H "Authorization: Bearer $TOKEN" | jq .
+# {"message":"pong","service":"lexicon"}
+
+# без токена gateway вернёт 401
+curl -s -o /dev/null -w "без токена: %{http_code}\n" \
+  http://localhost:8080/api/v1/platform/demo/ping
+```
+
+---
+
+**Если ручка с БД** — добавляется store между шагами 1 и 2:
+
+| Файл | Что |
+|------|-----|
+| `services/lexicon/internal/store/<ресурс>.go` | SQL, структуры |
+| `services/lexicon/internal/httpapi/<ресурс>.go` | handler вызывает store |
+
+Полный пример с таблицей — [DEVELOPMENT.md § GET /languages](DEVELOPMENT.md).
+
+**Auth в handler (шпаргалка):**
+
+- **public** — `mux.HandleFunc("GET /path", h.method)` без `jwtMW` + путь в `services/api-gateway/internal/middleware/auth.go` → `IsPublic`
+- **с JWT** — `mux.Handle("GET /path", jwtMW(http.HandlerFunc(h.method)))`
+- **platform admin** — JWT + внутри handler `requireAdmin(w, r)` (см. `platform_media.go`)
 
 ---
 
@@ -183,26 +264,24 @@ docker compose up --build -d lexicon
 docker compose ps lexicon
 ```
 
-### 9. Проверить новую ручку
+### 9. Проверить dummy-ручку
 
 ```bash
-# напрямую на сервис
-curl -s http://localhost:8082/languages | jq .
+# с токеном из шага 4
+curl -s http://localhost:8080/api/v1/platform/demo/ping \
+  -H "Authorization: Bearer $TOKEN" | jq .
 
-# через gateway (как клиент)
-curl -s http://localhost:8080/languages | jq .
+curl -s -o /dev/null -w "без токена: %{http_code}\n" \
+  http://localhost:8080/api/v1/platform/demo/ping
+# 401
 
-# public — 200 без токена
-curl -s -o /dev/null -w "GET /languages: %{http_code}\n" \
-  http://localhost:8080/languages
-
-# полный smoke с новой ручкой
+# smoke старых ручек всё ещё должен проходить
 just smoke-api
 ```
 
-Ожидаем JSON с `evn` и `ru`; smoke — `GET /languages → 200`.
+Ожидаем `{"message":"pong","service":"lexicon"}`.
 
-**Озвучка:** «От контракта в API.md до curl — store, handler, router, один сервис пересобрали.»
+**Озвучка:** «Handler + router, пересобрали lexicon, curl через gateway с Bearer.»
 
 ### 10. MinIO (опционально)
 
@@ -242,10 +321,9 @@ just down
 
 ```bash
 just up && just health-check && just smoke-api
-# шаг 7: store/*.go → httpapi/*.go → router.go
+# шаг 7: httpapi/demo.go + router.go
 docker compose up --build -d lexicon
-curl -s http://localhost:8080/languages | jq .
-just smoke-api
+curl -s http://localhost:8080/api/v1/platform/demo/ping -H "Authorization: Bearer $TOKEN" | jq .
 ```
 
 ---
@@ -259,7 +337,7 @@ just smoke-api
 - [ ] Терминал: крупный шрифт, `cd Even-APP` уже открыт
 - [ ] IDE: дерево проекта видно, `.env` **не** показывать на экране (или замазать `JWT_SECRET`)
 - [ ] Закрыть лишние вкладки / уведомления
-- [ ] (Опционально) заранее реализовать `GET /languages` в отдельной ветке и на демо только показать diff — если боишься опечаток в live coding
+- [ ] (Опционально) заранее вставить `demo.go` из шага 7 и на записи только показать diff
 
 **Короткая версия (10 мин):** блоки 1 → 2 → 4 → 6 → 8 → 10 (без MinIO и без live coding — показать готовый PR).
 
@@ -392,8 +470,8 @@ curl -s -X POST http://localhost:8080/api/v1/auth/login \
 curl -s -o /dev/null -w "%{http_code}\n" http://localhost:8080/api/v1/auth/me
 # 401
 
-curl -s -o /dev/null -w "%{http_code}\n" http://localhost:8080/languages
-# 404 сейчас (ручки ещё нет) — после реализации будет 200 без токена
+curl -s -o /dev/null -w "%{http_code}\n" http://localhost:8080/api/v1/platform/demo/ping
+# 401 — protected; после шага 7 с токеном будет 200
 ```
 
 **Текст:**
@@ -404,34 +482,26 @@ curl -s -o /dev/null -w "%{http_code}\n" http://localhost:8080/languages
 
 ## Блок 6. Куда писать код (2 мин)
 
-**Экран:** DEMO.md шаг 7 или дерево `services/lexicon/internal/`.
+**Экран:** DEMO.md шаг 7 — таблица «куда писать» + пример dummy.
 
 **Текст:**
 
-> Новая ручка — это три места в сервисе: **store** (SQL), **httpapi** (логика и JSON), **router.go** (подключение).  
-> Контракт — в API.md. Если нужна новая таблица — миграция в `database/migrations/`.  
-> Клиент ходит на gateway `:8080`; public-пути — в `api-gateway/.../auth.go`.
+> Минимум для ручки без БД: **один новый файл handler** + **одна строка в router.go**.  
+> С БД добавляется **store**. Gateway трогаем только для public-путей или нового префикса.
 
-**Показать на примере `GET /languages`:**
+**На демо копируем dummy `GET /api/v1/platform/demo/ping`:**
 
-1. `internal/store/languages.go` — запрос к таблице `languages`
-2. `internal/httpapi/languages.go` — handler + `Register`
-3. `internal/httpapi/router.go` — две строки wiring
-
-Код — в [DEVELOPMENT.md](DEVELOPMENT.md), не набираем на демо целиком, если мало времени.
+1. Создать `services/lexicon/internal/httpapi/demo.go`
+2. Дописать `(&DemoHandler{}).Register(mux, jwtMW)` в `router.go`
 
 ---
 
-## Блок 7. Live coding (5–7 мин, опционально)
+## Блок 7. Live coding (3–5 мин, опционально)
 
-**Экран:** IDE — по очереди открыть три файла из блока 6.
-
-```bash
-docker compose exec postgres psql -U even -d even_lexicon \
-  -c "SELECT code, name FROM languages WHERE is_active;"
-```
+**Экран:** IDE — вставить код из шага 7 DEMO.md.
 
 ```bash
+go build -o /tmp/lexicon ./services/lexicon/cmd
 docker compose up --build -d lexicon
 ```
 
@@ -442,24 +512,17 @@ docker compose up --build -d lexicon
 ## Блок 8. Проверка (2 мин)
 
 ```bash
-# напрямую
-curl -s http://localhost:8082/languages | jq .
+curl -s http://localhost:8080/api/v1/platform/demo/ping \
+  -H "Authorization: Bearer $TOKEN" | jq .
 
-# через gateway — как у клиента
-curl -s http://localhost:8080/languages | jq .
-
-# public: без токена
-curl -s -o /dev/null -w "%{http_code}\n" http://localhost:8080/languages
-# 200
+curl -s -o /dev/null -w "%{http_code}\n" \
+  http://localhost:8080/api/v1/platform/demo/ping
+# 401 без токена
 ```
 
 **Текст:**
 
-> Два языка из seed-миграции. Gateway проксирует `/languages/` на lexicon без JWT.
-
-**Опционально — добавить в smoke (20 сек):**
-
-Показать 3 строки в `scripts/smoke-api.sh` из DEVELOPMENT.md (не обязательно запускать, если времени мало).
+> JWT на gateway и на lexicon. Клиент всегда бьёт в `:8080` с Bearer.
 
 ---
 
@@ -500,8 +563,7 @@ docker compose logs lexicon --tail 20
 
 **Текст:**
 
-> Перед merge: обновить API_STATUS.md — перенести `GET /languages` в ✅.  
-> API.md и DTO.md уже описывают контракт.  
+> Dummy `demo/ping` в прод не мержим — только для демо. Реальную фичу: API.md + API_STATUS.md + store/handler.  
 > Полный backlog MVP — в API_STATUS.md, порядок фич — в MVP.md.
 
 ---
@@ -527,7 +589,7 @@ just smoke-api
 just logs
 just migrate
 docker compose up --build -d lexicon
-curl http://localhost:8080/languages
+curl -H "Authorization: Bearer $TOKEN" http://localhost:8080/api/v1/platform/demo/ping
 curl http://localhost:8080/api/v1/ready
 ```
 
@@ -540,8 +602,8 @@ curl http://localhost:8080/api/v1/ready
 | `just up` долго | Заранее прогреть образы или начать запись после `up` |
 | Порт занят | `just down` и повторить |
 | gateway `not_ready` | `curl localhost:8081/api/v1/ready` — какой backend упал |
-| 401 на /languages | Забыли public в handler или gateway `IsPublic` |
-| Пустой список языков | `just migrate` не применён |
+| 401 на demo/ping | Нет `$TOKEN` или не передан `Authorization: Bearer` |
+| 404 на demo/ping | Забыли `Register` в router.go или не пересобрали lexicon |
 | smoke падает на MinIO | `docker compose up --build -d lexicon content` после pull |
 
 ---
