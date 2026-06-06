@@ -10,10 +10,15 @@ import (
 
 type claimsKey struct{}
 
-// ClaimsFromContext returns JWT claims set by JWT middleware.
+// ClaimsFromContext returns JWT claims set by JWT or ogen SecurityHandler.
 func ClaimsFromContext(ctx context.Context) (libjwt.Claims, bool) {
 	c, ok := ctx.Value(claimsKey{}).(libjwt.Claims)
 	return c, ok
+}
+
+// WithClaims stores JWT claims in context (ogen SecurityHandler).
+func WithClaims(ctx context.Context, claims libjwt.Claims) context.Context {
+	return context.WithValue(ctx, claimsKey{}, claims)
 }
 
 // JWT validates Bearer access tokens.

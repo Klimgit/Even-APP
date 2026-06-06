@@ -5,19 +5,6 @@ info:
   description: Authentication and user management
 
 paths:
-  /api/v1/health:
-    get:
-      operationId: getHealth
-      tags: [System, Public]
-      summary: Health check
-      responses:
-        "200":
-          description: OK
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/HealthResponse"
-
   /api/v1/auth/register:
     post:
       operationId: register
@@ -38,8 +25,18 @@ paths:
                 $ref: "#/components/schemas/AuthResponse"
         "400":
           description: Bad request
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
         "409":
           description: Email already registered
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        default:
+          $ref: "#/components/responses/DefaultError"
 
   /api/v1/auth/login:
     post:
@@ -61,6 +58,12 @@ paths:
                 $ref: "#/components/schemas/AuthResponse"
         "401":
           description: Invalid credentials
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        default:
+          $ref: "#/components/responses/DefaultError"
 
   /api/v1/auth/refresh:
     post:
@@ -72,16 +75,22 @@ paths:
         content:
           application/json:
             schema:
-              type: object
-              required: [refresh_token]
-              properties:
-                refresh_token:
-                  type: string
+              $ref: "#/components/schemas/RefreshRequest"
       responses:
         "200":
           description: OK
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/TokensResponse"
         "401":
           description: Invalid refresh token
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        default:
+          $ref: "#/components/responses/DefaultError"
 
   /api/v1/auth/me:
     get:
@@ -99,6 +108,18 @@ paths:
                 $ref: "#/components/schemas/User"
         "401":
           description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "404":
+          description: Not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        default:
+          $ref: "#/components/responses/DefaultError"
 
 components:
   securitySchemes:
@@ -107,16 +128,15 @@ components:
       scheme: bearer
       bearerFormat: JWT
 
-  schemas:
-    HealthResponse:
-      type: object
-      required: [status, service]
-      properties:
-        status:
-          type: string
-        service:
-          type: string
+  responses:
+    DefaultError:
+      description: Unexpected error
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/ErrorResponse"
 
+  schemas:
     RegisterRequest:
       type: object
       required: [email, password]
@@ -143,6 +163,13 @@ components:
         password:
           type: string
 
+    RefreshRequest:
+      type: object
+      required: [refresh_token]
+      properties:
+        refresh_token:
+          type: string
+
     AuthResponse:
       type: object
       required: [access_token, refresh_token, user]
@@ -153,6 +180,15 @@ components:
           type: string
         user:
           $ref: "#/components/schemas/User"
+
+    TokensResponse:
+      type: object
+      required: [access_token, refresh_token]
+      properties:
+        access_token:
+          type: string
+        refresh_token:
+          type: string
 
     User:
       type: object
@@ -173,3 +209,14 @@ components:
         created_at:
           type: string
           format: date-time
+
+    ErrorResponse:
+      type: object
+      properties:
+        code:
+          type: integer
+          format: int32
+        message:
+          type: string
+        error:
+          type: string

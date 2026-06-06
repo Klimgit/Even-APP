@@ -5,7 +5,8 @@
 # Go
 bin/
 .dev/
-**/internal/gen/
+**/internal/gen/http/
+**/internal/gen/mocks/
 
 # IDE
 .idea/

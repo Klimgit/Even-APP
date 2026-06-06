@@ -22,7 +22,16 @@ logs:
 
 # --- Build ---
 
-build-all:
+sqlc-all:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    export PATH="$(go env GOPATH)/bin:$PATH"
+    command -v sqlc >/dev/null || go install github.com/sqlc-dev/sqlc/cmd/sqlc@v1.31.1
+    for svc in auth lexicon content learning; do
+      (cd "services/$svc/database" && sqlc generate)
+    done
+
+build-all: sqlc-all
     go build -o bin/api-gateway ./services/api-gateway/cmd
     go build -o bin/auth ./services/auth/cmd
     go build -o bin/lexicon ./services/lexicon/cmd

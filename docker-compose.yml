@@ -102,7 +102,7 @@ services:
   auth:
     build:
       context: .
-      dockerfile: services/auth/Dockerfile
+      dockerfile: services/auth/docker/Dockerfile
     environment:
       <<: *service-env
       HTTP_PORT: 8081
@@ -123,7 +123,7 @@ services:
   lexicon:
     build:
       context: .
-      dockerfile: services/lexicon/Dockerfile
+      dockerfile: services/lexicon/docker/Dockerfile
     environment:
       <<: *service-env
       HTTP_PORT: 8082
@@ -152,7 +152,7 @@ services:
   content:
     build:
       context: .
-      dockerfile: services/content/Dockerfile
+      dockerfile: services/content/docker/Dockerfile
     environment:
       <<: *service-env
       HTTP_PORT: 8083
@@ -179,7 +179,7 @@ services:
   learning:
     build:
       context: .
-      dockerfile: services/learning/Dockerfile
+      dockerfile: services/learning/docker/Dockerfile
     environment:
       <<: *service-env
       HTTP_PORT: 8084
@@ -199,7 +199,7 @@ services:
   api-gateway:
     build:
       context: .
-      dockerfile: services/api-gateway/Dockerfile
+      dockerfile: services/api-gateway/docker/Dockerfile
     environment:
       <<: *service-env
       HTTP_PORT: 8080

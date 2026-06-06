@@ -3,17 +3,21 @@ package main
 import (
 	"context"
 	"log"
+	"net/http"
 	"os"
 	"os/signal"
 	"syscall"
 
 	"github.com/even-app/even-app/libs/core/logger"
 	libjwt "github.com/even-app/even-app/libs/jwt"
+	"github.com/even-app/even-app/libs/http/middleware"
 	"github.com/even-app/even-app/libs/http/server"
 	"github.com/even-app/even-app/libs/postgres"
-	apiv1 "github.com/even-app/even-app/services/auth/api/http/v1"
 	"github.com/even-app/even-app/services/auth/internal/config"
-	"github.com/even-app/even-app/services/auth/internal/httpapi"
+	authhandler "github.com/even-app/even-app/services/auth/internal/handler"
+	"github.com/even-app/even-app/services/auth/internal/gen/query"
+	http_v1 "github.com/even-app/even-app/services/auth/internal/gen/http/v1"
+	"github.com/even-app/even-app/services/auth/internal/service"
 	"github.com/joho/godotenv"
 )
 
@@ -37,7 +41,24 @@ func main() {
 
 	jwtMgr := libjwt.NewManager(cfg.JWTSecret, cfg.AccessTTL)
 	ready := func(ctx context.Context) error { return pool.Ping(ctx) }
-	handler := httpapi.NewMux(logr, pool, jwtMgr, cfg.RefreshTTL, apiv1.OpenAPISpec, ready)
+
+	querier := query.New(pool)
+	authSvc := service.NewAuthService(querier, jwtMgr, cfg.RefreshTTL)
+	httpHandler := authhandler.NewHTTPHandler(authSvc)
+	secHandler := authhandler.NewSecurityHandler(jwtMgr)
+
+	oasServer, err := http_v1.NewServer(httpHandler, secHandler)
+	if err != nil {
+		log.Fatalf("ogen server: %v", err)
+	}
+
+	mux := http.NewServeMux()
+	server.RegisterHealth(mux, "auth", "/api/v1/auth/health")
+	server.RegisterReady(mux, ready, "/api/v1/auth/ready")
+	mux.Handle("GET /api/v1/openapi.yaml", http_v1.SpecHandler())
+	mux.Handle("/", oasServer)
+
+	handler := middleware.CORS(middleware.Recovery(logr, middleware.Logging(logr, mux)))
 
 	if err := server.Run(ctx, server.Options{
 		ServiceName: "auth",

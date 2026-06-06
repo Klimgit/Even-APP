@@ -3,18 +3,22 @@ package main
 import (
 	"context"
 	"log"
+	"net/http"
 	"os"
 	"os/signal"
 	"syscall"
 
 	"github.com/even-app/even-app/libs/core/logger"
 	libjwt "github.com/even-app/even-app/libs/jwt"
+	"github.com/even-app/even-app/libs/http/middleware"
 	"github.com/even-app/even-app/libs/http/server"
 	"github.com/even-app/even-app/libs/postgres"
 	libs3 "github.com/even-app/even-app/libs/s3"
-	apiv1 "github.com/even-app/even-app/services/lexicon/api/http/v1"
 	"github.com/even-app/even-app/services/lexicon/internal/config"
-	"github.com/even-app/even-app/services/lexicon/internal/httpapi"
+	lexhandler "github.com/even-app/even-app/services/lexicon/internal/handler"
+	"github.com/even-app/even-app/services/lexicon/internal/gen/query"
+	http_v1 "github.com/even-app/even-app/services/lexicon/internal/gen/http/v1"
+	"github.com/even-app/even-app/services/lexicon/internal/service"
 	"github.com/joho/godotenv"
 )
 
@@ -43,7 +47,24 @@ func main() {
 
 	jwtMgr := libjwt.NewManager(cfg.JWTSecret, cfg.AccessTTL())
 	ready := func(ctx context.Context) error { return pool.Ping(ctx) }
-	handler := httpapi.NewMux(logr, pool, s3c, cfg.S3.Bucket, cfg.Media.UserQuotaBytes, jwtMgr, apiv1.OpenAPISpec, ready)
+
+	querier := query.New(pool)
+	mediaSvc := service.NewMediaService(querier, s3c, cfg.S3.Bucket, cfg.Media.UserQuotaBytes)
+	httpHandler := lexhandler.NewHTTPHandler(mediaSvc)
+	secHandler := lexhandler.NewSecurityHandler(jwtMgr)
+
+	oasServer, err := http_v1.NewServer(httpHandler, secHandler)
+	if err != nil {
+		log.Fatalf("ogen server: %v", err)
+	}
+
+	mux := http.NewServeMux()
+	server.RegisterHealth(mux, "lexicon", "/api/v1/platform/health")
+	server.RegisterReady(mux, ready, "/api/v1/platform/ready")
+	mux.Handle("GET /api/v1/openapi.yaml", http_v1.SpecHandler())
+	mux.Handle("/", oasServer)
+
+	handler := middleware.CORS(middleware.Recovery(logr, middleware.Logging(logr, mux)))
 
 	if err := server.Run(ctx, server.Options{
 		ServiceName: "lexicon",

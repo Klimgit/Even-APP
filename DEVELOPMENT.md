@@ -411,28 +411,59 @@ open http://localhost:9001
 ---
 ## 9. Работа над сервисом
 
-### Структура сервиса
+### Структура сервиса (как в [cloudtraining](https://github.com/Klimgit/cloudtraining))
+
+Референс: `_misc/service-template` в репозитории cloudtraining.
 
 ```
-services/auth/
-├── cmd/main.go              # точка входа
+services/<svc>/
+├── api/http/v1/             # OpenAPI (ogen), embed.go
+├── cmd/main.go              # composition root: pool → query.New → service → handler
+├── database/
+│   ├── migrations/          # golang-migrate: схема БД
+│   ├── queries/             # SQL в отдельных файлах (users.sql, media.sql, …)
+│   └── sqlc.yaml            # конфиг sqlc (как в cloudtraining; запросы — в queries/)
+├── docker/Dockerfile
 ├── internal/
-│   ├── config/              # env-конфиг
-│   ├── httpapi/             # HTTP handlers + router.go
-│   ├── store/               # SQL (pgx), без HTTP
-│   └── gen/http/v1/         # ogen (gitignored, опционально)
-├── api/http/v1/
-│   ├── api.yaml             # OpenAPI
-│   └── embed.go             # встроенная спека для /openapi.yaml
-├── database/migrations/
-├── Dockerfile
-└── Justfile                 # swagger, migrate, run
+│   ├── client/
+│   ├── config/
+│   ├── domain/              # все модели данных, domain errors
+│   ├── gen/query/           # sqlc: `just sqlc` → коммитим в git (как cloudtraining)
+│   ├── handler/             # HTTP
+│   ├── repository/          # только PgTx для транзакций
+│   └── service/             # бизнес-логика + вызовы query.Queries
+└── Justfile                 # generate = swagger + sqlc
 ```
 
-Референсы реализованных ручек:
+Слои: **handler → service → query (sqlc) → domain**. SQL пишется только в `database/queries/*.sql`.
 
-- **auth:** `services/auth/internal/httpapi/auth.go`, `internal/store/users.go`
-- **platform media:** `services/lexicon/internal/httpapi/platform_media.go`, `internal/store/media.go`
+### Как в cloudtraining добавить ручку с БД
+
+1. **Контракт** — `api/http/v1/api.yaml` (при ogen) или ручной handler
+2. **Миграция** — `database/migrations/` (если нужна новая таблица)
+3. **SQL** — новый или существующий файл в `database/queries/<ресурс>.sql`:
+
+```sql
+-- name: GetDummy :one
+SELECT * FROM dummy WHERE id = $1;
+```
+
+4. **Генерация** — `just -f services/<svc>/Justfile sqlc` → `internal/gen/query/`
+5. **Service** — вызывает `s.q.GetDummy(ctx, …)`, маппит `query.*` → `domain.*`
+6. **Handler** — парсит HTTP, вызывает service
+
+```bash
+just -f services/lexicon/Justfile sqlc      # после правок queries/*.sql
+just -f services/lexicon/Justfile generate  # sqlc + swagger (как cloudtraining)
+just sqlc-all                               # все сервисы с БД
+```
+
+`internal/gen/query/` — в git (как cloudtraining). `internal/gen/http/` — локально через ogen.
+
+Референсы:
+
+- **auth:** `handler/auth.go` → `service/auth.go` → `gen/query` + `database/queries/users.sql`
+- **platform media:** `handler/media.go` → `service/media.go` → `database/queries/media.sql`
 
 ---
 
@@ -444,7 +475,7 @@ services/auth/
 
 1. Выбрать **сервис** по URL-префиксу.
 2. Решить **auth**: public / любой JWT / teacher / platform admin (`is_admin`).
-3. Нужна ли новая таблица или колонка → миграция; иначе сразу store.
+3. Нужна ли новая таблица или колонка → миграция; иначе сразу `database/queries/`.
 
 #### 1. Миграция (если меняется схема)
 
@@ -463,46 +494,74 @@ docker compose up lexicon-migrate
 docker compose exec postgres psql -U even -d even_lexicon -c '\dt'
 ```
 
-#### 2. Store — SQL и данные
+#### 2. Domain — все модели данных
 
-Новый или существующий файл в `services/<svc>/internal/store/`.
+`services/<svc>/internal/domain/` — **все** типы данных сервиса:
 
-- `*pgxpool.Pool`, `context.Context` первым аргументом
-- параметризованный SQL (`$1`, `$2`), без конкатенации user input
-- доменные фильтры в WHERE (`scope`, `owner_id`, `language_id`, …)
-- store **не** импортирует HTTP и JWT — только данные и ошибки
+- сущности БД (`User`, `MediaAsset`, …)
+- request/response DTO (`RegisterRequest`, `MediaAssetDTO`, …)
+- входы service-слоя (`PresignInput`, `MediaConfirmInput`, …)
+- доменные ошибки (`ErrNotFound`)
 
-Несколько таблиц в одной операции — транзакция в store (`pool.Begin` → `Commit` / `Rollback`).
+Handler и service **не** объявляют struct-модели — только `domain`.
 
-#### 3. Handler — бизнес-логика и HTTP
+#### 3. SQL-запросы (sqlc)
 
-Новый файл в `services/<svc>/internal/httpapi/` (или метод в существующем handler).
+Файл `services/<svc>/database/queries/<ресурс>.sql` — **отдельный файл на группу запросов** (как `users.sql`, `media.sql` в cloudtraining):
 
-Слои в handler:
-
-1. парсинг body / query / path (`r.PathValue("id")` в Go 1.22+)
-2. auth: `middleware.ClaimsFromContext(r.Context())` → `UserID`, `Role`, `IsAdmin`
-3. проверка прав (например `requireAdmin` как в `platform_media.go`)
-4. вызов store (+ S3 / квота / валидация из `libs/media` при необходимости)
-5. ответ: `writeJSON` / `writeErr`; ошибки `{ "error", "message" }`
-
-Регистрация маршрута в `Register(mux, jwtMW)`:
-
-```go
-// public
-mux.HandleFunc("GET /api/v1/languages", h.list)
-
-// с JWT
-mux.Handle("GET /api/v1/auth/me", jwtMW(http.HandlerFunc(h.me)))
+```sql
+-- name: ListActiveLanguages :many
+SELECT id, code, name, native_name, direction, is_active
+FROM languages WHERE is_active = true ORDER BY code;
 ```
 
-#### 4. Подключить в router
+`just -f services/<svc>/Justfile sqlc` → `internal/gen/query/*.sql.go`
 
-`services/<svc>/internal/httpapi/router.go` — создать store, handler, вызвать `Register`.
+#### 4. Service — бизнес-логика + sqlc
 
-Без этого шага ручка не появится, даже если handler написан.
+`service` получает `*query.Queries` (см. `query.New(pool)` в `cmd/main.go`):
 
-#### 5. Gateway
+```go
+row, err := s.q.ListActiveLanguages(ctx)
+// map query row → domain, map pgx.ErrNoRows → domain.ErrNotFound
+```
+
+Транзакции: `repository.PgTx` + `querier.WithTx(tx)` (как в cloudtraining service-template).
+
+#### 5. OpenAPI + ogen (контракт HTTP)
+
+`services/<svc>/api/http/v1/api.yaml` — все ручки, схемы, security (`bearerAuth`).
+
+```bash
+just -f services/<svc>/Justfile swagger   # → internal/gen/http/v1/
+```
+
+ogen генерирует роутер и типы; **отдельный `router.go` не нужен**.
+
+#### 6. Handler — `http_api.go` + wiring в `cmd/main.go`
+
+`internal/handler/http_api.go` реализует `http_v1.Handler` (интерфейс из ogen):
+
+1. JWT уже в контексте (см. `security.go` + `HandleBearerAuth`)
+2. `middleware.ClaimsFromContext(ctx)` → `UserID`, `Role`, `IsAdmin`
+3. проверка прав, вызов service
+4. map `domain` → ogen response types; ошибки через `NewError` (`errors.go`)
+
+`cmd/main.go` — как в cloudtraining:
+
+```go
+querier := query.New(pool)
+svc := service.New…(querier, …)
+oasServer, _ := http_v1.NewServer(handler.NewHTTPHandler(svc), handler.NewSecurityHandler(jwtMgr))
+
+mux := http.NewServeMux()
+server.RegisterHealth(mux, "auth", "/api/v1/auth/health")
+server.RegisterReady(mux, ready, "/api/v1/auth/ready")
+mux.Handle("GET /api/v1/openapi.yaml", http_v1.SpecHandler())
+mux.Handle("/", oasServer)   // все пути из api.yaml
+```
+
+#### 7. Gateway
 
 Большинство префиксов уже в `services/api-gateway/cmd/main.go`. Новый префикс — добавить в `routes` там же.
 
@@ -512,11 +571,11 @@ mux.Handle("GET /api/v1/auth/me", jwtMW(http.HandlerFunc(h.me)))
 curl http://localhost:8080/api/v1/...
 ```
 
-#### 6. Конфиг (если нужны новые env)
+#### 8. Конфиг (если нужны новые env)
 
 `services/<svc>/internal/config/config.go`, при необходимости `libs/config/`, `.env.example`.
 
-#### 7. Сборка и проверка
+#### 9. Сборка и проверка
 
 ```bash
 docker compose up --build -d lexicon   # или auth, content, learning
@@ -529,7 +588,7 @@ curl -s -H "Authorization: Bearer $TOKEN" http://localhost:8080/api/v1/...
 
 Опционально: кейс в `scripts/smoke-api.sh`. После правок `libs/`: `just tidy && just build-all`.
 
-#### 8. Документация
+#### 10. Документация
 
 - [API.md](API.md) — описание ручки, коды ошибок
 - [DTO.md](DTO.md) — JSON-типы
@@ -539,7 +598,7 @@ curl -s -H "Authorization: Bearer $TOKEN" http://localhost:8080/api/v1/...
 
 - [ ] API.md + DTO.md
 - [ ] миграция `.up.sql` + `.down.sql` (если нужна)
-- [ ] `internal/store` + `internal/httpapi` + `router.go`
+- [ ] `api.yaml` + `just swagger` + `database/queries/*.sql` + `just sqlc` + `domain` + `service` + `http_api.go` + `cmd/main.go`
 - [ ] gateway route (если новый префикс)
 - [ ] `just migrate` локально
 - [ ] curl / smoke через `:8080`
@@ -555,7 +614,7 @@ curl -s -H "Authorization: Bearer $TOKEN" http://localhost:8080/api/v1/...
 | Teacher | `claims.Role == "teacher" \|\| claims.IsAdmin` |
 | Владелец ресурса | `owner_id == claims.UserID` |
 
-Кто загрузил файл — `uploaded_by = claims.UserID`. В какой «базе» лежит медиа — задаётся **endpoint** (`/platform/` vs `/teacher/`) и полем `scope` в store, не ролью alone.
+Кто загрузил файл — `uploaded_by = claims.UserID`. В какой «базе» лежит медиа — задаётся **endpoint** (`/platform/` vs `/teacher/`) и полем `scope` в repository, не ролью alone.
 
 ---
 
@@ -596,112 +655,47 @@ docker compose exec postgres psql -U even -d even_lexicon \
   -c "SELECT code, name FROM languages WHERE is_active;"
 ```
 
-#### Шаг 2 — store
+#### Шаг 2 — domain
 
-Создать `services/lexicon/internal/store/languages.go`:
+Добавить в `services/lexicon/internal/domain/language.go` тип `Language` и в `domain/repo.go` интерфейс:
 
 ```go
-package store
-
-import (
-	"context"
-
-	"github.com/google/uuid"
-	"github.com/jackc/pgx/v5/pgxpool"
-)
-
-type Language struct {
-	ID         uuid.UUID
-	Code       string
-	Name       string
-	NativeName string
-	Direction  string
-	IsActive   bool
-}
-
-type LanguageStore struct {
-	pool *pgxpool.Pool
-}
-
-func NewLanguageStore(pool *pgxpool.Pool) *LanguageStore {
-	return &LanguageStore{pool: pool}
-}
-
-func (s *LanguageStore) ListActive(ctx context.Context) ([]Language, error) {
-	rows, err := s.pool.Query(ctx, `
-		SELECT id, code, name, native_name, direction, is_active
-		FROM languages
-		WHERE is_active = true
-		ORDER BY code
-	`)
-	if err != nil {
-		return nil, err
-	}
-	defer rows.Close()
-
-	var out []Language
-	for rows.Next() {
-		var l Language
-		if err := rows.Scan(&l.ID, &l.Code, &l.Name, &l.NativeName, &l.Direction, &l.IsActive); err != nil {
-			return nil, err
-		}
-		out = append(out, l)
-	}
-	return out, rows.Err()
+type LanguageRepository interface {
+	ListActive(ctx context.Context) ([]Language, error)
 }
 ```
 
-#### Шаг 3 — handler
+#### Шаг 3 — SQL (sqlc)
 
-Создать `services/lexicon/internal/httpapi/languages.go`:
+`services/lexicon/database/queries/languages.sql`:
 
-```go
-package httpapi
-
-import (
-	"net/http"
-
-	"github.com/even-app/even-app/services/lexicon/internal/store"
-)
-
-type LanguagesHandler struct {
-	Store *store.LanguageStore
-}
-
-func (h *LanguagesHandler) Register(mux *http.ServeMux) {
-	// Public — без jwtMW (gateway тоже пропускает GET /languages)
-	mux.HandleFunc("GET /languages", h.list)
-}
-
-func (h *LanguagesHandler) list(w http.ResponseWriter, r *http.Request) {
-	items, err := h.Store.ListActive(r.Context())
-	if err != nil {
-		writeErr(w, http.StatusInternalServerError, err.Error())
-		return
-	}
-	dtos := make([]map[string]any, 0, len(items))
-	for _, l := range items {
-		dtos = append(dtos, map[string]any{
-			"id": l.ID.String(), "code": l.Code, "name": l.Name,
-			"native_name": l.NativeName, "direction": l.Direction, "is_active": l.IsActive,
-		})
-	}
-	writeJSON(w, http.StatusOK, dtos)
-}
+```sql
+-- name: ListActiveLanguages :many
+SELECT id, code, name, native_name, direction, is_active
+FROM languages WHERE is_active = true ORDER BY code;
 ```
 
-`writeJSON` / `writeErr` — скопировать из `platform_media.go` или вынести в `httpapi/response.go` при росте сервиса.
+`just -f services/lexicon/Justfile sqlc`
 
-#### Шаг 4 — router
+#### Шаг 4 — service
 
-В `services/lexicon/internal/httpapi/router.go` после `MediaStore`:
+`internal/service/languages.go` — `s.q.ListActiveLanguages(ctx)` и маппинг в `domain.Language`.
+
+#### Шаг 5 — handler
+
+`services/lexicon/internal/handler/languages.go` — `LanguagesHandler{Service: …}`, `Register` без `jwtMW`, в `list` вызов service и `writeJSON`.
+
+`writeJSON` / `writeErr` — уже в `internal/handler/response.go`.
+
+#### Шаг 6 — router
 
 ```go
-langStore := store.NewLanguageStore(pool)
-(&LanguagesHandler{Store: langStore}).Register(mux)
+querier := query.New(pool)
+langSvc := service.NewLanguagesService(querier)
+(&LanguagesHandler{Service: langSvc}).Register(mux)
 ```
 
-#### Шаг 5 — gateway
+#### Шаг 7 — gateway
 
 Префикс `/languages/` → lexicon уже в `services/api-gateway/cmd/main.go`.
 
@@ -709,11 +703,11 @@ langStore := store.NewLanguageStore(pool)
 
 Если добавляешь **новый public path** — допиши его в `services/api-gateway/internal/middleware/auth.go` и тест в `auth_test.go`.
 
-#### Шаг 6 — конфиг
+#### Шаг 8 — конфиг
 
 Не нужен — `DATABASE_URL` уже есть.
 
-#### Шаг 7 — сборка и проверка
+#### Шаг 9 — сборка и проверка
 
 ```bash
 docker compose up --build -d lexicon
@@ -746,9 +740,9 @@ c=$(code http://localhost:8080/languages)
 | Platform admin | внутри handler: `if !claims.IsAdmin { writeErr(..., 403, ...) }` |
 | Новый префикс URL | `api-gateway/cmd/main.go` → `routes` |
 | Новая таблица | шаг 1: `migrate create` + `just migrate` |
-| Teacher / owner | фильтр `owner_id = $1` в store + проверка `claims.UserID` |
+| Teacher / owner | фильтр `owner_id = $1` в SQL + проверка `claims.UserID` |
 
-Пример с admin: `POST /platform/languages` — тот же store/handler/router, но `Register` вешает route через `jwtMW`, в handler первой строкой `requireAdmin(w, r)`.
+Пример с admin: `POST /platform/languages` — queries → sqlc → service → handler, route через `jwtMW`, в handler `requireAdmin(w, r)`.
 
 ---
 

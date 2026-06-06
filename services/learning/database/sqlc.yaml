@@ -1,0 +1,27 @@
+version: "2"
+
+overrides:
+  go:
+    overrides:
+      - db_type: "uuid"
+        go_type:
+          import: "github.com/google/uuid"
+          type: "UUID"
+      - db_type: "timestamptz"
+        go_type:
+          import: "time"
+          type: "Time"
+
+sql:
+  - engine: "postgresql"
+    queries: "./queries/"
+    schema: "./migrations/"
+    gen:
+      go:
+        package: "query"
+        out: "../internal/gen/query/"
+        sql_package: "pgx/v5"
+        sql_driver: "github.com/jackc/pgx/v5"
+        omit_unused_structs: true
+        emit_sql_as_comment: true
+        emit_pointers_for_null_types: true

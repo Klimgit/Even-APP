@@ -23,12 +23,9 @@ func TestIsPublic(t *testing.T) {
 		{"GET", "/languages/evn/alphabet", true},
 		{"GET", "/languages/evn/media", false},
 		{"GET", "/api/v1/platform/languages/evn/media", false},
-		{"GET", "/api/v1/platform/demo/public", true},
-		{"GET", "/api/v1/platform/demo/auth", false},
 		{"GET", "/api/v1/auth/health", true},
 		{"GET", "/api/v1/auth/ready", true},
 		{"GET", "/api/v1/platform/health", true},
-		{"GET", "/api/v1/platform/demo/admin", false},
 		{"POST", "/api/v1/platform/media/presign", false},
 		{"OPTIONS", "/api/v1/auth/me", false}, // OPTIONS handled in RequireJWT, not IsPublic
 	}
