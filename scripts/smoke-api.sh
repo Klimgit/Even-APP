@@ -61,8 +61,8 @@ MEDIA_ID=$(python3 -c "import json; print(json.load(open('/tmp/smoke-body.json')
 
 # 1x1 PNG
 printf '\x89PNG\r\n\x1a\n\x00\x00\x00\rIHDR\x00\x00\x00\x01\x00\x00\x00\x01\x08\x06\x00\x00\x00\x1f\x15\xc4\x89\x00\x00\x00\nIDATx\x9cc\x00\x01\x00\x00\x05\x00\x01\r\n-\xdb\x00\x00\x00\x00IEND\xaeB`\x82' > /tmp/smoke.png
-curl -sf -X PUT "$UPLOAD" -H 'Content-Type: image/png' --data-binary @/tmp/smoke.png >/dev/null
-pass "PUT to MinIO presigned URL"
+c=$(code -X PUT "$UPLOAD" -H 'Content-Type: image/png' --data-binary @/tmp/smoke.png)
+[[ "$c" == "200" ]] && pass "PUT to MinIO presigned URL → $c" || fail "PUT to MinIO presigned URL → $c ($(cat /tmp/smoke-body.json))"
 
 c=$(code -H "Authorization: Bearer $ACCESS" -X POST "$LEX/api/v1/platform/media/confirm" \
   -H 'Content-Type: application/json' \
