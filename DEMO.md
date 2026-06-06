@@ -147,51 +147,72 @@ curl -s -o /dev/null -w "GET /languages до реализации: %{http_code}\
 - auth: `services/auth/internal/httpapi/auth.go` + `internal/store/users.go`
 - platform media: `services/lexicon/internal/httpapi/platform_media.go` + `internal/store/media.go`
 
-#### Пример: dummy `GET /api/v1/platform/demo/ping` (lexicon, JWT)
+#### Пример: dummy demo-ручки (lexicon, все типы auth + БД)
 
-Учебная ручка: отвечает `{"message":"pong","service":"lexicon"}`. БД не трогаем, gateway не меняем — префикс `/api/v1/platform/` уже проксируется на lexicon.
+Учебный блок в `demo.go`: каждая ручка делает `SELECT 1` и возвращает `"auth": "<тип>"`, `"db": 1`. Код — в репозитории (`store/demo.go`, `httpapi/demo.go`).
+
+| Путь | Auth | Handler | Gateway `IsPublic` |
+|------|------|---------|-------------------|
+| `GET /api/v1/platform/demo/public` | public | без `jwtMW` | **да** — `auth.go` |
+| `GET /api/v1/platform/demo/auth` | любой JWT | `jwtMW` | нет |
+| `GET /api/v1/platform/demo/ping` | любой JWT (alias) | `jwtMW` | нет |
+| `GET /api/v1/platform/demo/admin` | platform admin | `jwtMW` + `requireAdmin` | нет |
+| `GET /api/v1/platform/demo/teacher` | teacher или admin | `jwtMW` + `requireTeacher` | нет |
+| `GET /api/v1/platform/demo/owner?user_id=` | владелец или admin | `jwtMW` + `user_id == claims.UserID` | нет |
 
 | Шаг | Файл | Действие |
 |-----|------|----------|
-| 1 | `services/lexicon/internal/httpapi/demo.go` | **создать** — handler |
-| 2 | `services/lexicon/internal/httpapi/router.go` | **дописать** — подключить handler |
-| — | gateway, миграция, `IsPublic` | **не нужны** |
+| 1 | `services/lexicon/internal/store/demo.go` | SQL (`SELECT 1`) |
+| 2 | `services/lexicon/internal/httpapi/demo.go` | все demo-ручки |
+| 3 | `services/lexicon/internal/httpapi/router.go` | `DemoHandler` + `Register` |
+| 4 | `services/api-gateway/internal/middleware/auth.go` | public-путь `/api/v1/platform/demo/public` |
 
 ---
 
-**Файл 1 — создать** `services/lexicon/internal/httpapi/demo.go`:
+**Файл 1 — создать** `services/lexicon/internal/store/demo.go`:
 
 ```go
-package httpapi
+package store
 
 import (
-	"net/http"
+	"context"
+
+	"github.com/jackc/pgx/v5/pgxpool"
 )
 
-type DemoHandler struct{}
-
-func (h *DemoHandler) Register(mux *http.ServeMux, jwt func(http.Handler) http.Handler) {
-	mux.Handle("GET /api/v1/platform/demo/ping", jwt(http.HandlerFunc(h.ping)))
+type DemoStore struct {
+	pool *pgxpool.Pool
 }
 
-func (h *DemoHandler) ping(w http.ResponseWriter, r *http.Request) {
-	writeJSON(w, http.StatusOK, map[string]string{
-		"message": "pong",
-		"service": "lexicon",
-	})
+func NewDemoStore(pool *pgxpool.Pool) *DemoStore {
+	return &DemoStore{pool: pool}
+}
+
+func (s *DemoStore) Ping(ctx context.Context) (int, error) {
+	var n int
+	err := s.pool.QueryRow(ctx, `SELECT 1`).Scan(&n)
+	return n, err
 }
 ```
 
-`writeJSON` уже есть в пакете `httpapi` (см. `platform_media.go`).
+---
+
+**Файл 2 —** `services/lexicon/internal/httpapi/demo.go` — см. готовый файл в репозитории (все 6 маршрутов + `requireTeacher`).
+
+**Файл 4 — public на gateway** — в `IsPublic` для `GET`:
+
+```go
+"/api/v1/platform/demo/public":
+```
 
 ---
 
-**Файл 2 — дописать** `services/lexicon/internal/httpapi/router.go`
+**Файл 3 — дописать** `services/lexicon/internal/httpapi/router.go`
 
 После строк с `PlatformMediaHandler` (перед `return middleware.CORS`):
 
 ```go
-	(&DemoHandler{}).Register(mux, jwtMW)
+	(&DemoHandler{Store: store.NewDemoStore(pool)}).Register(mux, jwtMW)
 ```
 
 Должно получиться примерно так:
@@ -201,7 +222,7 @@ func (h *DemoHandler) ping(w http.ResponseWriter, r *http.Request) {
 	ms := store.NewMediaStore(pool)
 	(&PlatformMediaHandler{Store: ms, S3: s3c, Bucket: bucket, UserQuotaBytes: userQuotaBytes}).Register(mux, jwtMW)
 
-	(&DemoHandler{}).Register(mux, jwtMW)
+	(&DemoHandler{Store: store.NewDemoStore(pool)}).Register(mux, jwtMW)
 
 	return middleware.CORS(middleware.Recovery(log, middleware.Logging(log, mux)))
 ```
@@ -219,33 +240,34 @@ docker compose up --build -d lexicon
 docker compose ps lexicon   # ждём healthy
 ```
 
-**Проверка** (нужен `$TOKEN` из шага 4):
+**Проверка** (`$TOKEN` — teacher из шага 4; для admin — promote в smoke или SQL):
 
 ```bash
-# напрямую на lexicon
-curl -s http://localhost:8082/api/v1/platform/demo/ping \
-  -H "Authorization: Bearer $TOKEN" | jq .
+GW=http://localhost:8080
+ME=$(curl -s "$GW/api/v1/auth/me" -H "Authorization: Bearer $TOKEN" | jq -r .id)
 
-# через gateway — как у клиента
-curl -s http://localhost:8080/api/v1/platform/demo/ping \
-  -H "Authorization: Bearer $TOKEN" | jq .
-# {"message":"pong","service":"lexicon"}
+# public — без токена
+curl -s "$GW/api/v1/platform/demo/public" | jq .
 
-# без токена gateway вернёт 401
-curl -s -o /dev/null -w "без токена: %{http_code}\n" \
-  http://localhost:8080/api/v1/platform/demo/ping
+# любой JWT
+curl -s "$GW/api/v1/platform/demo/auth" -H "Authorization: Bearer $TOKEN" | jq .
+
+# teacher (токен teacher из register)
+curl -s "$GW/api/v1/platform/demo/teacher" -H "Authorization: Bearer $TOKEN" | jq .
+
+# owner — свой user_id
+curl -s "$GW/api/v1/platform/demo/owner?user_id=$ME" -H "Authorization: Bearer $TOKEN" | jq .
+
+# admin — после promote is_admin (как в smoke-api)
+curl -s "$GW/api/v1/platform/demo/admin" -H "Authorization: Bearer $ADMIN_TOKEN" | jq .
+
+# protected без токена → 401
+curl -s -o /dev/null -w "%{http_code}\n" "$GW/api/v1/platform/demo/auth"
 ```
 
 ---
 
-**Если ручка с БД** — добавляется store между шагами 1 и 2:
-
-| Файл | Что |
-|------|-----|
-| `services/lexicon/internal/store/<ресурс>.go` | SQL, структуры |
-| `services/lexicon/internal/httpapi/<ресурс>.go` | handler вызывает store |
-
-Полный пример с таблицей — [DEVELOPMENT.md § GET /languages](DEVELOPMENT.md).
+Полный пример с реальной таблицей — [DEVELOPMENT.md § GET /languages](DEVELOPMENT.md).
 
 **Auth в handler (шпаргалка):**
 
@@ -279,7 +301,7 @@ curl -s -o /dev/null -w "без токена: %{http_code}\n" \
 just smoke-api
 ```
 
-Ожидаем `{"message":"pong","service":"lexicon"}`.
+Ожидаем `"auth"` в ответе (`public`, `jwt`, `teacher`, …) и `"db":1`.
 
 **Озвучка:** «Handler + router, пересобрали lexicon, curl через gateway с Bearer.»
 
@@ -491,8 +513,9 @@ curl -s -o /dev/null -w "%{http_code}\n" http://localhost:8080/api/v1/platform/d
 
 **На демо копируем dummy `GET /api/v1/platform/demo/ping`:**
 
-1. Создать `services/lexicon/internal/httpapi/demo.go`
-2. Дописать `(&DemoHandler{}).Register(mux, jwtMW)` в `router.go`
+1. Создать `services/lexicon/internal/store/demo.go` — `SELECT 1`
+2. Создать `services/lexicon/internal/httpapi/demo.go`
+3. Дописать `(&DemoHandler{Store: store.NewDemoStore(pool)}).Register(mux, jwtMW)` в `router.go`
 
 ---
 

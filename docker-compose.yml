@@ -48,7 +48,6 @@ services:
     restart: "no"
 
   auth-migrate:
-    profiles: [migrate]
     image: migrate/migrate:v4.19.1
     volumes:
       - ./services/auth/database/migrations:/migrations:ro
@@ -62,7 +61,6 @@ services:
     restart: "no"
 
   lexicon-migrate:
-    profiles: [migrate]
     image: migrate/migrate:v4.19.1
     volumes:
       - ./services/lexicon/database/migrations:/migrations:ro
@@ -76,7 +74,6 @@ services:
     restart: "no"
 
   content-migrate:
-    profiles: [migrate]
     image: migrate/migrate:v4.19.1
     volumes:
       - ./services/content/database/migrations:/migrations:ro
@@ -90,7 +87,6 @@ services:
     restart: "no"
 
   learning-migrate:
-    profiles: [migrate]
     image: migrate/migrate:v4.19.1
     volumes:
       - ./services/learning/database/migrations:/migrations:ro
@@ -115,8 +111,8 @@ services:
     ports:
       - "8081:8081"
     depends_on:
-      postgres:
-        condition: service_healthy
+      auth-migrate:
+        condition: service_completed_successfully
     healthcheck:
       test: ["CMD", "wget", "-qO-", "http://localhost:8081/health"]
       interval: 10s
@@ -142,8 +138,8 @@ services:
     ports:
       - "8082:8082"
     depends_on:
-      postgres:
-        condition: service_healthy
+      lexicon-migrate:
+        condition: service_completed_successfully
       minio-init:
         condition: service_completed_successfully
     healthcheck:
@@ -169,8 +165,8 @@ services:
     ports:
       - "8083:8083"
     depends_on:
-      postgres:
-        condition: service_healthy
+      content-migrate:
+        condition: service_completed_successfully
       minio-init:
         condition: service_completed_successfully
     healthcheck:
@@ -191,8 +187,8 @@ services:
     ports:
       - "8084:8084"
     depends_on:
-      postgres:
-        condition: service_healthy
+      learning-migrate:
+        condition: service_completed_successfully
     healthcheck:
       test: ["CMD", "wget", "-qO-", "http://localhost:8084/health"]
       interval: 10s

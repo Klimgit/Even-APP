@@ -18,7 +18,7 @@ mkdir -p .dev/logs .dev/pids
 echo "→ starting postgres + minio..."
 docker compose up -d postgres minio minio-init
 
-echo "→ running migrations (explicit step)..."
+echo "→ applying migrations..."
 ./scripts/migrate.sh
 
 echo "→ stopping docker app containers (free ports 8080-8084)..."

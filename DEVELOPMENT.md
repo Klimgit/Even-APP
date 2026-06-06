@@ -96,7 +96,7 @@ just down
 
 | Команда | Действие |
 |---------|----------|
-| `just up` | поднять всё |
+| `just up` | поднять всё (миграции применяются автоматически до старта сервисов) |
 | `just down` | остановить и убрать контейнеры |
 | `just logs` | логи gateway + 4 сервиса (follow) |
 | `just compose-logs` | логи всех контейнеров, включая postgres/minio |
@@ -134,7 +134,7 @@ just up-local
 Скрипт `scripts/up-local.sh`:
 
 1. поднимает Postgres + MinIO;
-2. явно гоняет миграции (`just migrate`);
+2. применяет миграции (`just migrate`);
 3. останавливает docker-контейнеры приложений (освобождает 8080–8084);
 4. `just build-all` → бинарники в `bin/`;
 5. запускает 5 процессов в фоне, логи в `.dev/logs/`, PID в `.dev/pids/`.
@@ -170,8 +170,8 @@ echo $! > .dev/pids/auth.pid
 
 ```bash
 just infra-up                                    # только postgres + minio
-just migrate                                     # все БД
-# или одна: docker compose --profile migrate up auth-migrate
+just migrate                                     # все БД (или просто just up — миграции там же)
+# одна БД: docker compose up auth-migrate
 docker compose stop auth                         # если порт занят
 
 just run-auth-local                              # foreground, Ctrl+C для остановки
@@ -277,22 +277,19 @@ just smoke-api         # только HTTP smoke (сервисы уже запу
 
 Файлы: `services/<svc>/database/migrations/`.
 
-### Рекомендуемый порядок (локально и на сервере)
+### Локально (автоматически)
+
+`just up` и `docker compose up` применяют миграции **до** старта приложений: сервисы `auth-migrate`, `lexicon-migrate`, … в `depends_on` у каждого app.
+
+После добавления нового `.sql` — снова `just up` (или `just migrate` без перезапуска всего стека).
+
+### Вручную
 
 ```bash
-just migrate          # Docker, все четыре БД
-just up               # уже вызывает migrate внутри up.sh
-```
-
-### Через Docker
-
-```bash
-just migrate
+just migrate          # все четыре БД
 # одна БД:
-docker compose --profile migrate up auth-migrate
+docker compose rm -sf auth-migrate && docker compose up auth-migrate
 ```
-
-Контейнеры `*-migrate` в profile `migrate` — не стартуют с обычным `docker compose up`.
 
 ### С хоста
 
@@ -455,7 +452,7 @@ services/auth/
 migrate create -ext sql -dir services/lexicon/database/migrations -seq add_lexemes
 just migrate
 # одна БД:
-docker compose --profile migrate up lexicon-migrate
+docker compose up lexicon-migrate
 ```
 
 Файлы: `services/<svc>/database/migrations/NNNNNN_name.up.sql` и `.down.sql`.

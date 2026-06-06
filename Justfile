@@ -90,9 +90,9 @@ run-gateway-local:
       CONTENT_URL="${CONTENT_URL}" LEARNING_URL="${LEARNING_URL}" \
       LOG_LEVEL="${LOG_LEVEL:-info}" go run ./services/api-gateway/cmd
 
-# --- Migrations (explicit; never on app startup) ---
+# --- Migrations (auto on `just up`; manual if needed) ---
 
-# Docker migrate containers (no migrate CLI on host required)
+# Re-apply migrations without restarting the full stack
 migrate:
     @./scripts/migrate.sh
 

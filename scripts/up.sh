@@ -10,10 +10,9 @@ if [[ ! -f .env ]]; then
   echo "→ created .env from .env.example"
 fi
 
-echo "→ applying migrations (explicit step)..."
-./scripts/migrate.sh
-
-echo "→ building and starting containers..."
+echo "→ building and starting stack (migrations run automatically before apps)..."
+# Fresh migrate containers on each up so new .sql files apply without a separate step.
+docker compose rm -sf auth-migrate lexicon-migrate content-migrate learning-migrate >/dev/null 2>&1 || true
 docker compose up --build -d
 
 echo "→ waiting for gateway (http://localhost:8080/api/v1/ready)..."
