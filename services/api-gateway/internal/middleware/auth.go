@@ -4,8 +4,8 @@ import (
 	"net/http"
 	"strings"
 
-	libjwt "github.com/even-app/even-app/libs/jwt"
 	httpmw "github.com/even-app/even-app/libs/http/middleware"
+	libjwt "github.com/even-app/even-app/libs/jwt"
 )
 
 // RequireJWT validates Bearer tokens on protected routes. Public routes and OPTIONS pass through.
@@ -29,7 +29,8 @@ func IsPublic(r *http.Request) bool {
 	switch r.Method {
 	case http.MethodGet:
 		switch path {
-		case "/health", "/api/v1/health", "/api/v1/ready", "/api/v1/openapi.yaml", "/api/v1/gateway/status":
+		case "/health", "/api/v1/health", "/api/v1/ready", "/api/v1/openapi.yaml", "/api/v1/gateway/status",
+			"/api/v1/platform/demo/public":
 			return true
 		}
 		return isPublicLanguageGET(path)
