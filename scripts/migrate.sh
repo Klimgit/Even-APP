@@ -17,6 +17,7 @@ docker compose up -d postgres
 docker compose exec -T postgres pg_isready -U "${POSTGRES_USER:-even}" >/dev/null
 
 echo "→ applying migrations (auth, lexicon, content, learning)..."
+# COMPOSE_FILE may include docker-compose.prod.yml (set by deploy.sh)
 docker compose --profile migrate up auth-migrate lexicon-migrate content-migrate learning-migrate
 
 echo "✓ migrations applied"

@@ -1,3 +1,12 @@
 #!/bin/bash
-# Strip Cursor co-author trailers before commit is finalized.
-sed -i '' '/cursoragent@cursor\.com/d' "$1" 2>/dev/null || sed -i '/cursoragent@cursor\.com/d' "$1"
+# Strip Cursor/agent attribution trailers before commit is finalized.
+MSG_FILE="$1"
+sed -i '' \
+  -e '/cursoragent@cursor\.com/d' \
+  -e '/[Cc]o-authored-by:.*[Cc]ursor/d' \
+  -e '/Made-with:.*[Cc]ursor/d' \
+  "$MSG_FILE" 2>/dev/null || sed -i \
+  -e '/cursoragent@cursor\.com/d' \
+  -e '/[Cc]o-authored-by:.*[Cc]ursor/d' \
+  -e '/Made-with:.*[Cc]ursor/d' \
+  "$MSG_FILE"

@@ -2,7 +2,7 @@
 
 Руководство для backend-разработки: локальный запуск, сборка, миграции, логи, отладка.
 
-Связанные документы: [BACKEND.md](BACKEND.md) (архитектура скелета), [API.md](API.md), [DTO.md](DTO.md), [CONTEXT.md](CONTEXT.md).
+Связанные документы: [BACKEND.md](BACKEND.md) (архитектура скелета), [API.md](API.md), [DTO.md](DTO.md), [CONTEXT.md](CONTEXT.md), [DEPLOY.md](DEPLOY.md) (CI/CD и production).
 
 ---
 

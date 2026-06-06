@@ -1,0 +1,36 @@
+# Production overrides. Use:
+#   COMPOSE_FILE=docker-compose.yml:docker-compose.prod.yml docker compose up -d
+# Or: ./scripts/deploy.sh
+
+services:
+  postgres:
+    restart: unless-stopped
+    ports:
+      - "127.0.0.1:5432:5432"
+
+  minio:
+    restart: unless-stopped
+    ports:
+      - "127.0.0.1:9000:9000"
+      - "127.0.0.1:9001:9001"
+
+  auth:
+    restart: unless-stopped
+    ports: []
+
+  lexicon:
+    restart: unless-stopped
+    ports: []
+
+  content:
+    restart: unless-stopped
+    ports: []
+
+  learning:
+    restart: unless-stopped
+    ports: []
+
+  api-gateway:
+    restart: unless-stopped
+    ports:
+      - "8080:8080"

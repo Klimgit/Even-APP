@@ -1,0 +1,33 @@
+name: CI
+
+on:
+  pull_request:
+    branches: [main]
+  workflow_call:
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version: "1.23"
+          cache-dependency-path: |
+            **/go.sum
+            go.work.sum
+
+      - name: Sync workspace
+        run: go work sync
+
+      - name: Build all services
+        run: |
+          go build -o /tmp/api-gateway ./services/api-gateway/cmd
+          go build -o /tmp/auth ./services/auth/cmd
+          go build -o /tmp/lexicon ./services/lexicon/cmd
+          go build -o /tmp/content ./services/content/cmd
+          go build -o /tmp/learning ./services/learning/cmd
+
+      - name: Docker build (smoke)
+        run: docker compose build api-gateway auth lexicon
