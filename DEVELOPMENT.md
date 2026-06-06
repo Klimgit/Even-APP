@@ -398,7 +398,9 @@ services/auth/
 ├── cmd/main.go              # точка входа
 ├── internal/
 │   ├── config/              # env-конфиг
-│   └── gen/http/v1/         # ogen (gitignored, генерируется)
+│   ├── httpapi/             # HTTP handlers + router.go
+│   ├── store/               # SQL (pgx), без HTTP
+│   └── gen/http/v1/         # ogen (gitignored, опционально)
 ├── api/http/v1/
 │   ├── api.yaml             # OpenAPI
 │   └── embed.go             # встроенная спека для /openapi.yaml
@@ -407,19 +409,146 @@ services/auth/
 └── Justfile                 # swagger, migrate, run
 ```
 
-### Типичный цикл
+Референсы реализованных ручек:
 
-1. Правишь `api/http/v1/api.yaml`.
-2. `just -f services/auth/Justfile swagger` — codegen (нужен ogen: `just -f services/auth/Justfile install-tools`).
-3. Добавляешь миграцию + handler.
-4. Локально: `just run-auth-local` или `just up-local`.
-5. Проверяешь через gateway: `curl http://localhost:8080/api/v1/auth/...`.
+- **auth:** `services/auth/internal/httpapi/auth.go`, `internal/store/users.go`
+- **platform media:** `services/lexicon/internal/httpapi/platform_media.go`, `internal/store/media.go`
 
-### OpenAPI / ogen
+---
+
+### Как добавить новую ручку (пошагово)
+
+Клиент ходит в **gateway** `:8080`. Каждый сервис — своя БД, миграции **до** старта приложения.
+
+#### 0. Спроектировать
+
+1. Записать контракт в [API.md](API.md) и [DTO.md](DTO.md).
+2. Выбрать **сервис** по URL-префиксу (см. раздел 10 — Gateway).
+3. Решить **auth**: public / любой JWT / teacher / platform admin (`is_admin`).
+4. Нужна ли новая таблица или колонка → миграция; иначе сразу store.
+
+#### 1. Миграция (если меняется схема)
+
+```bash
+migrate create -ext sql -dir services/lexicon/database/migrations -seq add_lexemes
+just migrate
+# одна БД:
+docker compose --profile migrate up lexicon-migrate
+```
+
+Файлы: `services/<svc>/database/migrations/NNNNNN_name.up.sql` и `.down.sql`.
+
+Проверка:
+
+```bash
+docker compose exec postgres psql -U even -d even_lexicon -c '\dt'
+```
+
+Миграции **не** вешать на старт `main.go` — только явный шаг `just migrate` / `deploy.sh`.
+
+#### 2. Store — SQL и данные
+
+Новый или существующий файл в `services/<svc>/internal/store/`.
+
+- `*pgxpool.Pool`, `context.Context` первым аргументом
+- параметризованный SQL (`$1`, `$2`), без конкатенации user input
+- доменные фильтры в WHERE (`scope`, `owner_id`, `language_id`, …)
+- store **не** импортирует HTTP и JWT — только данные и ошибки
+
+Несколько таблиц в одной операции — транзакция в store (`pool.Begin` → `Commit` / `Rollback`).
+
+#### 3. Handler — бизнес-логика и HTTP
+
+Новый файл в `services/<svc>/internal/httpapi/` (или метод в существующем handler).
+
+Слои в handler:
+
+1. парсинг body / query / path (`r.PathValue("id")` в Go 1.22+)
+2. auth: `middleware.ClaimsFromContext(r.Context())` → `UserID`, `Role`, `IsAdmin`
+3. проверка прав (например `requireAdmin` как в `platform_media.go`)
+4. вызов store (+ S3 / квота / валидация из `libs/media` при необходимости)
+5. ответ: `writeJSON` / `writeErr`; ошибки `{ "error", "message" }`
+
+Регистрация маршрута в `Register(mux, jwtMW)`:
+
+```go
+// public
+mux.HandleFunc("GET /api/v1/languages", h.list)
+
+// с JWT
+mux.Handle("GET /api/v1/auth/me", jwtMW(http.HandlerFunc(h.me)))
+```
+
+#### 4. Подключить в router
+
+`services/<svc>/internal/httpapi/router.go` — создать store, handler, вызвать `Register`.
+
+Без этого шага ручка не появится, даже если handler написан.
+
+#### 5. Gateway
+
+Большинство префиксов уже в `services/api-gateway/cmd/main.go`. Новый префикс — добавить в `routes` там же.
+
+Тестировать **через gateway**:
+
+```bash
+curl http://localhost:8080/api/v1/...
+```
+
+#### 6. Конфиг (если нужны новые env)
+
+`services/<svc>/internal/config/config.go`, при необходимости `libs/config/`, `.env.example`.
+
+#### 7. Сборка и проверка
+
+```bash
+docker compose up --build -d lexicon   # или auth, content, learning
+# либо на хосте:
+just run-lexicon-local
+
+curl -s http://localhost:8080/api/v1/... | jq .
+curl -s -H "Authorization: Bearer $TOKEN" http://localhost:8080/api/v1/...
+```
+
+Опционально: кейс в `scripts/smoke-api.sh`. После правок `libs/`: `just tidy && just build-all`.
+
+#### 8. Документация
+
+- [API.md](API.md) — описание ручки, коды ошибок
+- [DTO.md](DTO.md) — JSON-типы
+- `services/<svc>/api/http/v1/api.yaml` — OpenAPI (желательно)
+
+#### Чеклист перед merge
+
+- [ ] API.md + DTO.md
+- [ ] миграция `.up.sql` + `.down.sql` (если нужна)
+- [ ] `internal/store` + `internal/httpapi` + `router.go`
+- [ ] gateway route (если новый префикс)
+- [ ] `just migrate` локально
+- [ ] curl / smoke через `:8080`
+- [ ] нет секретов и полных JWT в логах
+
+#### Типичные проверки прав
+
+| Доступ | Условие в handler |
+|--------|-------------------|
+| Public | без `jwtMW` на route |
+| Любой авторизованный | `jwtMW` |
+| Platform admin | `claims.IsAdmin` |
+| Teacher | `claims.Role == "teacher" \|\| claims.IsAdmin` |
+| Владелец ресурса | `owner_id == claims.UserID` |
+
+Кто загрузил файл — `uploaded_by = claims.UserID`. В какой «базе» лежит медиа — задаётся **endpoint** (`/platform/` vs `/teacher/`) и полем `scope` в store, не ролью alone.
+
+---
+
+### OpenAPI / ogen (опционально)
+
+Сейчас **auth** и **platform media** — ручные handlers (см. референсы выше). Ogen можно использовать параллельно:
 
 ```bash
 just -f services/auth/Justfile install-tools   # один раз: ogen + migrate
-just -f services/auth/Justfile swagger         # перегенерация handlers
+just -f services/auth/Justfile swagger         # перегенерация
 ```
 
 Общие фрагменты спеки: `_shared/openapi/`. Генератор-хелпер: `_misc/openapi-handler-gen/`.
