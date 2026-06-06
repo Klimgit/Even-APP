@@ -1,0 +1,27 @@
+# Preview/staging overrides (test feature branches on the same server).
+# Use with: COMPOSE_FILE=docker-compose.yml:docker-compose.prod.yml:docker-compose.preview.yml
+#           COMPOSE_PROJECT_NAME=even-preview
+
+name: even-preview
+
+services:
+  postgres:
+    ports:
+      - "127.0.0.1:5433:5432"
+    volumes:
+      - postgres_preview_data:/var/lib/postgresql/data
+
+  minio:
+    ports:
+      - "127.0.0.1:9010:9000"
+      - "127.0.0.1:9011:9001"
+    volumes:
+      - minio_preview_data:/data
+
+  api-gateway:
+    ports:
+      - "9080:8080"
+
+volumes:
+  postgres_preview_data:
+  minio_preview_data:

@@ -100,6 +100,10 @@ migrate-all:
 smoke-api:
     @./scripts/smoke-api.sh
 
+# Preview on server (SSH): just deploy-preview BRANCH=feature/foo
+deploy-preview BRANCH:
+    @./scripts/deploy-preview.sh "{{BRANCH}}"
+
 health-check:
     #!/usr/bin/env bash
     set -euo pipefail

@@ -113,8 +113,40 @@ flowchart LR
 
 | Workflow | Триггер | Действие |
 |----------|---------|----------|
-| [ci.yml](.github/workflows/ci.yml) | Pull Request | `go build` + docker build smoke |
-| [deploy.yml](.github/workflows/deploy.yml) | push `main`, manual | CI → SSH → `git pull` → `deploy.sh` |
+| [ci.yml](.github/workflows/ci.yml) | PR, push в feature-ветки | `go build` + docker build smoke |
+| [deploy.yml](.github/workflows/deploy.yml) | push `main`, manual | CI → SSH → `deploy.sh` (production) |
+| [deploy-preview.yml](.github/workflows/deploy-preview.yml) | manual, выбор ветки | CI ветки → SSH → `deploy-preview.sh` |
+
+### Preview (тест отдельных веток)
+
+Отдельный слот на том же сервере — **не трогает production** (`/opt/even-app`).
+
+| | Production | Preview |
+|---|------------|---------|
+| Путь | `/opt/even-app` | `/opt/even-app-preview` |
+| API | `:8080` | `:9080` |
+| Postgres | `127.0.0.1:5432` | `127.0.0.1:5433` |
+| MinIO | `127.0.0.1:9000` | `127.0.0.1:9010` |
+| Compose project | `even-app` | `even-preview` |
+
+**Первичная настройка preview (один раз):**
+
+```bash
+ssh DEPLOY_USER@91.218.245.136
+sudo bash /opt/even-app/scripts/server-bootstrap-preview.sh
+# или после clone:
+cd /opt/even-app-preview && cp deploy/env.preview.example .env && nano .env
+sudo ufw allow 9080/tcp
+```
+
+**Деплой ветки:**
+
+- GitHub: **Actions → Deploy Preview → Run workflow** → указать имя ветки (`feature/foo`)
+- На сервере: `cd /opt/even-app-preview && ./scripts/deploy-preview.sh feature/foo`
+
+Одновременно активна **одна** preview-ветка (новый деплой переключает checkout и пересобирает стек).
+
+Опциональный secret: `DEPLOY_PREVIEW_PATH` (по умолчанию `/opt/even-app-preview`).
 
 `deploy.sh`:
 

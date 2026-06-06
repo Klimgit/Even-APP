@@ -1,0 +1,39 @@
+name: Deploy Preview
+
+on:
+  workflow_dispatch:
+    inputs:
+      branch:
+        description: Branch name to deploy (e.g. feature/auth)
+        required: true
+        type: string
+
+concurrency:
+  group: deploy-preview
+  cancel-in-progress: true
+
+jobs:
+  ci:
+    uses: ./.github/workflows/ci.yml
+    with:
+      ref: ${{ inputs.branch }}
+
+  deploy-preview:
+    needs: ci
+    runs-on: ubuntu-latest
+    steps:
+      - name: Deploy branch to preview slot
+        uses: appleboy/ssh-action@v1.2.0
+        with:
+          host: ${{ secrets.DEPLOY_HOST }}
+          username: ${{ secrets.DEPLOY_USER }}
+          key: ${{ secrets.DEPLOY_SSH_KEY }}
+          port: ${{ secrets.DEPLOY_PORT || 22 }}
+          script_stop: true
+          script: |
+            set -euo pipefail
+            PREVIEW_PATH="${{ secrets.DEPLOY_PREVIEW_PATH || '/opt/even-app-preview' }}"
+            cd "$PREVIEW_PATH"
+            git fetch origin --prune
+            chmod +x scripts/*.sh
+            ./scripts/deploy-preview.sh "${{ inputs.branch }}"

@@ -3,13 +3,22 @@ name: CI
 on:
   pull_request:
     branches: [main]
+  push:
+    branches-ignore: [main]
   workflow_call:
+    inputs:
+      ref:
+        description: Git ref to build (branch, tag, SHA)
+        required: false
+        type: string
 
 jobs:
   build:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.ref || github.ref }}
 
       - uses: actions/setup-go@v5
         with:
