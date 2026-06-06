@@ -50,6 +50,17 @@ _Avoid_: word, vocabulary item, термин
 Языковое хранилище всех Lexeme для данного Language. Создание и правка — только Platform administrator. Teacher при редактировании урока выбирает Lexeme через read-only picker.
 _Avoid_: словарь платформы, word bank, база слов
 
+**Platform media library** (общая база):
+Отдельный каталог медиа языка (`scope=platform`, `owner_id=null`). Наполняется **только** platform administrator — это не агрегат и не «сборка со всех учителей». Просмотр (поиск, picker) доступен всем авторизованным; загрузка и правка — только admin. При сборке урока учитель может вставить медиа из общей базы.
+_Avoid_: S3 browser, assets folder, общая папка учителей
+
+**Teacher media library** (личная база):
+Изолированный каталог учителя (`scope=teacher`, `owner_id=teacher`). Учитель видит и управляет **только своими** файлами; медиа других учителей недоступны. Каждая загрузка — в хранилище с `display_name`, опционально TTL. Квота: `MEDIA_USER_QUOTA_BYTES`. При сборке урока учитель может вставить медиа из **своей** базы или из **общей** (read-only).
+_Avoid_: teacher uploads, личные картинки
+
+**Lesson media picker**:
+При редактировании блока урока источник медиа — ровно один из двух: `platform` library или `teacher` library (своя). Ссылка в блоке — `media_asset_id`; сервис проверяет, что asset либо `scope=platform`, либо `scope=teacher` с `owner_id=current_teacher`.
+
 **LexemeForm**:
 Грамматическая форма Lexeme (например, «бишни» 3sg). Отслеживается в Course coverage: introduced / exercised по каждой форме.
 _Avoid_: inflection, variant

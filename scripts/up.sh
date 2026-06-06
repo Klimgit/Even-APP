@@ -10,6 +10,9 @@ if [[ ! -f .env ]]; then
   echo "→ created .env from .env.example"
 fi
 
+echo "→ applying migrations (explicit step)..."
+./scripts/migrate.sh
+
 echo "→ building and starting containers..."
 docker compose up --build -d
 

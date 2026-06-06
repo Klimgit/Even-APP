@@ -4,7 +4,10 @@ use (
 	./libs/config
 	./libs/core
 	./libs/http
+	./libs/jwt
+	./libs/media
 	./libs/postgres
+	./libs/s3
 	./services/api-gateway
 	./services/auth
 	./services/content

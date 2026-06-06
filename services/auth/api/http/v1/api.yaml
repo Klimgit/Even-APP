@@ -1,8 +1,8 @@
 openapi: 3.0.3
 info:
   title: even-auth
-  version: 0.1.0
-  description: Authentication and user management (skeleton)
+  version: 0.2.0
+  description: Authentication and user management
 
 paths:
   /api/v1/health:
@@ -18,7 +18,95 @@ paths:
               schema:
                 $ref: "#/components/schemas/HealthResponse"
 
+  /api/v1/auth/register:
+    post:
+      operationId: register
+      tags: [Auth, Public]
+      summary: Register a new user
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/RegisterRequest"
+      responses:
+        "201":
+          description: Created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AuthResponse"
+        "400":
+          description: Bad request
+        "409":
+          description: Email already registered
+
+  /api/v1/auth/login:
+    post:
+      operationId: login
+      tags: [Auth, Public]
+      summary: Login
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/LoginRequest"
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AuthResponse"
+        "401":
+          description: Invalid credentials
+
+  /api/v1/auth/refresh:
+    post:
+      operationId: refresh
+      tags: [Auth, Public]
+      summary: Refresh access token
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [refresh_token]
+              properties:
+                refresh_token:
+                  type: string
+      responses:
+        "200":
+          description: OK
+        "401":
+          description: Invalid refresh token
+
+  /api/v1/auth/me:
+    get:
+      operationId: getMe
+      tags: [Auth]
+      summary: Current user profile
+      security:
+        - bearerAuth: []
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/User"
+        "401":
+          description: Unauthorized
+
 components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+
   schemas:
     HealthResponse:
       type: object
@@ -28,3 +116,60 @@ components:
           type: string
         service:
           type: string
+
+    RegisterRequest:
+      type: object
+      required: [email, password]
+      properties:
+        email:
+          type: string
+          format: email
+        password:
+          type: string
+          minLength: 8
+        display_name:
+          type: string
+        role:
+          type: string
+          enum: [student, teacher]
+
+    LoginRequest:
+      type: object
+      required: [email, password]
+      properties:
+        email:
+          type: string
+          format: email
+        password:
+          type: string
+
+    AuthResponse:
+      type: object
+      required: [access_token, refresh_token, user]
+      properties:
+        access_token:
+          type: string
+        refresh_token:
+          type: string
+        user:
+          $ref: "#/components/schemas/User"
+
+    User:
+      type: object
+      required: [id, email, role, is_admin, created_at]
+      properties:
+        id:
+          type: string
+          format: uuid
+        email:
+          type: string
+        display_name:
+          type: string
+        role:
+          type: string
+          enum: [student, teacher]
+        is_admin:
+          type: boolean
+        created_at:
+          type: string
+          format: date-time

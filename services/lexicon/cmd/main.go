@@ -8,10 +8,13 @@ import (
 	"syscall"
 
 	"github.com/even-app/even-app/libs/core/logger"
+	libjwt "github.com/even-app/even-app/libs/jwt"
 	"github.com/even-app/even-app/libs/http/server"
 	"github.com/even-app/even-app/libs/postgres"
+	libs3 "github.com/even-app/even-app/libs/s3"
 	apiv1 "github.com/even-app/even-app/services/lexicon/api/http/v1"
 	"github.com/even-app/even-app/services/lexicon/internal/config"
+	"github.com/even-app/even-app/services/lexicon/internal/httpapi"
 	"github.com/joho/godotenv"
 )
 
@@ -24,8 +27,6 @@ func main() {
 	}
 
 	logr := logger.New(cfg.Base.LogLevel)
-	logr.Info("s3 configured", "endpoint", cfg.S3.Endpoint, "bucket", cfg.S3.Bucket)
-
 	ctx, stop := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM)
 	defer stop()
 
@@ -35,14 +36,20 @@ func main() {
 	}
 	defer pool.Close()
 
+	s3c, err := libs3.New(cfg.S3)
+	if err != nil {
+		log.Fatalf("s3: %v", err)
+	}
+
+	jwtMgr := libjwt.NewManager(cfg.JWTSecret, cfg.AccessTTL())
 	ready := func(ctx context.Context) error { return pool.Ping(ctx) }
+	handler := httpapi.NewMux(logr, pool, s3c, cfg.S3.Bucket, cfg.Media.UserQuotaBytes, jwtMgr, apiv1.OpenAPISpec, ready)
 
 	if err := server.Run(ctx, server.Options{
 		ServiceName: "lexicon",
 		Port:        cfg.Base.HTTPPort,
 		Logger:      logr,
-		Ready:       ready,
-		OpenAPISpec: apiv1.OpenAPISpec,
+		Handler:     handler,
 	}); err != nil {
 		logr.Error("server stopped", "err", err)
 		os.Exit(1)

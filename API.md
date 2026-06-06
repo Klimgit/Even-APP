@@ -2,7 +2,23 @@
 
 Base URL: `/api/v1`
 
-Формат: **JSON**. Auth: **Bearer JWT** (`Authorization: Bearer <access_token>`), кроме `/auth/`*.
+Формат: **JSON**. Auth: **Bearer JWT** (`Authorization: Bearer <access_token>`), кроме `/auth/*` и public alphabet.
+
+См. также [MVP.md](./MVP.md). Ниже — полная спека; секции помечены **MVP** / **Phase 2**.
+
+---
+
+## MVP — сводка ручек
+
+| Сервис | Группа | Ручки |
+|--------|--------|-------|
+| auth | Auth | `POST /auth/register`, `/login`, `/refresh`, `GET /auth/me` |
+| lexicon | Public | `GET /languages`, `/languages/{code}`, `/languages/{code}/alphabet` |
+| lexicon | Platform | users, languages, alphabet, sounds, lexicon CRUD, **platform media library** |
+| content | Teacher | courses, lessons, blocks, coverage, **teacher media library**, invite code, students list |
+| learning | Student | `POST /courses/join`, courses, lessons, flow, progress, review, dictionary |
+
+**Вне MVP (Phase 2):** `grammar-topics`, email-enrollment (`/teacher/students` POST), manual enrollments, block-type favorites, `POST /review/session`.
 
 ---
 
@@ -27,8 +43,8 @@ Base URL: `/api/v1`
 | ------------------------------ | -------------------------------------- |
 | `RequireAuth`                  | все кроме auth, public alphabet        |
 | `RequireEnrollment(course_id)` | ученик читает уроки курса              |
-| `RequireTeacher()`             | `/teacher/*` — role ∈ {teacher, admin} |
-| `RequirePlatformAdmin()`       | `/platform/*` — role = admin           |
+| `RequireTeacher()`             | `/teacher/*` — `role = teacher` (или `is_admin`) |
+| `RequirePlatformAdmin()`       | `/platform/*` — `is_admin = true`      |
 | `RequireTeacherOfStudent(id)`  | прогресс ученика                       |
 | `RequireCourseOwner()`         | CRUD курса/урока                       |
 
@@ -39,7 +55,7 @@ Base URL: `/api/v1`
 
 ### POST /auth/register
 
-Регистрация ученика (`role = student`).
+**MVP.** Регистрация. `is_admin` всегда `false`. `role` по умолчанию `student`.
 
 **Body:**
 
@@ -47,9 +63,12 @@ Base URL: `/api/v1`
 {
   "email": "student@example.com",
   "password": "secret123",
-  "display_name": "Аня"
+  "display_name": "Аня",
+  "role": "student"
 }
 ```
+
+`role`: `student` | `teacher`
 
 **Response 201:** `AuthResponse`
 
@@ -112,6 +131,24 @@ Base URL: `/api/v1`
 ---
 
 ## Public — ученик: курсы и уроки
+
+### POST /courses/join
+
+**MVP.** Запись на курс по invite code.
+
+**Auth:** required (`role = student`)
+
+**Body:**
+
+```json
+{ "invite_code": "A1B2C3D4" }
+```
+
+**Response 201:** `JoinCourseResponse`
+
+**Errors:** `404` код не найден, `409` уже записан
+
+---
 
 ### GET /courses
 
@@ -535,47 +572,31 @@ Draft → published. Запускает `LexiconIndexer`.
 
 ---
 
-## Teacher — ученики
+## Teacher — invite code и ученики курса
 
-### GET /teacher/students
+### GET /teacher/courses/{courseId}/invite-code
 
-Список учеников из `teacher_students`.
+**MVP.** Текущий код курса (8 символов A–Z0–9).
+
+**RequireCourseOwner**
+
+**Response 200:** `InviteCodeResponse`
+
+---
+
+### POST /teacher/courses/{courseId}/invite-code/regenerate
+
+**MVP.** Новый код (старый перестаёт работать).
+
+**Response 200:** `InviteCodeResponse`
+
+---
+
+### GET /teacher/courses/{courseId}/students
+
+**MVP.** Ученики с активным enrollment (не email-add).
 
 **Response 200:** `StudentDTO[]`
-
----
-
-### POST /teacher/students
-
-Привязать ученика по email.
-
-**Body:** `AssignStudentRequest`
-
-**Response 201:** `StudentDTO`
-
----
-
-### DELETE /teacher/students/{studentId}
-
-**Response 204**
-
----
-
-### POST /teacher/courses/{courseId}/enrollments
-
-**Body:** `EnrollmentRequest`
-
-**Response 201:**
-
-```json
-{ "user_id": "...", "course_id": "...", "status": "active" }
-```
-
----
-
-### DELETE /teacher/courses/{courseId}/enrollments/{userId}
-
-**Response 204**
 
 ---
 
@@ -589,9 +610,24 @@ Query: `?course_id=...`
 
 ---
 
-## Teacher — медиа (для блоков урока)
+## Медиа: две независимые базы
+
+| База | `scope` | Кто видит | Кто добавляет | В урок |
+|------|---------|-----------|---------------|--------|
+| **Общая (platform)** | `platform` | все авторизованные | только `is_admin` | да, picker |
+| **Личная учителя** | `teacher` | только `owner_id` | владелец-учитель | да, picker |
+
+Общая база **не** собирается из загрузок учителей — только явные загрузки админов. Учитель **не** видит чужие личные медиа.
+
+---
+
+## Teacher — медиа (личная база)
+
+Каталог `scope=teacher`, `owner_id=current_user`. Только свои assets; чужие — 403.
 
 ### POST /teacher/media/presign
+
+**MVP.** **RequireTeacher** (не student).
 
 **Body:** `PresignRequest`
 
@@ -601,23 +637,71 @@ Query: `?course_id=...`
 
 ### POST /teacher/media/confirm
 
-**Body:** `ConfirmMediaRequest`
+**MVP.** Создаёт `media_assets` с `scope=teacher`.
+
+**Body:** `ConfirmMediaRequest` — обязателен `display_name`; опционально `ttl_seconds` / `expires_at`. Квота: `MEDIA_USER_QUOTA_BYTES` на пользователя.
 
 **Response 201:** `MediaAssetDTO`
 
 ---
 
+### GET /teacher/media
+
+**MVP.** Личный каталог медиа учителя.
+
+Query: `?q=`, `?kind=image|audio|video`, `?language_code=evn`, `?page=`, `?limit=`
+
+**Response 200:** `MediaListResponse`
+
+---
+
+### GET /teacher/media/{mediaAssetId}
+
+**MVP.** Только свои assets.
+
+**Response 200:** `MediaAssetDTO`
+
+---
+
+### PATCH /teacher/media/{mediaAssetId}
+
+**MVP.** `PatchMediaRequest` — имя, `linked_lexeme_id`, TTL.
+
+**Response 200:** `MediaAssetDTO`
+
+---
+
+### DELETE /teacher/media/{mediaAssetId}
+
+**MVP.** Если не используется в блоках.
+
+**Response 204**
+
+---
+
+### GET /teacher/languages/{code}/media/platform
+
+**MVP.** Read-only поиск platform library при сборке урока.
+
+Query: `?q=`, `?kind=`, `?page=`, `?limit=`
+
+**Response 200:** `MediaListResponse`
+
+---
+
 ## Platform — пользователи и роли
 
-### POST /platform/users/{userId}/role
+### PATCH /platform/users/{userId}
 
-**RequirePlatformAdmin**
+**MVP.** **RequirePlatformAdmin**
 
 **Body:**
 
 ```json
-{ "role": "teacher" }
+{ "role": "teacher", "is_admin": true }
 ```
+
+Поля опциональны.
 
 **Response 200:** `UserDTO`
 
@@ -625,9 +709,9 @@ Query: `?course_id=...`
 
 ### GET /platform/users
 
-Список пользователей (admin).
+**MVP.** Список пользователей.
 
-Query: `?role=teacher|student|admin`
+Query: `?q=`, `?role=teacher|student`, `?page=`, `?limit=`
 
 **Response 200:** `{ items: UserDTO[], total }`
 
@@ -867,9 +951,13 @@ Query: `?role=teacher|student|admin`
 
 ---
 
-## Platform — медиа (для лексем)
+## Platform — медиа (общая база)
+
+Каталог `scope=platform`, `owner_id=null`. Отдельно от личных баз учителей.
 
 ### POST /platform/media/presign
+
+**MVP.** **RequirePlatformAdmin**
 
 **Body:** `PresignRequest`
 
@@ -879,51 +967,67 @@ Query: `?role=teacher|student|admin`
 
 ### POST /platform/media/confirm
 
+**MVP.** `scope=platform`, `owner_id=null`.
+
 **Body:** `ConfirmMediaRequest`
 
 **Response 201:** `MediaAssetDTO`
 
 ---
 
-### GET /platform/media/{mediaAssetId}
+### GET /platform/languages/{code}/media
 
-**Response 200:** `MediaAssetDTO` (с signed URL)
+**MVP.** Каталог общей базы (без истёкших по TTL). **Любой авторизованный** (учитель — picker при сборке урока).
+
+Query: `?q=`, `?kind=image|audio|video`, `?page=`, `?limit=`
+
+**Response 200:** `MediaListResponse`
 
 ---
 
-## Platform — грамматика (topics)
+### GET /platform/media/{mediaAssetId}
+
+**MVP.** **Любой авторизованный** (только `scope=platform`).
+
+**Response 200:** `MediaAssetDTO` (signed URL)
+
+---
+
+### PATCH /platform/media/{mediaAssetId}
+
+**MVP.** **RequirePlatformAdmin.** `PatchMediaRequest`
+
+**Response 200:** `MediaAssetDTO`
+
+---
+
+### DELETE /platform/media/{mediaAssetId}
+
+**MVP.** **RequirePlatformAdmin.** Если не в `lexeme_media` и не в блоках.
+
+**Response 204**
+
+---
+
+## Phase 2 — грамматика (topics)
+
+> Не в MVP (нет `grammar_table` / `grammar_exercise` в 17 BlockType).
 
 ### GET /platform/languages/{code}/grammar-topics
 
-**Response 200:** `GrammarTopicDTO[]`
-
----
+**Phase 2**
 
 ### POST /platform/languages/{code}/grammar-topics
 
-**Body:**
-
-```json
-{
-  "title": "Спряжение биш-",
-  "body_richtext": "...",
-  "table_data": { "rows": [] }
-}
-```
-
-**Response 201:** `GrammarTopicDTO`
-
----
+**Phase 2**
 
 ### PATCH /platform/grammar-topics/{topicId}
 
-**Response 200:** `GrammarTopicDTO`
-
----
+**Phase 2**
 
 ### DELETE /platform/grammar-topics/{topicId}
 
-**Response 204**
+**Phase 2**
 
 ---
 

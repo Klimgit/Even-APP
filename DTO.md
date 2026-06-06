@@ -64,12 +64,13 @@ erDiagram
 | email         | TEXT UNIQUE NOT NULL            |                                 |
 | password_hash | TEXT NOT NULL                   | bcrypt                          |
 | display_name  | TEXT                            |                                 |
-| role          | TEXT NOT NULL DEFAULT 'student' | `student` | `teacher` | `admin` |
+| role          | TEXT NOT NULL DEFAULT 'student' | `student` \| `teacher` |
+| is_admin      | BOOLEAN NOT NULL DEFAULT false | platform administrator flag |
 | created_at    | TIMESTAMPTZ                     | DEFAULT now()                   |
 
 
 ```sql
-CHECK (role IN ('student', 'teacher', 'admin'))
+CHECK (role IN ('student', 'teacher'))
 ```
 
 ---
@@ -151,19 +152,39 @@ PK: `(letter_id, sound_id)`
 
 ### media_assets
 
+Хранится в **even_lexicon** (`scope=platform` — общая база, только admin пишет) и **even_content** (`scope=teacher` — личная база, изоляция по `owner_id`). Одинаковая схема. Общая база **не** агрегирует загрузки учителей.
 
-| Колонка     | Тип                  | Описание                 |
-| ----------- | -------------------- | ------------------------ |
-| id          | UUID PK              |                          |
-| object_key  | TEXT UNIQUE NOT NULL | `media/{uuid}/file.webp` |
-| bucket      | TEXT NOT NULL        |                          |
-| mime_type   | TEXT NOT NULL        |                          |
-| size_bytes  | BIGINT               |                          |
-| width       | INT                  |                          |
-| height      | INT                  |                          |
-| duration_ms | INT                  |                          |
-| uploaded_by | UUID FK → users      |                          |
-| created_at  | TIMESTAMPTZ          |                          |
+| Колонка            | Тип                             | Описание                                      |
+| ------------------ | ------------------------------- | --------------------------------------------- |
+| id                 | UUID PK                         |                                               |
+| scope              | TEXT NOT NULL                   | `platform` \| `teacher`                       |
+| language_id        | UUID FK → languages             | язык (evn)                                    |
+| owner_id           | UUID FK → users                 | `scope=teacher`: владелец (изоляция); `platform`: NULL |
+| object_key         | TEXT UNIQUE NOT NULL            | `media/{uuid}/file.webp`                      |
+| bucket             | TEXT NOT NULL                   |                                               |
+| mime_type          | TEXT NOT NULL                   |                                               |
+| media_kind         | TEXT NOT NULL                   | `image` \| `audio` \| `video`                 |
+| size_bytes         | BIGINT                          |                                               |
+| width              | INT                             |                                               |
+| height             | INT                             |                                               |
+| duration_ms        | INT                             |                                               |
+| display_name       | TEXT NOT NULL                   | имя в каталоге (1–120)                        |
+| linked_lexeme_id   | UUID FK → lexemes               | опциональная метка «про слово» (lexicon DB)   |
+| expires_at         | TIMESTAMPTZ                     | опциональный TTL; NULL = бессрочно            |
+| uploaded_by        | UUID FK → users                 |                                               |
+| created_at         | TIMESTAMPTZ                     |                                               |
+| updated_at         | TIMESTAMPTZ                     |                                               |
+
+```sql
+CHECK (scope IN ('platform', 'teacher'))
+CHECK (media_kind IN ('image', 'audio', 'video'))
+CHECK (char_length(display_name) BETWEEN 1 AND 120)
+CHECK (scope != 'teacher' OR owner_id IS NOT NULL)
+```
+
+Квота: сумма `size_bytes` активных файлов (`expires_at IS NULL OR expires_at > now()`) на пользователя ограничена `MEDIA_USER_QUOTA_BYTES` (см. конфиг). Platform administrator не ограничивается.
+
+INDEX: `(language_id)` WHERE `scope=platform` и не истёк TTL; `(uploaded_by)` для квоты
 
 
 ---
@@ -259,6 +280,7 @@ PK: `(lexeme_id, sound_id)`
 | ui_language_id     | UUID FK → languages   | язык UI / переводов |
 | owner_id           | UUID FK → users       | учитель-владелец    |
 | is_published       | BOOLEAN DEFAULT false |                     |
+| invite_code        | CHAR(8) UNIQUE        | A–Z0–9, один на курс |
 
 
 ---
@@ -523,7 +545,7 @@ PK: `(user_id, lexeme_id)`
 
 ```typescript
 // POST /auth/register
-RegisterRequest { email: string; password: string; display_name?: string }
+RegisterRequest { email: string; password: string; display_name?: string; role?: "student" | "teacher" }
 AuthResponse { access_token: string; refresh_token: string; user: UserDTO }
 
 // POST /auth/login
@@ -536,7 +558,8 @@ UserDTO {
   id: string
   email: string
   display_name?: string
-  role: "student" | "teacher" | "admin"
+  role: "student" | "teacher"
+  is_admin: boolean
   created_at: string  // ISO8601
 }
 ```
@@ -643,19 +666,53 @@ ConfirmMediaRequest {
   object_key: string
   mime_type: string
   size_bytes: number
+  language_id: string
+  display_name: string        // обязателен
+  linked_lexeme_id?: string
+  ttl_seconds?: number        // опционально; альтернатива expires_at
+  expires_at?: string         // RFC3339; опционально, бессрочно если не задано
   width?: number
   height?: number
   duration_ms?: number
 }
 
+PatchMediaRequest {
+  display_name?: string
+  linked_lexeme_id?: string | null
+  ttl_seconds?: number        // 0 + пустой expires_at = снять TTL (бессрочно)
+  expires_at?: string | null
+}
+
 MediaAssetDTO {
   id: string
+  scope: "platform" | "teacher"
+  language_id: string
+  owner_id?: string
   mime_type: string
+  media_kind: "image" | "audio" | "video"
+  display_name: string
+  linked_lexeme_id?: string
+  expires_at?: string
   url: string
+  size_bytes: number
   width?: number
   height?: number
   duration_ms?: number
+  created_at: string
 }
+
+MediaListResponse {
+  items: MediaAssetDTO[]
+  total: number
+  page: number
+  limit: number
+}
+
+JoinCourseRequest { invite_code: string }
+
+JoinCourseResponse { course_id: string; enrollment_id: string }
+
+InviteCodeResponse { invite_code: string }
 ```
 
 ---
@@ -670,6 +727,7 @@ CourseDTO {
   ui_language_id: string
   owner_id: string
   is_published: boolean
+  invite_code?: string        // only for course owner / teacher API
 }
 
 CourseListItemDTO {

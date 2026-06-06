@@ -1,0 +1,2 @@
+DROP TABLE IF EXISTS media_assets;
+DROP TABLE IF EXISTS languages;

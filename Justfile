@@ -63,6 +63,7 @@ run-auth-local:
 
 run-lexicon-local:
     HTTP_PORT=8082 DATABASE_URL="${LEXICON_DATABASE_URL}" JWT_SECRET="${JWT_SECRET}" \
+      MEDIA_USER_QUOTA_BYTES="${MEDIA_USER_QUOTA_BYTES:-524288000}" \
       S3_ENDPOINT="${S3_ENDPOINT}" S3_PUBLIC_ENDPOINT="${S3_PUBLIC_ENDPOINT}" \
       S3_BUCKET="${S3_BUCKET}" S3_ACCESS_KEY="${S3_ACCESS_KEY}" S3_SECRET_KEY="${S3_SECRET_KEY}" \
       LOG_LEVEL="${LOG_LEVEL:-info}" go run ./services/lexicon/cmd
@@ -82,7 +83,11 @@ run-gateway-local:
       CONTENT_URL="${CONTENT_URL}" LEARNING_URL="${LEARNING_URL}" \
       LOG_LEVEL="${LOG_LEVEL:-info}" go run ./services/api-gateway/cmd
 
-# --- Migrations (host, postgres must be up) ---
+# --- Migrations (explicit; never on app startup) ---
+
+# Docker migrate containers (no migrate CLI on host required)
+migrate:
+    @./scripts/migrate.sh
 
 migrate-all:
     DATABASE_URL="${AUTH_DATABASE_URL}" just -f services/auth/Justfile migrate-up
@@ -91,6 +96,9 @@ migrate-all:
     DATABASE_URL="${LEARNING_DATABASE_URL}" just -f services/learning/Justfile migrate-up
 
 # --- Smoke checks ---
+
+smoke-api:
+    @./scripts/smoke-api.sh
 
 health-check:
     #!/usr/bin/env bash

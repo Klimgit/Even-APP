@@ -18,8 +18,8 @@ mkdir -p .dev/logs .dev/pids
 echo "→ starting postgres + minio..."
 docker compose up -d postgres minio minio-init
 
-echo "→ running migrations (docker)..."
-docker compose up auth-migrate lexicon-migrate content-migrate learning-migrate
+echo "→ running migrations (explicit step)..."
+./scripts/migrate.sh
 
 echo "→ stopping docker app containers (free ports 8080-8084)..."
 docker compose stop api-gateway auth lexicon content learning 2>/dev/null || true
@@ -36,10 +36,13 @@ echo "→ building binaries..."
 just build-all
 
 start() {
-  local name=$1 cmd=$2 log=".dev/logs/${name}.log" pidfile=".dev/pids/${name}.pid"
-  eval "$cmd" >"$log" 2>&1 &
+  local svc="$1"
+  local cmd="$2"
+  local log=".dev/logs/${svc}.log"
+  local pidfile=".dev/pids/${svc}.pid"
+  setsid bash -c "$cmd" >"$log" 2>&1 &
   echo $! >"$pidfile"
-  echo "  started $name (pid $(cat "$pidfile"), log $log)"
+  echo "  started $svc (pid $(cat "$pidfile"), log $log)"
 }
 
 echo "→ starting services on host..."
