@@ -1,0 +1,19 @@
+.env
+.env.prod
+*.local
+
+# Go
+bin/
+.dev/
+**/internal/gen/
+
+# IDE
+.idea/
+.vscode/
+
+# Flutter (later)
+apps/mobile/.dart_tool/
+apps/mobile/build/
+
+# OS
+.DS_Store

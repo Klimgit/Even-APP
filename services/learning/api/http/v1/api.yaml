@@ -1,0 +1,30 @@
+openapi: 3.0.3
+info:
+  title: even-learning
+  version: 0.1.0
+  description: Authentication and user management (skeleton)
+
+paths:
+  /api/v1/health:
+    get:
+      operationId: getHealth
+      tags: [System, Public]
+      summary: Health check
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/HealthResponse"
+
+components:
+  schemas:
+    HealthResponse:
+      type: object
+      required: [status, service]
+      properties:
+        status:
+          type: string
+        service:
+          type: string

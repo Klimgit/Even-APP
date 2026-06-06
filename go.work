@@ -1,0 +1,13 @@
+go 1.23
+
+use (
+	./libs/config
+	./libs/core
+	./libs/http
+	./libs/postgres
+	./services/api-gateway
+	./services/auth
+	./services/content
+	./services/learning
+	./services/lexicon
+)

@@ -927,34 +927,6 @@ Query: `?role=teacher|student|admin`
 
 ---
 
-## Webhooks / будущее (v2)
-
-
-| Endpoint                            | Назначение                    |
-| ----------------------------------- | ----------------------------- |
-| `POST /teacher/lessons/{id}/lock`   | блокировка при редактировании |
-| `DELETE /teacher/lessons/{id}/lock` | снять блокировку              |
-| `GET /health`                       | healthcheck                   |
-| `GET /ready`                        | readiness (DB, S3)            |
-
-
----
-
-## Матрица доступа (кратко)
-
-
-| Endpoint group                                      | student | teacher | admin |
-| --------------------------------------------------- | ------- | ------- | ----- |
-| /auth/*                                             | ✓       | ✓       | ✓     |
-| /courses, /lessons, /progress, /review, /dictionary | ✓       | ✓*      | ✓*    |
-| /teacher/*                                          |         | ✓       | ✓     |
-| /platform/*                                         |         |         | ✓     |
-
-
- если enrolled как ученик
-
----
-
 ## Примеры flow
 
 ### Учитель создаёт урок

@@ -1,0 +1,26 @@
+set dotenv-load := true
+
+gen_dir := "internal/gen/http/v1"
+
+default:
+    @just --list
+
+install-tools:
+    @go install github.com/ogen-go/ogen/cmd/ogen@v1.18.0
+    @go install -tags 'postgres' github.com/golang-migrate/migrate/v4/cmd/migrate@v4.19.1
+
+swagger:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    mkdir -p {{ gen_dir }}
+    ogen --target {{ gen_dir }} --package http_v1 --config api/http/v1/.ogen.yml --clean api/http/v1/api.yaml
+    go run ../../_misc/openapi-handler-gen/main.go {{ gen_dir }}/openapi_handler.go http_v1 openapi.yaml
+
+migrate-up:
+    migrate -path database/migrations -database "${DATABASE_URL}" up
+
+migrate-down:
+    migrate -path database/migrations -database "${DATABASE_URL}" down 1
+
+run:
+    go run ./cmd
