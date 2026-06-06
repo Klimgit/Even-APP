@@ -41,7 +41,7 @@ ACCESS=$(python3 -c "import json; print(json.load(open('/tmp/smoke-body.json'))[
 
 echo ""
 echo "=== Promote to platform admin (DB) ==="
-docker exec even-app-postgres-1 psql -U even -d even_auth -c \
+docker compose exec -T postgres psql -U "${POSTGRES_USER:-even}" -d even_auth -c \
   "UPDATE users SET is_admin=true WHERE id='$USER_ID';" >/dev/null
 c=$(code -X POST "$AUTH/api/v1/auth/login" -H 'Content-Type: application/json' \
   -d "{\"email\":\"$EMAIL\",\"password\":\"$PASS\"}")

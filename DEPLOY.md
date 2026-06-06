@@ -113,7 +113,7 @@ flowchart LR
 
 | Workflow | Триггер | Действие |
 |----------|---------|----------|
-| [ci.yml](.github/workflows/ci.yml) | PR, push в feature-ветки | `go build` + docker build smoke |
+| [ci.yml](.github/workflows/ci.yml) | PR, push в feature-ветки | unit tests → build → integration (smoke-api) |
 | [deploy.yml](.github/workflows/deploy.yml) | push `main`, manual | CI → SSH → `deploy.sh` (production) |
 | [deploy-preview.yml](.github/workflows/deploy-preview.yml) | manual, выбор ветки | CI ветки → SSH → `deploy-preview.sh` |
 

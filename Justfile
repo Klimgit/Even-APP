@@ -29,6 +29,13 @@ build-all:
     go build -o bin/content ./services/content/cmd
     go build -o bin/learning ./services/learning/cmd
 
+test:
+    go test -C libs/jwt . -count=1
+    go test -C libs/media . -count=1
+
+test-integration:
+    @./scripts/ci-integration.sh
+
 tidy:
     go work sync
     cd services/auth && go mod tidy

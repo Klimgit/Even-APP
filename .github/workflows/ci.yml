@@ -13,6 +13,28 @@ on:
         type: string
 
 jobs:
+  unit:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.ref || github.ref }}
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version: "1.23"
+          cache-dependency-path: |
+            **/go.sum
+            go.work.sum
+
+      - name: Sync workspace
+        run: go work sync
+
+      - name: Unit tests
+        run: |
+          go test -C libs/jwt . -count=1 -timeout=2m
+          go test -C libs/media . -count=1 -timeout=2m
+
   build:
     runs-on: ubuntu-latest
     steps:
@@ -39,4 +61,18 @@ jobs:
           go build -o /tmp/learning ./services/learning/cmd
 
       - name: Docker build (smoke)
-        run: docker compose build api-gateway auth lexicon
+        run: docker compose build api-gateway auth lexicon content learning
+
+  integration:
+    runs-on: ubuntu-latest
+    needs: [unit, build]
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.ref || github.ref }}
+
+      - name: Integration tests (docker + smoke-api)
+        run: |
+          chmod +x scripts/*.sh
+          ./scripts/ci-integration.sh
