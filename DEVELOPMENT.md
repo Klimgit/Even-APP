@@ -414,6 +414,8 @@ open http://localhost:9001
 ---
 ## 9. Работа над сервисом
 
+**Пошаговая инструкция «добавить новую ручку»** (контракт, sqlc, ogen, gateway, swagger merge, тесты): [ADDING_ENDPOINT.md](ADDING_ENDPOINT.md).
+
 ### Структура сервиса (как в [cloudtraining](https://github.com/Klimgit/cloudtraining))
 
 Референс: `_misc/service-template` в репозитории cloudtraining.

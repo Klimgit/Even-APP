@@ -1,46 +1,7 @@
 # API — статус реализации (MVP)
 
-Сводка: **что уже в коде** и **что осталось для MVP**, с контрактами.
-
-Полная спека: [API.md](API.md). Типы JSON: [DTO.md](DTO.md). Домен: [CONTEXT.md](CONTEXT.md). Как добавить ручку: [DEVELOPMENT.md](DEVELOPMENT.md) §9.
-
-**Base URL (клиент):** `http://localhost:8080/api/v1` через gateway.
-
-**Легенда:** ✅ реализовано · ⬜ MVP, не реализовано · 🚫 Phase 2 (вне MVP)
-
 ---
 
-## Сводка
-
-| Область | ✅ | ⬜ MVP |
-|---------|---|--------|
-| Auth | 4 | 0 |
-| System (health/ready) | все сервисы | — |
-| Platform media | 6 | 0 |
-| Public languages | 0 | 3 |
-| Platform admin | 0 | ~30 |
-| Teacher | 0 | ~35 |
-| Student (learning) | 0 | 9 |
-
-**Итого бизнес-ручек:** 10 / ~87 MVP (без Phase 2).
-
----
-
-## Общие соглашения
-
-| Правило | Значение |
-|---------|----------|
-| Auth | `Authorization: Bearer <access_token>` |
-| Ошибка | `{ "error": string, "message": string }` |
-| Пагинация | `?page=1&limit=20` → `{ items, total, page, limit }` |
-| ID | UUID string |
-| Даты | ISO 8601 UTC |
-
-### JWT (access token)
-
-Поля в claims: `uid` (user id), `role` (`student` \| `teacher`), `is_admin` (bool).
-
----
 
 ## ✅ Реализовано
 
@@ -452,37 +413,3 @@ Side effects attempt: `block_attempts`, `user_block_progress`, `user_review_item
 
 ---
 
-## 🚫 Phase 2 (не MVP)
-
-Не реализовывать до закрытия MVP end-to-end:
-
-| Ручки | Причина |
-|-------|---------|
-| `POST/DELETE /teacher/block-types/{type}/favorite` | удобство редактора |
-| `POST /review/session` | достаточно `GET /review` |
-| `GET/POST/PATCH/DELETE /platform/.../grammar-topics` | грамматика после MVP |
-| `POST /teacher/students` (assign by email) | только invite code в MVP |
-
----
-
-## Gateway — маршрутизация
-
-| Префикс | Сервис |
-|---------|--------|
-| `/api/v1/auth/` | auth |
-| `/api/v1/platform/` | lexicon |
-| `/api/v1/teacher/` | content |
-| `/api/v1/courses/`, `/lessons/`, `/progress/`, `/review/`, `/dictionary/` | learning |
-| `/languages/` | lexicon |
-
-Gateway проверяет JWT на protected маршрутах; public — см. `services/api-gateway/internal/middleware/auth.go`. Upstream-сервисы дублируют проверку на своих handlers.
-
----
-
-## Обновление этого документа
-
-При добавлении ручки:
-
-1. Перенести строку из ⬜ в ✅ с актуальным контрактом.
-2. Обновить счётчик в сводке.
-3. Добавить кейс в `scripts/smoke-api.sh` для критичных сценариев.
