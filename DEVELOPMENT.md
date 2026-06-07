@@ -109,6 +109,7 @@ just down
 | API Gateway | http://localhost:8080 |
 | auth | http://localhost:8081 |
 | lexicon | http://localhost:8082 |
+| media | http://localhost:8085 |
 | content | http://localhost:8083 |
 | learning | http://localhost:8084 |
 | Postgres | `localhost:5432` (user/pass: `even` / `even`) |
@@ -200,6 +201,7 @@ just run-auth-local                              # foreground, Ctrl+C для о�
 |------------|----------|
 | `POSTGRES_USER` / `POSTGRES_PASSWORD` | учётка Postgres |
 | `AUTH_DATABASE_URL` | DSN для `even_auth` |
+| `MEDIA_DATABASE_URL` | DSN для `even_media` |
 | `LEXICON_DATABASE_URL` | DSN для `even_lexicon` |
 | `CONTENT_DATABASE_URL` | DSN для `even_content` |
 | `LEARNING_DATABASE_URL` | DSN для `even_learning` |
@@ -215,13 +217,14 @@ just run-auth-local                              # foreground, Ctrl+C для о�
 | `S3_BUCKET` | имя бакета (`even-media`) |
 | `S3_ACCESS_KEY` / `S3_SECRET_KEY` | ключи MinIO |
 
-Нужны сервисам **lexicon** и **content**.
+Нужен сервису **media** (MinIO/S3, квоты, presign).
 
 ### Gateway upstream
 
 | Переменная | На хосте | В Docker (compose) |
 |------------|----------|-------------------|
 | `AUTH_URL` | `http://localhost:8081` | `http://auth:8081` |
+| `MEDIA_URL` | `http://localhost:8085` | `http://media:8085` |
 | `LEXICON_URL` | `http://localhost:8082` | `http://lexicon:8082` |
 | `CONTENT_URL` | `http://localhost:8083` | `http://content:8083` |
 | `LEARNING_URL` | `http://localhost:8084` | `http://learning:8084` |
@@ -273,7 +276,7 @@ just smoke-api         # только HTTP smoke (сервисы уже запу
 
 ## 7. Миграции БД
 
-Четыре отдельные БД: `even_auth`, `even_lexicon`, `even_content`, `even_learning`.
+Пять отдельных БД: `even_auth`, `even_media`, `even_lexicon`, `even_content`, `even_learning`.
 
 Файлы: `services/<svc>/database/migrations/`.
 

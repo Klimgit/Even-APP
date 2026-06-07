@@ -22,7 +22,7 @@ echo "→ applying migrations..."
 ./scripts/migrate.sh
 
 echo "→ stopping docker app containers (free ports 8080-8084)..."
-docker compose stop api-gateway auth lexicon content learning 2>/dev/null || true
+docker compose stop api-gateway auth media lexicon content learning 2>/dev/null || true
 
 # Stop previous local processes if any
 for f in .dev/pids/*.pid; do
@@ -48,23 +48,23 @@ start() {
 echo "→ starting services on host..."
 start auth \
   "HTTP_PORT=8081 DATABASE_URL='${AUTH_DATABASE_URL}' JWT_SECRET='${JWT_SECRET}' LOG_LEVEL='${LOG_LEVEL:-info}' ./bin/auth"
+start media \
+  "HTTP_PORT=8085 DATABASE_URL='${MEDIA_DATABASE_URL}' JWT_SECRET='${JWT_SECRET}' \
+   MEDIA_USER_QUOTA_BYTES='${MEDIA_USER_QUOTA_BYTES:-524288000}' \
+   S3_ENDPOINT='${S3_ENDPOINT}' S3_PUBLIC_ENDPOINT='${S3_PUBLIC_ENDPOINT}' \
+   S3_BUCKET='${S3_BUCKET}' S3_ACCESS_KEY='${S3_ACCESS_KEY}' S3_SECRET_KEY='${S3_SECRET_KEY}' \
+   LOG_LEVEL='${LOG_LEVEL:-info}' ./bin/media"
 start lexicon \
-  "HTTP_PORT=8082 DATABASE_URL='${LEXICON_DATABASE_URL}' JWT_SECRET='${JWT_SECRET}' \
-   S3_ENDPOINT='${S3_ENDPOINT}' S3_PUBLIC_ENDPOINT='${S3_PUBLIC_ENDPOINT}' \
-   S3_BUCKET='${S3_BUCKET}' S3_ACCESS_KEY='${S3_ACCESS_KEY}' S3_SECRET_KEY='${S3_SECRET_KEY}' \
-   LOG_LEVEL='${LOG_LEVEL:-info}' ./bin/lexicon"
+  "HTTP_PORT=8082 DATABASE_URL='${LEXICON_DATABASE_URL}' LOG_LEVEL='${LOG_LEVEL:-info}' ./bin/lexicon"
 start content \
-  "HTTP_PORT=8083 DATABASE_URL='${CONTENT_DATABASE_URL}' JWT_SECRET='${JWT_SECRET}' \
-   S3_ENDPOINT='${S3_ENDPOINT}' S3_PUBLIC_ENDPOINT='${S3_PUBLIC_ENDPOINT}' \
-   S3_BUCKET='${S3_BUCKET}' S3_ACCESS_KEY='${S3_ACCESS_KEY}' S3_SECRET_KEY='${S3_SECRET_KEY}' \
-   LOG_LEVEL='${LOG_LEVEL:-info}' ./bin/content"
+  "HTTP_PORT=8083 DATABASE_URL='${CONTENT_DATABASE_URL}' LOG_LEVEL='${LOG_LEVEL:-info}' ./bin/content"
 start learning \
   "HTTP_PORT=8084 DATABASE_URL='${LEARNING_DATABASE_URL}' JWT_SECRET='${JWT_SECRET}' LOG_LEVEL='${LOG_LEVEL:-info}' ./bin/learning"
 
 # Backends must be up before gateway ready check passes
 sleep 2
 start api-gateway \
-  "HTTP_PORT=8080 JWT_SECRET='${JWT_SECRET}' AUTH_URL='${AUTH_URL}' LEXICON_URL='${LEXICON_URL}' \
+  "HTTP_PORT=8080 JWT_SECRET='${JWT_SECRET}' AUTH_URL='${AUTH_URL}' MEDIA_URL='${MEDIA_URL}' LEXICON_URL='${LEXICON_URL}' \
    CONTENT_URL='${CONTENT_URL}' LEARNING_URL='${LEARNING_URL}' LOG_LEVEL='${LOG_LEVEL:-info}' ./bin/api-gateway"
 
 echo "→ waiting for gateway..."

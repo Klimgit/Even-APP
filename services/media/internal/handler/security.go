@@ -5,7 +5,7 @@ import (
 
 	libjwt "github.com/even-app/even-app/libs/jwt"
 	"github.com/even-app/even-app/libs/http/middleware"
-	http_v1 "github.com/even-app/even-app/services/lexicon/internal/gen/http/v1"
+	http_v1 "github.com/even-app/even-app/services/media/internal/gen/http/v1"
 )
 
 type SecurityHandler struct {

@@ -26,8 +26,6 @@ func main() {
 	}
 
 	logr := logger.New(cfg.Base.LogLevel)
-	logr.Info("s3 configured", "endpoint", cfg.S3.Endpoint, "bucket", cfg.S3.Bucket)
-
 	ctx, stop := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM)
 	defer stop()
 

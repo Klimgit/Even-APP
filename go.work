@@ -1,4 +1,4 @@
-go 1.25
+go 1.25.0
 
 use (
 	./libs/config
@@ -13,4 +13,5 @@ use (
 	./services/content
 	./services/learning
 	./services/lexicon
+	./services/media
 )

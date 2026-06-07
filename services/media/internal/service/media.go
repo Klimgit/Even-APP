@@ -9,8 +9,8 @@ import (
 
 	"github.com/even-app/even-app/libs/media"
 	libs3 "github.com/even-app/even-app/libs/s3"
-	"github.com/even-app/even-app/services/lexicon/internal/domain"
-	"github.com/even-app/even-app/services/lexicon/internal/gen/query"
+	"github.com/even-app/even-app/services/media/internal/domain"
+	"github.com/even-app/even-app/services/media/internal/gen/query"
 	"github.com/google/uuid"
 )
 

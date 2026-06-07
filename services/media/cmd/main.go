@@ -1,0 +1,78 @@
+package main
+
+import (
+	"context"
+	"log"
+	"net/http"
+	"os"
+	"os/signal"
+	"syscall"
+
+	"github.com/even-app/even-app/libs/core/logger"
+	libjwt "github.com/even-app/even-app/libs/jwt"
+	"github.com/even-app/even-app/libs/http/middleware"
+	"github.com/even-app/even-app/libs/http/server"
+	"github.com/even-app/even-app/libs/postgres"
+	libs3 "github.com/even-app/even-app/libs/s3"
+	"github.com/even-app/even-app/services/media/internal/config"
+	mediahandler "github.com/even-app/even-app/services/media/internal/handler"
+	http_v1 "github.com/even-app/even-app/services/media/internal/gen/http/v1"
+	"github.com/even-app/even-app/services/media/internal/gen/query"
+	"github.com/even-app/even-app/services/media/internal/service"
+	"github.com/joho/godotenv"
+)
+
+func main() {
+	_ = godotenv.Load()
+
+	cfg, err := config.Load()
+	if err != nil {
+		log.Fatalf("config: %v", err)
+	}
+
+	logr := logger.New(cfg.Base.LogLevel)
+	ctx, stop := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM)
+	defer stop()
+
+	pool, err := postgres.NewPool(ctx, cfg.DatabaseURL)
+	if err != nil {
+		log.Fatalf("database: %v", err)
+	}
+	defer pool.Close()
+
+	s3c, err := libs3.New(cfg.S3)
+	if err != nil {
+		log.Fatalf("s3: %v", err)
+	}
+
+	jwtMgr := libjwt.NewManager(cfg.JWTSecret, cfg.AccessTTL())
+	ready := func(ctx context.Context) error { return pool.Ping(ctx) }
+
+	querier := query.New(pool)
+	mediaSvc := service.NewMediaService(querier, s3c, cfg.S3.Bucket, cfg.Media.UserQuotaBytes)
+	httpHandler := mediahandler.NewHTTPHandler(mediaSvc)
+	secHandler := mediahandler.NewSecurityHandler(jwtMgr)
+
+	oasServer, err := http_v1.NewServer(httpHandler, secHandler)
+	if err != nil {
+		log.Fatalf("ogen server: %v", err)
+	}
+
+	mux := http.NewServeMux()
+	server.RegisterHealth(mux, "media", "/api/v1/platform/health")
+	server.RegisterReady(mux, ready, "/api/v1/platform/ready")
+	mux.Handle("GET /api/v1/openapi.yaml", http_v1.SpecHandler())
+	mux.Handle("/", oasServer)
+
+	handler := middleware.CORS(middleware.Recovery(logr, middleware.Logging(logr, mux)))
+
+	if err := server.Run(ctx, server.Options{
+		ServiceName: "media",
+		Port:        cfg.Base.HTTPPort,
+		Logger:      logr,
+		Handler:     handler,
+	}); err != nil {
+		logr.Error("server stopped", "err", err)
+		os.Exit(1)
+	}
+}

@@ -60,6 +60,19 @@ services:
         condition: service_healthy
     restart: "no"
 
+  media-migrate:
+    image: migrate/migrate:v4.19.1
+    volumes:
+      - ./services/media/database/migrations:/migrations:ro
+    command:
+      - -path=/migrations
+      - -database=postgres://${POSTGRES_USER:-even}:${POSTGRES_PASSWORD:-even}@postgres:5432/even_media?sslmode=disable
+      - up
+    depends_on:
+      postgres:
+        condition: service_healthy
+    restart: "no"
+
   lexicon-migrate:
     image: migrate/migrate:v4.19.1
     volumes:
@@ -120,14 +133,14 @@ services:
       retries: 5
       start_period: 10s
 
-  lexicon:
+  media:
     build:
       context: .
-      dockerfile: services/lexicon/docker/Dockerfile
+      dockerfile: services/media/docker/Dockerfile
     environment:
       <<: *service-env
-      HTTP_PORT: 8082
-      DATABASE_URL: postgres://${POSTGRES_USER:-even}:${POSTGRES_PASSWORD:-even}@postgres:5432/even_lexicon?sslmode=disable
+      HTTP_PORT: 8085
+      DATABASE_URL: postgres://${POSTGRES_USER:-even}:${POSTGRES_PASSWORD:-even}@postgres:5432/even_media?sslmode=disable
       JWT_SECRET: ${JWT_SECRET:-dev-change-me}
       MEDIA_USER_QUOTA_BYTES: ${MEDIA_USER_QUOTA_BYTES:-524288000}
       S3_ENDPOINT: http://minio:9000
@@ -136,11 +149,31 @@ services:
       S3_ACCESS_KEY: ${S3_ACCESS_KEY:-minio}
       S3_SECRET_KEY: ${S3_SECRET_KEY:-minio123}
     ports:
+      - "8085:8085"
+    depends_on:
+      media-migrate:
+        condition: service_completed_successfully
+      minio-init:
+        condition: service_completed_successfully
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://localhost:8085/health"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+
+  lexicon:
+    build:
+      context: .
+      dockerfile: services/lexicon/docker/Dockerfile
+    environment:
+      <<: *service-env
+      HTTP_PORT: 8082
+      DATABASE_URL: postgres://${POSTGRES_USER:-even}:${POSTGRES_PASSWORD:-even}@postgres:5432/even_lexicon?sslmode=disable
+    ports:
       - "8082:8082"
     depends_on:
       lexicon-migrate:
-        condition: service_completed_successfully
-      minio-init:
         condition: service_completed_successfully
     healthcheck:
       test: ["CMD", "wget", "-qO-", "http://localhost:8082/health"]
@@ -157,17 +190,10 @@ services:
       <<: *service-env
       HTTP_PORT: 8083
       DATABASE_URL: postgres://${POSTGRES_USER:-even}:${POSTGRES_PASSWORD:-even}@postgres:5432/even_content?sslmode=disable
-      S3_ENDPOINT: http://minio:9000
-      S3_PUBLIC_ENDPOINT: ${S3_PUBLIC_ENDPOINT:-http://localhost:9000}
-      S3_BUCKET: ${S3_BUCKET:-even-media}
-      S3_ACCESS_KEY: ${S3_ACCESS_KEY:-minio}
-      S3_SECRET_KEY: ${S3_SECRET_KEY:-minio123}
     ports:
       - "8083:8083"
     depends_on:
       content-migrate:
-        condition: service_completed_successfully
-      minio-init:
         condition: service_completed_successfully
     healthcheck:
       test: ["CMD", "wget", "-qO-", "http://localhost:8083/health"]
@@ -205,6 +231,7 @@ services:
       HTTP_PORT: 8080
       JWT_SECRET: ${JWT_SECRET:-dev-change-me}
       AUTH_URL: http://auth:8081
+      MEDIA_URL: http://media:8085
       LEXICON_URL: http://lexicon:8082
       CONTENT_URL: http://content:8083
       LEARNING_URL: http://learning:8084
@@ -212,6 +239,8 @@ services:
       - "8080:8080"
     depends_on:
       auth:
+        condition: service_healthy
+      media:
         condition: service_healthy
       lexicon:
         condition: service_healthy

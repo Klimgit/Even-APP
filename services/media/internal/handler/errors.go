@@ -3,7 +3,7 @@ package handler
 import (
 	"context"
 
-	http_v1 "github.com/even-app/even-app/services/lexicon/internal/gen/http/v1"
+	http_v1 "github.com/even-app/even-app/services/media/internal/gen/http/v1"
 )
 
 const (

@@ -18,7 +18,7 @@ down-local:
     @./scripts/down-local.sh
 
 logs:
-    docker compose logs -f api-gateway auth lexicon content learning
+    docker compose logs -f api-gateway auth media lexicon content learning
 
 # --- Build ---
 
@@ -27,13 +27,14 @@ sqlc-all:
     set -euo pipefail
     export PATH="$(go env GOPATH)/bin:$PATH"
     command -v sqlc >/dev/null || go install github.com/sqlc-dev/sqlc/cmd/sqlc@v1.31.1
-    for svc in auth lexicon content learning; do
+    for svc in auth media lexicon content learning; do
       (cd "services/$svc/database" && sqlc generate)
     done
 
 build-all: sqlc-all
     go build -o bin/api-gateway ./services/api-gateway/cmd
     go build -o bin/auth ./services/auth/cmd
+    go build -o bin/media ./services/media/cmd
     go build -o bin/lexicon ./services/lexicon/cmd
     go build -o bin/content ./services/content/cmd
     go build -o bin/learning ./services/learning/cmd
@@ -48,6 +49,7 @@ test-integration:
 tidy:
     go work sync
     cd services/auth && go mod tidy
+    cd services/media && go mod tidy
     cd services/lexicon && go mod tidy
     cd services/content && go mod tidy
     cd services/learning && go mod tidy
@@ -77,25 +79,25 @@ infra-down:
 run-auth-local:
     HTTP_PORT=8081 DATABASE_URL="${AUTH_DATABASE_URL}" JWT_SECRET="${JWT_SECRET}" LOG_LEVEL="${LOG_LEVEL:-info}" go run ./services/auth/cmd
 
-run-lexicon-local:
-    HTTP_PORT=8082 DATABASE_URL="${LEXICON_DATABASE_URL}" JWT_SECRET="${JWT_SECRET}" \
+run-media-local:
+    HTTP_PORT=8085 DATABASE_URL="${MEDIA_DATABASE_URL}" JWT_SECRET="${JWT_SECRET}" \
       MEDIA_USER_QUOTA_BYTES="${MEDIA_USER_QUOTA_BYTES:-524288000}" \
       S3_ENDPOINT="${S3_ENDPOINT}" S3_PUBLIC_ENDPOINT="${S3_PUBLIC_ENDPOINT}" \
       S3_BUCKET="${S3_BUCKET}" S3_ACCESS_KEY="${S3_ACCESS_KEY}" S3_SECRET_KEY="${S3_SECRET_KEY}" \
-      LOG_LEVEL="${LOG_LEVEL:-info}" go run ./services/lexicon/cmd
+      LOG_LEVEL="${LOG_LEVEL:-info}" go run ./services/media/cmd
+
+run-lexicon-local:
+    HTTP_PORT=8082 DATABASE_URL="${LEXICON_DATABASE_URL}" LOG_LEVEL="${LOG_LEVEL:-info}" go run ./services/lexicon/cmd
 
 run-content-local:
-    HTTP_PORT=8083 DATABASE_URL="${CONTENT_DATABASE_URL}" JWT_SECRET="${JWT_SECRET}" \
-      S3_ENDPOINT="${S3_ENDPOINT}" S3_PUBLIC_ENDPOINT="${S3_PUBLIC_ENDPOINT}" \
-      S3_BUCKET="${S3_BUCKET}" S3_ACCESS_KEY="${S3_ACCESS_KEY}" S3_SECRET_KEY="${S3_SECRET_KEY}" \
-      LOG_LEVEL="${LOG_LEVEL:-info}" go run ./services/content/cmd
+    HTTP_PORT=8083 DATABASE_URL="${CONTENT_DATABASE_URL}" LOG_LEVEL="${LOG_LEVEL:-info}" go run ./services/content/cmd
 
 run-learning-local:
     HTTP_PORT=8084 DATABASE_URL="${LEARNING_DATABASE_URL}" JWT_SECRET="${JWT_SECRET}" LOG_LEVEL="${LOG_LEVEL:-info}" go run ./services/learning/cmd
 
 run-gateway-local:
     HTTP_PORT=8080 JWT_SECRET="${JWT_SECRET}" \
-      AUTH_URL="${AUTH_URL}" LEXICON_URL="${LEXICON_URL}" \
+      AUTH_URL="${AUTH_URL}" MEDIA_URL="${MEDIA_URL}" LEXICON_URL="${LEXICON_URL}" \
       CONTENT_URL="${CONTENT_URL}" LEARNING_URL="${LEARNING_URL}" \
       LOG_LEVEL="${LOG_LEVEL:-info}" go run ./services/api-gateway/cmd
 
@@ -107,6 +109,7 @@ migrate:
 
 migrate-all:
     DATABASE_URL="${AUTH_DATABASE_URL}" just -f services/auth/Justfile migrate-up
+    DATABASE_URL="${MEDIA_DATABASE_URL}" just -f services/media/Justfile migrate-up
     DATABASE_URL="${LEXICON_DATABASE_URL}" just -f services/lexicon/Justfile migrate-up
     DATABASE_URL="${CONTENT_DATABASE_URL}" just -f services/content/Justfile migrate-up
     DATABASE_URL="${LEARNING_DATABASE_URL}" just -f services/learning/Justfile migrate-up
@@ -131,7 +134,8 @@ health-check:
         http://localhost:8081/health \
         http://localhost:8082/health \
         http://localhost:8083/health \
-        http://localhost:8084/health; do
+        http://localhost:8084/health \
+        http://localhost:8085/health; do
       echo "GET $url"
       curl -sf "$url"
       echo
@@ -141,7 +145,8 @@ health-check:
         http://localhost:8081/api/v1/ready \
         http://localhost:8082/api/v1/ready \
         http://localhost:8083/api/v1/ready \
-        http://localhost:8084/api/v1/ready; do
+        http://localhost:8084/api/v1/ready \
+        http://localhost:8085/api/v1/ready; do
       echo "GET $url"
       curl -sf "$url"
       echo

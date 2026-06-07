@@ -1,0 +1,100 @@
+openapi: 3.0.3
+info:
+  title: even-app-gateway
+  version: 0.0.0
+paths:
+  /api/v1/health:
+    get:
+      operationId: getGatewayHealth
+      tags: [System, Public]
+      summary: Gateway health
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/HealthResponse"
+  /api/v1/ready:
+    get:
+      operationId: getGatewayReady
+      tags: [System, Public]
+      summary: Gateway readiness (all backends)
+      responses:
+        "200":
+          description: Ready
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ReadyResponse"
+        "503":
+          description: Not ready
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status:
+                    type: string
+                  reason:
+                    type: string
+  /api/v1/gateway/status:
+    get:
+      operationId: getGatewayStatus
+      tags: [System, Public]
+      summary: Gateway status and backend URLs
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/GatewayStatusResponse"
+components:
+  schemas:
+    ErrorResponse:
+      type: object
+      properties:
+        code:
+          type: integer
+          format: int32
+        message:
+          type: string
+        error:
+          type: string
+        details:
+          type: object
+          additionalProperties: true
+    HealthResponse:
+      type: object
+      required: [status, service]
+      properties:
+        status:
+          type: string
+        service:
+          type: string
+    ReadyResponse:
+      type: object
+      required: [status]
+      properties:
+        status:
+          type: string
+    GatewayStatusResponse:
+      type: object
+      required: [status, service, backends]
+      properties:
+        status:
+          type: string
+        service:
+          type: string
+        backends:
+          type: object
+          additionalProperties:
+            type: string
+  responses:
+    DefaultError:
+      description: Unexpected error
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/ErrorResponse"

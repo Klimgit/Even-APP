@@ -8,7 +8,7 @@ import (
 	"time"
 )
 
-var checkOrder = []string{"auth", "lexicon", "content", "learning"}
+var checkOrder = []string{"auth", "media", "lexicon", "content", "learning"}
 
 // CheckBackends GETs /api/v1/ready on each upstream. Returns on first failure.
 func CheckBackends(ctx context.Context, backends map[string]string) error {

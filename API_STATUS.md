@@ -103,7 +103,7 @@
 
 ---
 
-### Platform media — `lexicon` (:8082)
+### Platform media — `media` (:8085)
 
 Каталог `scope=platform`, `owner_id=null`. Запись в S3: presign → PUT → confirm.
 

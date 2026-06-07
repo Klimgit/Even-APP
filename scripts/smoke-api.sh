@@ -4,7 +4,7 @@ set -euo pipefail
 
 GW="${GW:-http://localhost:8080}"
 AUTH="${AUTH:-http://localhost:8081}"
-LEX="${LEX:-http://localhost:8082}"
+MEDIA="${MEDIA:-http://localhost:8085}"
 EMAIL="smoke-$(date +%s)@example.com"
 PASS="password123"
 
@@ -49,9 +49,9 @@ ACCESS=$(python3 -c "import json; print(json.load(open('/tmp/smoke-body.json'))[
 pass "admin token issued for $EMAIL"
 
 echo ""
-echo "=== Platform media (lexicon $LEX, gateway $GW) ==="
+echo "=== Platform media (media $MEDIA, gateway $GW) ==="
 
-c=$(code -H "Authorization: Bearer $ACCESS" -X POST "$LEX/api/v1/platform/media/presign" \
+c=$(code -H "Authorization: Bearer $ACCESS" -X POST "$MEDIA/api/v1/platform/media/presign" \
   -H 'Content-Type: application/json' \
   -d '{"filename":"smoke.png","mime_type":"image/png","size_bytes":68}')
 [[ "$c" == "200" ]] && pass "POST /platform/media/presign → $c" || fail "POST /platform/media/presign → $c ($(cat /tmp/smoke-body.json))"
@@ -64,7 +64,7 @@ printf '\x89PNG\r\n\x1a\n\x00\x00\x00\rIHDR\x00\x00\x00\x01\x00\x00\x00\x01\x08\
 c=$(code -X PUT "$UPLOAD" -H 'Content-Type: image/png' --data-binary @/tmp/smoke.png)
 [[ "$c" == "200" ]] && pass "PUT to MinIO presigned URL → $c" || fail "PUT to MinIO presigned URL → $c ($(cat /tmp/smoke-body.json))"
 
-c=$(code -H "Authorization: Bearer $ACCESS" -X POST "$LEX/api/v1/platform/media/confirm" \
+c=$(code -H "Authorization: Bearer $ACCESS" -X POST "$MEDIA/api/v1/platform/media/confirm" \
   -H 'Content-Type: application/json' \
   -d "{\"object_key\":\"$OBJ\",\"mime_type\":\"image/png\",\"size_bytes\":68,\"display_name\":\"Smoke PNG\",\"ttl_seconds\":86400}")
 [[ "$c" == "201" ]] && pass "POST /platform/media/confirm → $c" || fail "POST /platform/media/confirm → $c ($(cat /tmp/smoke-body.json))"
@@ -74,14 +74,14 @@ c=$(code -H "Authorization: Bearer $ACCESS" "$LEX/api/v1/platform/languages/evn/
 TOTAL=$(python3 -c "import json; print(json.load(open('/tmp/smoke-body.json'))['total'])")
 [[ "$TOTAL" -ge 1 ]] && pass "list total=$TOTAL" || fail "list empty"
 
-c=$(code -H "Authorization: Bearer $ACCESS" "$LEX/api/v1/platform/media/$MEDIA_ID")
+c=$(code -H "Authorization: Bearer $ACCESS" "$MEDIA/api/v1/platform/media/$MEDIA_ID")
 [[ "$c" == "200" ]] && pass "GET /platform/media/{id} → $c" || fail "GET /platform/media/{id} → $c"
 
-c=$(code -H "Authorization: Bearer $ACCESS" -X PATCH "$LEX/api/v1/platform/media/$MEDIA_ID" \
+c=$(code -H "Authorization: Bearer $ACCESS" -X PATCH "$MEDIA/api/v1/platform/media/$MEDIA_ID" \
   -H 'Content-Type: application/json' -d '{"display_name":"Smoke PNG renamed"}')
 [[ "$c" == "200" ]] && pass "PATCH /platform/media/{id} → $c" || fail "PATCH /platform/media/{id} → $c"
 
-c=$(code -H "Authorization: Bearer $ACCESS" -X DELETE "$LEX/api/v1/platform/media/$MEDIA_ID")
+c=$(code -H "Authorization: Bearer $ACCESS" -X DELETE "$MEDIA/api/v1/platform/media/$MEDIA_ID")
 [[ "$c" == "204" ]] && pass "DELETE /platform/media/{id} → $c" || fail "DELETE /platform/media/{id} → $c"
 
 # Gateway proxy to platform

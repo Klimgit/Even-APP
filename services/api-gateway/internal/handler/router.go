@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"net/http"
+	"strings"
 
 	"github.com/even-app/even-app/libs/http/middleware"
 	"github.com/even-app/even-app/libs/http/server"
@@ -21,9 +22,18 @@ func New(cfg config.Config, jwtMgr *libjwt.Manager) (http.Handler, error) {
 
 	backends := map[string]string{
 		"auth":     cfg.AuthURL,
+		"media":    cfg.MediaURL,
 		"lexicon":  cfg.LexiconURL,
 		"content":  cfg.ContentURL,
 		"learning": cfg.LearningURL,
+	}
+
+	mediaBase := strings.TrimRight(cfg.MediaURL, "/") + "/"
+	if err := proxy.MountPattern(mux, "/api/v1/platform/languages/{code}/media", mediaBase); err != nil {
+		return nil, err
+	}
+	if err := proxy.Mount(mux, "/api/v1/platform/media/", mediaBase); err != nil {
+		return nil, err
 	}
 
 	routes := []struct {

@@ -1,0 +1,53 @@
+openapi: 3.0.3
+info:
+  title: even-app-shared
+  version: 0.0.0
+paths: {}
+components:
+  schemas:
+    ErrorResponse:
+      type: object
+      properties:
+        code:
+          type: integer
+          format: int32
+        message:
+          type: string
+        error:
+          type: string
+        details:
+          type: object
+          additionalProperties: true
+    HealthResponse:
+      type: object
+      required: [status, service]
+      properties:
+        status:
+          type: string
+        service:
+          type: string
+    ReadyResponse:
+      type: object
+      required: [status]
+      properties:
+        status:
+          type: string
+    GatewayStatusResponse:
+      type: object
+      required: [status, service, backends]
+      properties:
+        status:
+          type: string
+        service:
+          type: string
+        backends:
+          type: object
+          additionalProperties:
+            type: string
+  responses:
+    DefaultError:
+      description: Unexpected error
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/ErrorResponse"

@@ -10,6 +10,7 @@ type Config struct {
 	Base        libconfig.Base
 	JWTSecret   string
 	AuthURL     string
+	MediaURL    string
 	LexiconURL  string
 	ContentURL  string
 	LearningURL string
@@ -25,6 +26,10 @@ func Load() (Config, error) {
 		return Config{}, err
 	}
 	auth, err := libconfig.MustGetenv("AUTH_URL")
+	if err != nil {
+		return Config{}, err
+	}
+	media, err := libconfig.MustGetenv("MEDIA_URL")
 	if err != nil {
 		return Config{}, err
 	}
@@ -44,6 +49,7 @@ func Load() (Config, error) {
 		Base:        base,
 		JWTSecret:   jwt,
 		AuthURL:     auth,
+		MediaURL:    media,
 		LexiconURL:  lexicon,
 		ContentURL:  content,
 		LearningURL: learning,

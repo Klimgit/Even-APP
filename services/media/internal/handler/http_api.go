@@ -5,9 +5,9 @@ import (
 	"time"
 
 	"github.com/even-app/even-app/libs/http/middleware"
-	"github.com/even-app/even-app/services/lexicon/internal/domain"
-	http_v1 "github.com/even-app/even-app/services/lexicon/internal/gen/http/v1"
-	"github.com/even-app/even-app/services/lexicon/internal/service"
+	"github.com/even-app/even-app/services/media/internal/domain"
+	http_v1 "github.com/even-app/even-app/services/media/internal/gen/http/v1"
+	"github.com/even-app/even-app/services/media/internal/service"
 	"github.com/google/uuid"
 )
 
