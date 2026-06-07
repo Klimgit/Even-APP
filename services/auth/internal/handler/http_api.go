@@ -81,6 +81,76 @@ func (h *HTTPHandler) GetMe(ctx context.Context) (http_v1.GetMeRes, error) {
 	return &user, nil
 }
 
+func (h *HTTPHandler) DemoPublic(ctx context.Context) (*http_v1.DemoPublicResponse, error) {
+	count, err := h.svc.DemoPublic(ctx)
+	if err != nil {
+		return nil, err
+	}
+	return &http_v1.DemoPublicResponse{
+		Message:   "public demo: user count from even_auth.users",
+		UserCount: int32(count),
+	}, nil
+}
+
+func (h *HTTPHandler) DemoMe(ctx context.Context) (http_v1.DemoMeRes, error) {
+	claims, ok := middleware.ClaimsFromContext(ctx)
+	if !ok {
+		return nil, domain.ErrUnauthorized
+	}
+	u, err := h.svc.DemoMe(ctx, claims.UserID)
+	if err != nil {
+		return nil, err
+	}
+	return &http_v1.DemoMeResponse{
+		User:         mapUser(*u),
+		TokenRole:    http_v1.DemoMeResponseTokenRole(claims.Role),
+		TokenIsAdmin: claims.IsAdmin,
+	}, nil
+}
+
+func (h *HTTPHandler) DemoTeacher(ctx context.Context) (http_v1.DemoTeacherRes, error) {
+	claims, ok := middleware.ClaimsFromContext(ctx)
+	if !ok {
+		return nil, domain.ErrUnauthorized
+	}
+	u, err := h.svc.DemoTeacher(ctx, claims.UserID, claims.Role, claims.IsAdmin)
+	if err != nil {
+		if errors.Is(err, domain.ErrForbidden) {
+			return forbiddenDemoTeacher()
+		}
+		return nil, err
+	}
+	name := u.Email
+	if u.DisplayName != nil && *u.DisplayName != "" {
+		name = *u.DisplayName
+	}
+	return &http_v1.DemoTeacherResponse{
+		Message:     "teacher demo: role check passed, profile loaded from DB",
+		Role:        http_v1.DemoTeacherResponseRole(u.Role),
+		DisplayName: name,
+	}, nil
+}
+
+func (h *HTTPHandler) DemoAdminStats(ctx context.Context) (http_v1.DemoAdminStatsRes, error) {
+	claims, ok := middleware.ClaimsFromContext(ctx)
+	if !ok {
+		return nil, domain.ErrUnauthorized
+	}
+	stats, err := h.svc.DemoAdminStats(ctx, claims.IsAdmin)
+	if err != nil {
+		if errors.Is(err, domain.ErrForbidden) {
+			return forbiddenDemoAdminStats()
+		}
+		return nil, err
+	}
+	return &http_v1.DemoAdminStatsResponse{
+		TotalUsers: int32(stats.TotalUsers),
+		Students:   int32(stats.Students),
+		Teachers:   int32(stats.Teachers),
+		Admins:     int32(stats.Admins),
+	}, nil
+}
+
 func authResponse(outcome *domain.AuthOutcome) *http_v1.AuthResponse {
 	return &http_v1.AuthResponse{
 		AccessToken: outcome.Tokens.AccessToken, RefreshToken: outcome.Tokens.RefreshToken,
@@ -124,4 +194,14 @@ func errBody(msg string) http_v1.ErrorResponse {
 		Message: http_v1.NewOptString(msg),
 		Error:   http_v1.NewOptString(msg),
 	}
+}
+
+func forbiddenDemoTeacher() (*http_v1.DemoTeacherForbidden, error) {
+	r := http_v1.DemoTeacherForbidden(errBody("teacher role required"))
+	return &r, nil
+}
+
+func forbiddenDemoAdminStats() (*http_v1.DemoAdminStatsForbidden, error) {
+	r := http_v1.DemoAdminStatsForbidden(errBody("platform admin required"))
+	return &r, nil
 }

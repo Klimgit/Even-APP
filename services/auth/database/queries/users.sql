@@ -12,3 +12,14 @@ WHERE email = $1;
 SELECT id, email, password_hash, display_name, role, is_admin, created_at
 FROM users
 WHERE id = $1;
+
+-- name: CountUsers :one
+SELECT count(*)::int AS count FROM users;
+
+-- name: UserStats :one
+SELECT
+  count(*)::int AS total_users,
+  count(*) FILTER (WHERE role = 'student')::int AS students,
+  count(*) FILTER (WHERE role = 'teacher')::int AS teachers,
+  count(*) FILTER (WHERE is_admin = true)::int AS admins
+FROM users;

@@ -11,6 +11,20 @@ import (
 	"github.com/google/uuid"
 )
 
+const countUsers = `-- name: CountUsers :one
+SELECT count(*)::int AS count FROM users
+`
+
+// CountUsers
+//
+//	SELECT count(*)::int AS count FROM users
+func (q *Queries) CountUsers(ctx context.Context) (int32, error) {
+	row := q.db.QueryRow(ctx, countUsers)
+	var count int32
+	err := row.Scan(&count)
+	return count, err
+}
+
 const createUser = `-- name: CreateUser :one
 INSERT INTO users (email, password_hash, display_name, role)
 VALUES ($1, $2, $3, $4)
@@ -105,6 +119,42 @@ func (q *Queries) GetUserByID(ctx context.Context, arg GetUserByIDParams) (User,
 		&i.Role,
 		&i.IsAdmin,
 		&i.CreatedAt,
+	)
+	return i, err
+}
+
+const userStats = `-- name: UserStats :one
+SELECT
+  count(*)::int AS total_users,
+  count(*) FILTER (WHERE role = 'student')::int AS students,
+  count(*) FILTER (WHERE role = 'teacher')::int AS teachers,
+  count(*) FILTER (WHERE is_admin = true)::int AS admins
+FROM users
+`
+
+type UserStatsRow struct {
+	TotalUsers int32
+	Students   int32
+	Teachers   int32
+	Admins     int32
+}
+
+// UserStats
+//
+//	SELECT
+//	  count(*)::int AS total_users,
+//	  count(*) FILTER (WHERE role = 'student')::int AS students,
+//	  count(*) FILTER (WHERE role = 'teacher')::int AS teachers,
+//	  count(*) FILTER (WHERE is_admin = true)::int AS admins
+//	FROM users
+func (q *Queries) UserStats(ctx context.Context) (UserStatsRow, error) {
+	row := q.db.QueryRow(ctx, userStats)
+	var i UserStatsRow
+	err := row.Scan(
+		&i.TotalUsers,
+		&i.Students,
+		&i.Teachers,
+		&i.Admins,
 	)
 	return i, err
 }

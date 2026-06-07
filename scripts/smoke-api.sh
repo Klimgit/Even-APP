@@ -34,6 +34,23 @@ c=$(code -X POST "$GW/api/v1/auth/login" -H 'Content-Type: application/json' \
 c=$(code -H "Authorization: Bearer $ACCESS" "$GW/api/v1/auth/me")
 [[ "$c" == "200" ]] && pass "GET /auth/me → $c" || fail "GET /auth/me → $c"
 
+echo ""
+echo "=== Auth demo endpoints (auth levels + DB) ==="
+
+c=$(code "$GW/api/v1/auth/demo/public")
+[[ "$c" == "200" ]] && pass "GET /auth/demo/public (no JWT) → $c" || fail "GET /auth/demo/public → $c"
+COUNT=$(python3 -c "import json; print(json.load(open('/tmp/smoke-body.json'))['user_count'])")
+[[ "$COUNT" -ge 1 ]] && pass "demo/public user_count=$COUNT" || fail "demo/public empty count"
+
+c=$(code -H "Authorization: Bearer $ACCESS" "$GW/api/v1/auth/demo/me")
+[[ "$c" == "200" ]] && pass "GET /auth/demo/me (JWT) → $c" || fail "GET /auth/demo/me → $c"
+
+c=$(code -H "Authorization: Bearer $ACCESS" "$GW/api/v1/auth/demo/teacher")
+[[ "$c" == "200" ]] && pass "GET /auth/demo/teacher (teacher JWT) → $c" || fail "GET /auth/demo/teacher → $c"
+
+c=$(code -H "Authorization: Bearer $ACCESS" "$GW/api/v1/auth/demo/admin/stats")
+[[ "$c" == "403" ]] && pass "GET /auth/demo/admin/stats (non-admin) → $c" || fail "GET /auth/demo/admin/stats before promote → $c"
+
 c=$(code -X POST "$GW/api/v1/auth/refresh" -H 'Content-Type: application/json' \
   -d "{\"refresh_token\":\"$REFRESH\"}")
 [[ "$c" == "200" ]] && pass "POST /auth/refresh → $c" || fail "POST /auth/refresh → $c"
@@ -47,6 +64,11 @@ c=$(code -X POST "$AUTH/api/v1/auth/login" -H 'Content-Type: application/json' \
   -d "{\"email\":\"$EMAIL\",\"password\":\"$PASS\"}")
 ACCESS=$(python3 -c "import json; print(json.load(open('/tmp/smoke-body.json'))['access_token'])")
 pass "admin token issued for $EMAIL"
+
+c=$(code -H "Authorization: Bearer $ACCESS" "$GW/api/v1/auth/demo/admin/stats")
+[[ "$c" == "200" ]] && pass "GET /auth/demo/admin/stats (admin JWT + DB) → $c" || fail "GET /auth/demo/admin/stats → $c"
+ADMINS=$(python3 -c "import json; print(json.load(open('/tmp/smoke-body.json'))['admins'])")
+[[ "$ADMINS" -ge 1 ]] && pass "demo/admin/stats admins=$ADMINS" || fail "demo/admin/stats no admins"
 
 echo ""
 echo "=== Platform media (media $MEDIA, gateway $GW) ==="
