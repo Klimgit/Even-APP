@@ -16,10 +16,9 @@ echo "→ ensuring postgres is up..."
 docker compose up -d postgres
 docker compose exec -T postgres pg_isready -U "${POSTGRES_USER:-even}" >/dev/null
 
-echo "→ ensuring even_media database exists..."
-docker compose exec -T postgres psql -U "${POSTGRES_USER:-even}" -d postgres -tc \
-  "SELECT 1 FROM pg_database WHERE datname = 'even_media'" | grep -q 1 \
-  || docker compose exec -T postgres psql -U "${POSTGRES_USER:-even}" -d postgres -c "CREATE DATABASE even_media;"
+echo "→ ensuring application databases exist..."
+docker compose rm -sf postgres-ensure-dbs >/dev/null 2>&1 || true
+docker compose up postgres-ensure-dbs
 
 echo "→ applying migrations (auth, media, lexicon, content, learning)..."
 # Recreate migrate containers so new .sql files are picked up on each run.

@@ -47,6 +47,19 @@ services:
     entrypoint: ["/bin/sh", "/init-bucket.sh"]
     restart: "no"
 
+  postgres-ensure-dbs:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-even}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-even}
+    volumes:
+      - ./deploy/postgres/ensure-dbs.sh:/ensure-dbs.sh:ro
+    entrypoint: ["/bin/sh", "/ensure-dbs.sh"]
+    depends_on:
+      postgres:
+        condition: service_healthy
+    restart: "no"
+
   auth-migrate:
     image: migrate/migrate:v4.19.1
     volumes:
@@ -56,8 +69,8 @@ services:
       - -database=postgres://${POSTGRES_USER:-even}:${POSTGRES_PASSWORD:-even}@postgres:5432/even_auth?sslmode=disable
       - up
     depends_on:
-      postgres:
-        condition: service_healthy
+      postgres-ensure-dbs:
+        condition: service_completed_successfully
     restart: "no"
 
   media-migrate:
@@ -69,8 +82,8 @@ services:
       - -database=postgres://${POSTGRES_USER:-even}:${POSTGRES_PASSWORD:-even}@postgres:5432/even_media?sslmode=disable
       - up
     depends_on:
-      postgres:
-        condition: service_healthy
+      postgres-ensure-dbs:
+        condition: service_completed_successfully
     restart: "no"
 
   lexicon-migrate:
@@ -82,8 +95,8 @@ services:
       - -database=postgres://${POSTGRES_USER:-even}:${POSTGRES_PASSWORD:-even}@postgres:5432/even_lexicon?sslmode=disable
       - up
     depends_on:
-      postgres:
-        condition: service_healthy
+      postgres-ensure-dbs:
+        condition: service_completed_successfully
     restart: "no"
 
   content-migrate:
@@ -95,8 +108,8 @@ services:
       - -database=postgres://${POSTGRES_USER:-even}:${POSTGRES_PASSWORD:-even}@postgres:5432/even_content?sslmode=disable
       - up
     depends_on:
-      postgres:
-        condition: service_healthy
+      postgres-ensure-dbs:
+        condition: service_completed_successfully
     restart: "no"
 
   learning-migrate:
@@ -108,8 +121,8 @@ services:
       - -database=postgres://${POSTGRES_USER:-even}:${POSTGRES_PASSWORD:-even}@postgres:5432/even_learning?sslmode=disable
       - up
     depends_on:
-      postgres:
-        condition: service_healthy
+      postgres-ensure-dbs:
+        condition: service_completed_successfully
     restart: "no"
 
   auth:
