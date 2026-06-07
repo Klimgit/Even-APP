@@ -26,6 +26,9 @@ until curl -sf http://localhost:8080/api/v1/ready >/dev/null 2>&1; do
   sleep 2
 done
 
+echo "→ dev seed (cleanup + evn/ru + Even alphabet)..."
+./scripts/seed-dev.sh
+
 echo ""
 echo "✓ Even-APP is up"
 echo ""

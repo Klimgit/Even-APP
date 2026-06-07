@@ -35,6 +35,9 @@ until curl -sf http://localhost:8080/api/v1/ready >/dev/null 2>&1; do
   sleep 3
 done
 
+echo "→ dev seed..."
+./scripts/seed-dev.sh
+
 echo "→ smoke tests..."
 ./scripts/smoke-api.sh
 

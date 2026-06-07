@@ -5,26 +5,1703 @@ info:
   description: Languages, lexicon, and vocabulary (media lives in the media service)
 
 paths:
-  /api/v1/health:
+  /languages:
     get:
-      operationId: getHealth
-      tags: [System, Public]
-      summary: Health check
+      operationId: listLanguages
+      tags: [Public]
+      summary: List active languages
       responses:
         "200":
           description: OK
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/HealthResponse"
+                type: array
+                items:
+                  $ref: "#/components/schemas/Language"
+        default:
+          $ref: "#/components/responses/DefaultError"
+
+  /languages/{code}:
+    get:
+      operationId: getLanguage
+      tags: [Public]
+      summary: Get language by code
+      parameters:
+        - name: code
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Language"
+        "404":
+          description: Language not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        default:
+          $ref: "#/components/responses/DefaultError"
+
+  /languages/{code}/alphabet:
+    get:
+      operationId: getLanguageAlphabet
+      tags: [Public]
+      summary: Get alphabet letters for keyboard
+      parameters:
+        - name: code
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/AlphabetLetter"
+        "404":
+          description: Language not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        default:
+          $ref: "#/components/responses/DefaultError"
+
+  /api/v1/platform/languages:
+    get:
+      operationId: listPlatformLanguages
+      tags: [PlatformLanguages]
+      summary: List all languages (platform admin)
+      security:
+        - bearerAuth: []
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Language"
+        "401":
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "403":
+          description: Platform admin required
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        default:
+          $ref: "#/components/responses/DefaultError"
+    post:
+      operationId: createPlatformLanguage
+      tags: [PlatformLanguages]
+      summary: Create a language (platform admin)
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateLanguageRequest"
+      responses:
+        "201":
+          description: Created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Language"
+        "400":
+          description: Bad request
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "401":
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "403":
+          description: Platform admin required
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "409":
+          description: Language code already exists
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        default:
+          $ref: "#/components/responses/DefaultError"
+
+  /api/v1/platform/languages/{code}:
+    patch:
+      operationId: patchPlatformLanguage
+      tags: [PlatformLanguages]
+      summary: Update a language (platform admin)
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: code
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/PatchLanguageRequest"
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Language"
+        "400":
+          description: Bad request
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "401":
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "403":
+          description: Platform admin required
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "404":
+          description: Language not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        default:
+          $ref: "#/components/responses/DefaultError"
+
+  /api/v1/platform/languages/{code}/alphabet:
+    get:
+      operationId: listPlatformAlphabet
+      tags: [PlatformAlphabet]
+      summary: List alphabet letters (platform admin)
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: code
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/AlphabetLetter"
+        "401":
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "403":
+          description: Platform admin required
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "404":
+          description: Language not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        default:
+          $ref: "#/components/responses/DefaultError"
+    post:
+      operationId: createPlatformAlphabetLetter
+      tags: [PlatformAlphabet]
+      summary: Create an alphabet letter (platform admin)
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: code
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateAlphabetLetterRequest"
+      responses:
+        "201":
+          description: Created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AlphabetLetter"
+        "400":
+          description: Bad request
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "401":
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "403":
+          description: Platform admin required
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "404":
+          description: Language not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "409":
+          description: Letter already exists
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        default:
+          $ref: "#/components/responses/DefaultError"
+
+  /api/v1/platform/alphabet/{letterId}:
+    patch:
+      operationId: patchPlatformAlphabetLetter
+      tags: [PlatformAlphabet]
+      summary: Update an alphabet letter (platform admin)
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: letterId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/PatchAlphabetLetterRequest"
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AlphabetLetter"
+        "400":
+          description: Bad request
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "401":
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "403":
+          description: Platform admin required
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "404":
+          description: Letter not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        default:
+          $ref: "#/components/responses/DefaultError"
+    delete:
+      operationId: deletePlatformAlphabetLetter
+      tags: [PlatformAlphabet]
+      summary: Delete an alphabet letter (platform admin)
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: letterId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        "204":
+          description: No content
+        "401":
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "403":
+          description: Platform admin required
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "404":
+          description: Letter not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        default:
+          $ref: "#/components/responses/DefaultError"
+
+  /api/v1/platform/languages/{code}/alphabet/reorder:
+    post:
+      operationId: reorderPlatformAlphabet
+      tags: [PlatformAlphabet]
+      summary: Reorder alphabet letters (platform admin)
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: code
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ReorderAlphabetRequest"
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/AlphabetLetter"
+        "400":
+          description: Bad request
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "401":
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "403":
+          description: Platform admin required
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "404":
+          description: Language not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        default:
+          $ref: "#/components/responses/DefaultError"
+
+  /api/v1/platform/languages/{code}/sounds:
+    get:
+      operationId: listPlatformSounds
+      tags: [PlatformSounds]
+      summary: List sounds for a language (platform admin)
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: code
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Sound"
+        "401":
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "403":
+          description: Platform admin required
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "404":
+          description: Language not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        default:
+          $ref: "#/components/responses/DefaultError"
+    post:
+      operationId: createPlatformSound
+      tags: [PlatformSounds]
+      summary: Create a sound (platform admin)
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: code
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateSoundRequest"
+      responses:
+        "201":
+          description: Created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Sound"
+        "400":
+          description: Bad request
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "401":
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "403":
+          description: Platform admin required
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "404":
+          description: Language not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        default:
+          $ref: "#/components/responses/DefaultError"
+
+  /api/v1/platform/sounds/{soundId}:
+    patch:
+      operationId: patchPlatformSound
+      tags: [PlatformSounds]
+      summary: Update a sound (platform admin)
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: soundId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/PatchSoundRequest"
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Sound"
+        "400":
+          description: Bad request
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "401":
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "403":
+          description: Platform admin required
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "404":
+          description: Sound not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        default:
+          $ref: "#/components/responses/DefaultError"
+    delete:
+      operationId: deletePlatformSound
+      tags: [PlatformSounds]
+      summary: Delete a sound (platform admin)
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: soundId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        "204":
+          description: No content
+        "401":
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "403":
+          description: Platform admin required
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "404":
+          description: Sound not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        default:
+          $ref: "#/components/responses/DefaultError"
+
+  /api/v1/platform/alphabet/{letterId}/sounds:
+    post:
+      operationId: linkPlatformAlphabetSound
+      tags: [PlatformSounds]
+      summary: Link a sound to an alphabet letter (platform admin)
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: letterId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/LinkSoundRequest"
+      responses:
+        "204":
+          description: No content
+        "400":
+          description: Bad request
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "401":
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "403":
+          description: Platform admin required
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "404":
+          description: Letter or sound not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        default:
+          $ref: "#/components/responses/DefaultError"
+
+  /api/v1/platform/alphabet/{letterId}/sounds/{soundId}:
+    delete:
+      operationId: unlinkPlatformAlphabetSound
+      tags: [PlatformSounds]
+      summary: Unlink a sound from an alphabet letter (platform admin)
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: letterId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+        - name: soundId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        "204":
+          description: No content
+        "401":
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "403":
+          description: Platform admin required
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "404":
+          description: Link not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        default:
+          $ref: "#/components/responses/DefaultError"
+
+  /api/v1/platform/languages/{code}/lexicon:
+    get:
+      operationId: listPlatformLexicon
+      tags: [PlatformLexicon]
+      summary: List lexemes for a language (platform admin)
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: code
+          in: path
+          required: true
+          schema:
+            type: string
+        - name: q
+          in: query
+          schema:
+            type: string
+        - name: page
+          in: query
+          schema:
+            type: integer
+            minimum: 1
+        - name: limit
+          in: query
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 100
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/LexemeListResponse"
+        "401":
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "403":
+          description: Platform admin required
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "404":
+          description: Language not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        default:
+          $ref: "#/components/responses/DefaultError"
+    post:
+      operationId: createPlatformLexeme
+      tags: [PlatformLexicon]
+      summary: Create a lexeme (platform admin)
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: code
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateLexemeRequest"
+      responses:
+        "201":
+          description: Created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Lexeme"
+        "400":
+          description: Bad request
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "401":
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "403":
+          description: Platform admin required
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "404":
+          description: Language not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "409":
+          description: Lexeme already exists
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        default:
+          $ref: "#/components/responses/DefaultError"
+
+  /api/v1/platform/lexemes/{lexemeId}:
+    get:
+      operationId: getPlatformLexeme
+      tags: [PlatformLexicon]
+      summary: Get a lexeme by id (platform admin)
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: lexemeId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Lexeme"
+        "401":
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "403":
+          description: Platform admin required
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "404":
+          description: Lexeme not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        default:
+          $ref: "#/components/responses/DefaultError"
+    patch:
+      operationId: patchPlatformLexeme
+      tags: [PlatformLexicon]
+      summary: Update a lexeme (platform admin)
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: lexemeId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/PatchLexemeRequest"
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Lexeme"
+        "400":
+          description: Bad request
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "401":
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "403":
+          description: Platform admin required
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "404":
+          description: Lexeme not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "409":
+          description: Conflict
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        default:
+          $ref: "#/components/responses/DefaultError"
+    delete:
+      operationId: deletePlatformLexeme
+      tags: [PlatformLexicon]
+      summary: Delete a lexeme (platform admin)
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: lexemeId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        "204":
+          description: No content
+        "401":
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "403":
+          description: Platform admin required
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "404":
+          description: Lexeme not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        default:
+          $ref: "#/components/responses/DefaultError"
+
+  /api/v1/platform/lexemes/{lexemeId}/forms:
+    post:
+      operationId: createPlatformLexemeForm
+      tags: [PlatformLexicon]
+      summary: Create a lexeme form (platform admin)
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: lexemeId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateLexemeFormRequest"
+      responses:
+        "201":
+          description: Created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/LexemeForm"
+        "400":
+          description: Bad request
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "401":
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "403":
+          description: Platform admin required
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "404":
+          description: Lexeme not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "409":
+          description: Form already exists
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        default:
+          $ref: "#/components/responses/DefaultError"
+
+  /api/v1/platform/lexeme-forms/{formId}:
+    patch:
+      operationId: patchPlatformLexemeForm
+      tags: [PlatformLexicon]
+      summary: Update a lexeme form (platform admin)
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: formId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/PatchLexemeFormRequest"
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/LexemeForm"
+        "400":
+          description: Bad request
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "401":
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "403":
+          description: Platform admin required
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "404":
+          description: Form not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        default:
+          $ref: "#/components/responses/DefaultError"
+    delete:
+      operationId: deletePlatformLexemeForm
+      tags: [PlatformLexicon]
+      summary: Delete a lexeme form (platform admin)
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: formId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        "204":
+          description: No content
+        "401":
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "403":
+          description: Platform admin required
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "404":
+          description: Form not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        default:
+          $ref: "#/components/responses/DefaultError"
+
+  /api/v1/platform/lexemes/{lexemeId}/translations:
+    post:
+      operationId: createPlatformLexemeTranslation
+      tags: [PlatformLexicon]
+      summary: Create a lexeme translation (platform admin)
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: lexemeId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateLexemeTranslationRequest"
+      responses:
+        "201":
+          description: Created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/LexemeTranslation"
+        "400":
+          description: Bad request
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "401":
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "403":
+          description: Platform admin required
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "404":
+          description: Lexeme not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        default:
+          $ref: "#/components/responses/DefaultError"
+
+  /api/v1/platform/lexeme-translations/{translationId}:
+    delete:
+      operationId: deletePlatformLexemeTranslation
+      tags: [PlatformLexicon]
+      summary: Delete a lexeme translation (platform admin)
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: translationId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        "204":
+          description: No content
+        "401":
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "403":
+          description: Platform admin required
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "404":
+          description: Translation not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        default:
+          $ref: "#/components/responses/DefaultError"
+
+  /api/v1/platform/lexemes/{lexemeId}/media:
+    post:
+      operationId: createPlatformLexemeMedia
+      tags: [PlatformLexicon]
+      summary: Attach media to a lexeme (platform admin)
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: lexemeId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateLexemeMediaRequest"
+      responses:
+        "201":
+          description: Created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/LexemeMedia"
+        "400":
+          description: Bad request
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "401":
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "403":
+          description: Platform admin required
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "404":
+          description: Lexeme or media not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        default:
+          $ref: "#/components/responses/DefaultError"
+
+  /api/v1/platform/lexeme-media/{lexemeMediaId}:
+    delete:
+      operationId: deletePlatformLexemeMedia
+      tags: [PlatformLexicon]
+      summary: Detach media from a lexeme (platform admin)
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: lexemeMediaId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        "204":
+          description: No content
+        "401":
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "403":
+          description: Platform admin required
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "404":
+          description: Lexeme media not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        default:
+          $ref: "#/components/responses/DefaultError"
 
 components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+
+  responses:
+    DefaultError:
+      description: Unexpected error
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/ErrorResponse"
+
   schemas:
-    HealthResponse:
+    Language:
       type: object
-      required: [status, service]
+      required: [id, code, name, native_name, direction, is_active]
       properties:
-        status:
+        id:
           type: string
-        service:
+          format: uuid
+        code:
           type: string
+        name:
+          type: string
+        native_name:
+          type: string
+        direction:
+          type: string
+          enum: [ltr, rtl]
+        is_active:
+          type: boolean
+
+    CreateLanguageRequest:
+      type: object
+      required: [code, name, native_name]
+      properties:
+        code:
+          type: string
+        name:
+          type: string
+        native_name:
+          type: string
+        direction:
+          type: string
+          enum: [ltr, rtl]
+
+    PatchLanguageRequest:
+      type: object
+      properties:
+        name:
+          type: string
+        native_name:
+          type: string
+        direction:
+          type: string
+          enum: [ltr, rtl]
+        is_active:
+          type: boolean
+
+    AlphabetLetter:
+      type: object
+      required: [id, language_id, character, sort_order]
+      properties:
+        id:
+          type: string
+          format: uuid
+        language_id:
+          type: string
+          format: uuid
+        character:
+          type: string
+          minLength: 1
+          maxLength: 32
+          description: Single Unicode letter for the keyboard (e.g. Even ӈ U+04A9, not ASCII-only).
+          example: "ӈ"
+        upper_char:
+          type: string
+          maxLength: 32
+          description: Optional uppercase counterpart (e.g. Ӈ U+04A7).
+          example: "Ӈ"
+        sort_order:
+          type: integer
+        label:
+          type: string
+          description: Optional short UI hint for the key (e.g. key name).
+        transcription:
+          type: string
+          maxLength: 64
+          description: IPA phonetic transcription shown near the keyboard key (e.g. ŋ for ӈ).
+          example: "ŋ"
+
+    CreateAlphabetLetterRequest:
+      type: object
+      required: [character, sort_order]
+      properties:
+        character:
+          type: string
+          minLength: 1
+          maxLength: 32
+          description: Unicode letter shown on the custom keyboard.
+          example: "ӈ"
+        upper_char:
+          type: string
+          maxLength: 32
+          example: "Ӈ"
+        sort_order:
+          type: integer
+        label:
+          type: string
+        transcription:
+          type: string
+          maxLength: 64
+          example: "ŋ"
+
+    PatchAlphabetLetterRequest:
+      type: object
+      properties:
+        character:
+          type: string
+          minLength: 1
+          maxLength: 32
+        upper_char:
+          type: string
+          maxLength: 32
+        sort_order:
+          type: integer
+        label:
+          type: string
+        transcription:
+          type: string
+          maxLength: 64
+
+    ReorderAlphabetRequest:
+      type: object
+      required: [letter_ids]
+      properties:
+        letter_ids:
+          type: array
+          items:
+            type: string
+            format: uuid
+
+    Sound:
+      type: object
+      required: [id, language_id]
+      properties:
+        id:
+          type: string
+          format: uuid
+        language_id:
+          type: string
+          format: uuid
+        ipa:
+          type: string
+        description:
+          type: string
+        audio_url:
+          type: string
+
+    CreateSoundRequest:
+      type: object
+      properties:
+        ipa:
+          type: string
+        description:
+          type: string
+        audio_key:
+          type: string
+
+    PatchSoundRequest:
+      type: object
+      properties:
+        ipa:
+          type: string
+        description:
+          type: string
+        audio_key:
+          type: string
+
+    LinkSoundRequest:
+      type: object
+      required: [sound_id]
+      properties:
+        sound_id:
+          type: string
+          format: uuid
+
+    Lexeme:
+      type: object
+      required: [id, language_id, lemma, translations, forms, media]
+      properties:
+        id:
+          type: string
+          format: uuid
+        language_id:
+          type: string
+          format: uuid
+        lemma:
+          type: string
+        part_of_speech:
+          type: string
+        notes:
+          type: string
+        translations:
+          type: array
+          items:
+            $ref: "#/components/schemas/LexemeTranslation"
+        forms:
+          type: array
+          items:
+            $ref: "#/components/schemas/LexemeForm"
+        media:
+          type: array
+          items:
+            $ref: "#/components/schemas/LexemeMedia"
+        primary_image_url:
+          type: string
+        primary_audio_url:
+          type: string
+
+    LexemeForm:
+      type: object
+      required: [id, lexeme_id, form]
+      properties:
+        id:
+          type: string
+          format: uuid
+        lexeme_id:
+          type: string
+          format: uuid
+        form:
+          type: string
+        tags:
+          type: object
+          additionalProperties:
+            type: string
+
+    LexemeTranslation:
+      type: object
+      required: [id, target_language_id, text]
+      properties:
+        id:
+          type: string
+          format: uuid
+        target_language_id:
+          type: string
+          format: uuid
+        text:
+          type: string
+        target_lexeme_id:
+          type: string
+          format: uuid
+
+    LexemeMedia:
+      type: object
+      required: [id, kind, is_primary, url]
+      properties:
+        id:
+          type: string
+          format: uuid
+        kind:
+          type: string
+          enum: [image, audio_word, audio_sentence, audio_form, video]
+        label:
+          type: string
+        is_primary:
+          type: boolean
+        url:
+          type: string
+        form_id:
+          type: string
+          format: uuid
+
+    CreateLexemeRequest:
+      type: object
+      required: [lemma]
+      properties:
+        lemma:
+          type: string
+        part_of_speech:
+          type: string
+        notes:
+          type: string
+        translations:
+          type: array
+          items:
+            $ref: "#/components/schemas/CreateLexemeTranslationInput"
+
+    CreateLexemeTranslationInput:
+      type: object
+      required: [target_language_id, text]
+      properties:
+        target_language_id:
+          type: string
+          format: uuid
+        text:
+          type: string
+
+    PatchLexemeRequest:
+      type: object
+      properties:
+        lemma:
+          type: string
+        part_of_speech:
+          type: string
+        notes:
+          type: string
+
+    CreateLexemeFormRequest:
+      type: object
+      required: [form]
+      properties:
+        form:
+          type: string
+        tags:
+          type: object
+          additionalProperties:
+            type: string
+
+    PatchLexemeFormRequest:
+      type: object
+      properties:
+        form:
+          type: string
+        tags:
+          type: object
+          additionalProperties:
+            type: string
+
+    CreateLexemeTranslationRequest:
+      type: object
+      required: [target_language_id, text]
+      properties:
+        target_language_id:
+          type: string
+          format: uuid
+        text:
+          type: string
+        target_lexeme_id:
+          type: string
+          format: uuid
+
+    CreateLexemeMediaRequest:
+      type: object
+      required: [media_asset_id, kind]
+      properties:
+        media_asset_id:
+          type: string
+          format: uuid
+        kind:
+          type: string
+          enum: [image, audio_word, audio_sentence, audio_form, video]
+        label:
+          type: string
+        is_primary:
+          type: boolean
+        form_id:
+          type: string
+          format: uuid
+
+    LexemeListResponse:
+      type: object
+      required: [items, total, page, limit]
+      properties:
+        items:
+          type: array
+          items:
+            $ref: "#/components/schemas/Lexeme"
+        total:
+          type: integer
+        page:
+          type: integer
+        limit:
+          type: integer
+
+    ErrorResponse:
+      type: object
+      required: [error, message]
+      properties:
+        error:
+          type: string
+        message:
+          type: string
+        details:
+          type: object
+          additionalProperties:
+            type: array
+            items:
+              type: string

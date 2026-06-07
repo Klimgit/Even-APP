@@ -11,6 +11,74 @@ import (
 	"github.com/google/uuid"
 )
 
+const createLanguage = `-- name: CreateLanguage :one
+INSERT INTO languages (code, name, native_name, direction, is_active)
+VALUES ($1, $2, $3, $4, true)
+RETURNING id, code, name, native_name, direction, is_active, created_at
+`
+
+type CreateLanguageParams struct {
+	Code       string
+	Name       string
+	NativeName string
+	Direction  string
+}
+
+// CreateLanguage
+//
+//	INSERT INTO languages (code, name, native_name, direction, is_active)
+//	VALUES ($1, $2, $3, $4, true)
+//	RETURNING id, code, name, native_name, direction, is_active, created_at
+func (q *Queries) CreateLanguage(ctx context.Context, arg CreateLanguageParams) (Language, error) {
+	row := q.db.QueryRow(ctx, createLanguage,
+		arg.Code,
+		arg.Name,
+		arg.NativeName,
+		arg.Direction,
+	)
+	var i Language
+	err := row.Scan(
+		&i.ID,
+		&i.Code,
+		&i.Name,
+		&i.NativeName,
+		&i.Direction,
+		&i.IsActive,
+		&i.CreatedAt,
+	)
+	return i, err
+}
+
+const getLanguageByCode = `-- name: GetLanguageByCode :one
+SELECT id, code, name, native_name, direction, is_active, created_at
+FROM languages
+WHERE code = $1
+`
+
+type GetLanguageByCodeParams struct {
+	Code string
+}
+
+// GetLanguageByCode
+//
+//	SELECT id, code, name, native_name, direction, is_active, created_at
+//	FROM languages
+//	WHERE code = $1
+func (q *Queries) GetLanguageByCode(ctx context.Context, arg GetLanguageByCodeParams) (Language, error) {
+	row := q.db.QueryRow(ctx, getLanguageByCode, arg.Code)
+	var i Language
+	err := row.Scan(
+		&i.ID,
+		&i.Code,
+		&i.Name,
+		&i.NativeName,
+		&i.Direction,
+		&i.IsActive,
+		&i.CreatedAt,
+	)
+	return i, err
+}
+
 const getLanguageIDByCode = `-- name: GetLanguageIDByCode :one
 SELECT id
 FROM languages
@@ -31,4 +99,134 @@ func (q *Queries) GetLanguageIDByCode(ctx context.Context, arg GetLanguageIDByCo
 	var id uuid.UUID
 	err := row.Scan(&id)
 	return id, err
+}
+
+const listActiveLanguages = `-- name: ListActiveLanguages :many
+SELECT id, code, name, native_name, direction, is_active, created_at
+FROM languages
+WHERE is_active = true
+ORDER BY code
+`
+
+// ListActiveLanguages
+//
+//	SELECT id, code, name, native_name, direction, is_active, created_at
+//	FROM languages
+//	WHERE is_active = true
+//	ORDER BY code
+func (q *Queries) ListActiveLanguages(ctx context.Context) ([]Language, error) {
+	rows, err := q.db.Query(ctx, listActiveLanguages)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []Language
+	for rows.Next() {
+		var i Language
+		if err := rows.Scan(
+			&i.ID,
+			&i.Code,
+			&i.Name,
+			&i.NativeName,
+			&i.Direction,
+			&i.IsActive,
+			&i.CreatedAt,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const listAllLanguages = `-- name: ListAllLanguages :many
+SELECT id, code, name, native_name, direction, is_active, created_at
+FROM languages
+ORDER BY code
+`
+
+// ListAllLanguages
+//
+//	SELECT id, code, name, native_name, direction, is_active, created_at
+//	FROM languages
+//	ORDER BY code
+func (q *Queries) ListAllLanguages(ctx context.Context) ([]Language, error) {
+	rows, err := q.db.Query(ctx, listAllLanguages)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []Language
+	for rows.Next() {
+		var i Language
+		if err := rows.Scan(
+			&i.ID,
+			&i.Code,
+			&i.Name,
+			&i.NativeName,
+			&i.Direction,
+			&i.IsActive,
+			&i.CreatedAt,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const updateLanguage = `-- name: UpdateLanguage :one
+UPDATE languages
+SET
+    name = COALESCE($1, name),
+    native_name = COALESCE($2, native_name),
+    direction = COALESCE($3, direction),
+    is_active = COALESCE($4, is_active)
+WHERE code = $5
+RETURNING id, code, name, native_name, direction, is_active, created_at
+`
+
+type UpdateLanguageParams struct {
+	Name       *string
+	NativeName *string
+	Direction  *string
+	IsActive   *bool
+	Code       string
+}
+
+// UpdateLanguage
+//
+//	UPDATE languages
+//	SET
+//	    name = COALESCE($1, name),
+//	    native_name = COALESCE($2, native_name),
+//	    direction = COALESCE($3, direction),
+//	    is_active = COALESCE($4, is_active)
+//	WHERE code = $5
+//	RETURNING id, code, name, native_name, direction, is_active, created_at
+func (q *Queries) UpdateLanguage(ctx context.Context, arg UpdateLanguageParams) (Language, error) {
+	row := q.db.QueryRow(ctx, updateLanguage,
+		arg.Name,
+		arg.NativeName,
+		arg.Direction,
+		arg.IsActive,
+		arg.Code,
+	)
+	var i Language
+	err := row.Scan(
+		&i.ID,
+		&i.Code,
+		&i.Name,
+		&i.NativeName,
+		&i.Direction,
+		&i.IsActive,
+		&i.CreatedAt,
+	)
+	return i, err
 }

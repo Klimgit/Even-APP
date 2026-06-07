@@ -3,3 +3,74 @@
 //   sqlc v1.31.1
 
 package query
+
+import (
+	"time"
+
+	"github.com/google/uuid"
+)
+
+type AlphabetLetter struct {
+	ID            uuid.UUID
+	LanguageID    uuid.UUID
+	Character     string
+	UpperChar     *string
+	SortOrder     int32
+	Label         *string
+	Transcription *string
+}
+
+type Language struct {
+	ID         uuid.UUID
+	Code       string
+	Name       string
+	NativeName string
+	Direction  string
+	IsActive   bool
+	CreatedAt  time.Time
+}
+
+type Lexeme struct {
+	ID           uuid.UUID
+	LanguageID   uuid.UUID
+	Lemma        string
+	PartOfSpeech *string
+	Notes        *string
+	CreatedBy    *uuid.UUID
+	CreatedAt    time.Time
+	UpdatedAt    time.Time
+}
+
+type LexemeForm struct {
+	ID       uuid.UUID
+	LexemeID uuid.UUID
+	Form     string
+	Tags     []byte
+}
+
+type LexemeMedium struct {
+	ID           uuid.UUID
+	LexemeID     uuid.UUID
+	FormID       *uuid.UUID
+	MediaAssetID uuid.UUID
+	Kind         string
+	Label        *string
+	IsPrimary    bool
+	SortOrder    int32
+}
+
+type LexemeTranslation struct {
+	ID               uuid.UUID
+	SourceLexemeID   uuid.UUID
+	TargetLanguageID uuid.UUID
+	Text             string
+	TargetLexemeID   *uuid.UUID
+}
+
+type Sound struct {
+	ID          uuid.UUID
+	LanguageID  uuid.UUID
+	Ipa         *string
+	Description *string
+	AudioKey    *string
+}

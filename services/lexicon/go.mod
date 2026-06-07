@@ -6,6 +6,7 @@ require (
 	github.com/even-app/even-app/libs/config v0.0.0
 	github.com/even-app/even-app/libs/core v0.0.0
 	github.com/even-app/even-app/libs/http v0.0.0
+	github.com/even-app/even-app/libs/jwt v0.0.0
 	github.com/even-app/even-app/libs/postgres v0.0.0
 	github.com/go-faster/errors v0.7.1
 	github.com/go-faster/jx v1.2.0
@@ -17,7 +18,6 @@ require (
 
 require (
 	github.com/dlclark/regexp2 v1.11.5 // indirect
-	github.com/even-app/even-app/libs/jwt v0.0.0 // indirect
 	github.com/fatih/color v1.18.0 // indirect
 	github.com/ghodss/yaml v1.0.0 // indirect
 	github.com/go-faster/yaml v0.4.6 // indirect

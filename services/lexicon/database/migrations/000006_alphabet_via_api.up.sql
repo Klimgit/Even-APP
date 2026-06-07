@@ -1,0 +1,1 @@
+-- Alphabet letters are managed via platform API, not DB seed.

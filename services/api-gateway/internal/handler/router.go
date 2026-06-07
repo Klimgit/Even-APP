@@ -48,6 +48,7 @@ func New(cfg config.Config, jwtMgr *libjwt.Manager) (http.Handler, error) {
 		{"/api/v1/progress/", cfg.LearningURL + "/"},
 		{"/api/v1/review/", cfg.LearningURL + "/"},
 		{"/api/v1/dictionary/", cfg.LearningURL + "/"},
+		{"/languages", cfg.LexiconURL + "/"},
 		{"/languages/", cfg.LexiconURL + "/"},
 	}
 	for _, r := range routes {

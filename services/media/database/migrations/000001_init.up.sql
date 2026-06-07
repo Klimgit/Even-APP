@@ -8,10 +8,6 @@ CREATE TABLE IF NOT EXISTS languages (
     created_at TIMESTAMPTZ NOT NULL DEFAULT now()
 );
 
-INSERT INTO languages (code, name, native_name)
-VALUES ('evn', 'Even', 'Эвэды'), ('ru', 'Russian', 'Русский')
-ON CONFLICT (code) DO NOTHING;
-
 CREATE TABLE IF NOT EXISTS media_assets (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     scope TEXT NOT NULL DEFAULT 'platform' CHECK (scope IN ('platform', 'teacher')),

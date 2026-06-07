@@ -119,6 +119,20 @@ migrate-all:
 smoke-api:
     @./scripts/smoke-api.sh
 
+verify-api:
+    @./scripts/verify-all-api.sh
+
+seed-languages:
+    @./scripts/seed-languages.sh
+
+seed-bootstrap: seed-dev
+
+seed-dev:
+    @./scripts/seed-dev.sh
+
+db-cleanup-dev:
+    @./scripts/db-cleanup-dev.sh
+
 # Branch preview on server: /preview/<slug>/
 deploy-branch BRANCH:
     @./scripts/deploy-branch-preview.sh "{{BRANCH}}"

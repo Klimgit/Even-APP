@@ -4,6 +4,7 @@ set -euo pipefail
 
 GW="${GW:-http://localhost:8080}"
 AUTH="${AUTH:-http://localhost:8081}"
+LEX="${LEX:-http://localhost:8082}"
 MEDIA="${MEDIA:-http://localhost:8085}"
 EMAIL="smoke-$(date +%s)@example.com"
 PASS="password123"
@@ -73,9 +74,15 @@ ADMINS=$(python3 -c "import json; print(json.load(open('/tmp/smoke-body.json'))[
 echo ""
 echo "=== Platform media (media $MEDIA, gateway $GW) ==="
 
+ROOT="$(cd "$(dirname "$0")/.." && pwd)"
+"$ROOT/scripts/seed-languages.sh" >/dev/null
+
+EVN_ID=$(docker compose exec -T postgres psql -U "${POSTGRES_USER:-even}" -d even_media -tAc "SELECT id FROM languages WHERE code='evn'")
+[[ -n "$EVN_ID" ]] || fail "evn missing in even_media — run ./scripts/seed-languages.sh"
+
 c=$(code -H "Authorization: Bearer $ACCESS" -X POST "$MEDIA/api/v1/platform/media/presign" \
   -H 'Content-Type: application/json' \
-  -d '{"filename":"smoke.png","mime_type":"image/png","size_bytes":68}')
+  -d "{\"filename\":\"smoke.png\",\"mime_type\":\"image/png\",\"size_bytes\":68,\"language_id\":\"$EVN_ID\"}")
 [[ "$c" == "200" ]] && pass "POST /platform/media/presign → $c" || fail "POST /platform/media/presign → $c ($(cat /tmp/smoke-body.json))"
 OBJ=$(python3 -c "import json; print(json.load(open('/tmp/smoke-body.json'))['object_key'])")
 UPLOAD=$(python3 -c "import json; print(json.load(open('/tmp/smoke-body.json'))['upload_url'])")
@@ -88,10 +95,10 @@ c=$(code -X PUT "$UPLOAD" -H 'Content-Type: image/png' --data-binary @/tmp/smoke
 
 c=$(code -H "Authorization: Bearer $ACCESS" -X POST "$MEDIA/api/v1/platform/media/confirm" \
   -H 'Content-Type: application/json' \
-  -d "{\"object_key\":\"$OBJ\",\"mime_type\":\"image/png\",\"size_bytes\":68,\"display_name\":\"Smoke PNG\",\"ttl_seconds\":86400}")
+  -d "{\"object_key\":\"$OBJ\",\"mime_type\":\"image/png\",\"size_bytes\":68,\"display_name\":\"Smoke PNG\",\"language_id\":\"$EVN_ID\",\"ttl_seconds\":86400}")
 [[ "$c" == "201" ]] && pass "POST /platform/media/confirm → $c" || fail "POST /platform/media/confirm → $c ($(cat /tmp/smoke-body.json))"
 
-c=$(code -H "Authorization: Bearer $ACCESS" "$LEX/api/v1/platform/languages/evn/media")
+c=$(code -H "Authorization: Bearer $ACCESS" "$GW/api/v1/platform/languages/evn/media")
 [[ "$c" == "200" ]] && pass "GET /platform/languages/evn/media → $c" || fail "GET /platform/languages/evn/media → $c"
 TOTAL=$(python3 -c "import json; print(json.load(open('/tmp/smoke-body.json'))['total'])")
 [[ "$TOTAL" -ge 1 ]] && pass "list total=$TOTAL" || fail "list empty"
@@ -109,7 +116,7 @@ c=$(code -H "Authorization: Bearer $ACCESS" -X DELETE "$MEDIA/api/v1/platform/me
 # Gateway proxy to platform
 c=$(code -H "Authorization: Bearer $ACCESS" -X POST "$GW/api/v1/platform/media/presign" \
   -H 'Content-Type: application/json' \
-  -d '{"filename":"gw.png","mime_type":"image/png","size_bytes":68}')
+  -d "{\"filename\":\"gw.png\",\"mime_type\":\"image/png\",\"size_bytes\":68,\"language_id\":\"$EVN_ID\"}")
 [[ "$c" == "200" ]] && pass "POST /platform/media/presign via gateway → $c" || fail "gateway presign → $c"
 
 echo ""

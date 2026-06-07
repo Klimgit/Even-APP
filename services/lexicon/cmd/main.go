@@ -9,11 +9,15 @@ import (
 	"syscall"
 
 	"github.com/even-app/even-app/libs/core/logger"
+	libjwt "github.com/even-app/even-app/libs/jwt"
 	"github.com/even-app/even-app/libs/http/middleware"
 	"github.com/even-app/even-app/libs/http/server"
 	"github.com/even-app/even-app/libs/postgres"
-	apiv1 "github.com/even-app/even-app/services/lexicon/api/http/v1"
 	"github.com/even-app/even-app/services/lexicon/internal/config"
+	lexhandler "github.com/even-app/even-app/services/lexicon/internal/handler"
+	http_v1 "github.com/even-app/even-app/services/lexicon/internal/gen/http/v1"
+	"github.com/even-app/even-app/services/lexicon/internal/gen/query"
+	"github.com/even-app/even-app/services/lexicon/internal/service"
 	"github.com/joho/godotenv"
 )
 
@@ -35,18 +39,24 @@ func main() {
 	}
 	defer pool.Close()
 
+	jwtMgr := libjwt.NewManager(cfg.JWTSecret, cfg.AccessTTL())
 	ready := func(ctx context.Context) error { return pool.Ping(ctx) }
+
+	querier := query.New(pool)
+	lexSvc := service.NewLexiconService(querier)
+	httpHandler := lexhandler.NewHTTPHandler(lexSvc)
+	secHandler := lexhandler.NewSecurityHandler(jwtMgr)
+
+	oasServer, err := http_v1.NewServer(httpHandler, secHandler)
+	if err != nil {
+		log.Fatalf("ogen server: %v", err)
+	}
 
 	mux := http.NewServeMux()
 	server.RegisterHealth(mux, "lexicon", "/api/v1/platform/health")
 	server.RegisterReady(mux, ready, "/api/v1/platform/ready")
-	if len(apiv1.OpenAPISpec) > 0 {
-		spec := apiv1.OpenAPISpec
-		mux.HandleFunc("GET /api/v1/openapi.yaml", func(w http.ResponseWriter, _ *http.Request) {
-			w.Header().Set("Content-Type", "application/yaml")
-			_, _ = w.Write(spec)
-		})
-	}
+	mux.Handle("GET /api/v1/openapi.yaml", http_v1.SpecHandler())
+	mux.Handle("/", oasServer)
 
 	handler := middleware.CORS(middleware.Recovery(logr, middleware.Logging(logr, mux)))
 
