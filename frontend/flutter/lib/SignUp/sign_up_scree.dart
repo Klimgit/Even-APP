@@ -1,6 +1,10 @@
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
+import 'package:online_cource_app/api/api_client.dart';
+import 'package:online_cource_app/controllers/api_auth_controller.dart';
 import 'package:online_cource_app/Login/login_page.dart';
+import 'package:online_cource_app/navigation/main_navigation.dart';
+import 'package:online_cource_app/teacher/teacher_dashboard.dart';
 import 'package:online_cource_app/Utils/dialouge_utils.dart';
 import 'package:online_cource_app/Utils/toast_messages.dart';
 import 'package:online_cource_app/controllers/auth_controller.dart';
@@ -59,6 +63,12 @@ class _SignUpPageState extends State<SignUpPage>
       _isLoading = true;
     });
 
+    // REST-backed sign-up (migration off Firebase).
+    if (kUseApiAuth) {
+      await _signUpViaApi();
+      return;
+    }
+
     try {
       showLoadingDialouge(context, 'Signing up...');
       await auth.signUpNewUsers(context, _emailController.text.trim(),
@@ -66,6 +76,39 @@ class _SignUpPageState extends State<SignUpPage>
       Get.back();
       showSuccessToast(context, 'Successfully signed up');
       Get.to(() => const LoginPage());
+    } catch (e) {
+      Get.back();
+      showErrorToast(context, 'Error: ${e.toString()}');
+    } finally {
+      setState(() {
+        _isLoading = false;
+      });
+    }
+  }
+
+  Future<void> _signUpViaApi() async {
+    final apiAuth = Get.find<ApiAuthController>();
+    try {
+      showLoadingDialouge(context, 'Signing up...');
+      // Role defaults to "student"; a role picker can be added later.
+      final error = await apiAuth.register(
+        email: _emailController.text.trim(),
+        password: _passwordController.text.trim(),
+        displayName: _nameController.text.trim(),
+        role: 'student',
+      );
+      Get.back();
+      if (error != null) {
+        showErrorToast(context, error);
+      } else {
+        // register() already established the session; route by role.
+        showSuccessToast(context, 'Successfully signed up');
+        if (apiAuth.isTeacher) {
+          Get.offAll(() => const TeacherDashboard());
+        } else {
+          Get.offAll(() => const MainNavigationScreen());
+        }
+      }
     } catch (e) {
       Get.back();
       showErrorToast(context, 'Error: ${e.toString()}');

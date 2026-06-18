@@ -1,6 +1,8 @@
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
+import 'package:online_cource_app/api/api_client.dart';
+import 'package:online_cource_app/controllers/api_auth_controller.dart';
 import 'package:online_cource_app/controllers/auth_controller.dart';
 import 'package:online_cource_app/Login/login_page.dart';
 import 'package:online_cource_app/Utils/toast_messages.dart';
@@ -248,7 +250,12 @@ class ProfileScreen extends StatelessWidget {
             textColor: AppTheme.errorColor,
             onTap: () async {
               try {
-                await authController.signOutUsers();
+                if (kUseApiAuth) {
+                  // API mode: clearing the session makes AuthGate show login.
+                  await Get.find<ApiAuthController>().logout();
+                } else {
+                  await authController.signOutUsers();
+                }
                 showSuccessToast(context, 'Signed out successfully');
                 Get.offAll(() => const LoginPage());
               } catch (e) {

@@ -1,6 +1,8 @@
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
+import 'package:online_cource_app/api/api_client.dart';
+import 'package:online_cource_app/controllers/api_auth_controller.dart';
 import 'package:online_cource_app/controllers/auth_controller.dart';
 import 'package:online_cource_app/Login/login_page.dart';
 import 'package:online_cource_app/navigation/main_navigation.dart';
@@ -12,6 +14,11 @@ class AuthGate extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    // REST-backed auth path (migration off Firebase).
+    if (kUseApiAuth) {
+      return _buildApiAuthGate();
+    }
+
     final authController = Get.find<AuthController>();
 
     return Obx(() {
@@ -44,6 +51,21 @@ class AuthGate extends StatelessWidget {
           }
         },
       );
+    });
+  }
+
+  Widget _buildApiAuthGate() {
+    final auth = Get.find<ApiAuthController>();
+    return Obx(() {
+      if (auth.isRestoring.value) {
+        return _buildLoadingScreen();
+      }
+      if (!auth.isLoggedIn) {
+        return const LoginPage();
+      }
+      return auth.isTeacher
+          ? const TeacherDashboard()
+          : const MainNavigationScreen(initialIndex: 0);
     });
   }
 

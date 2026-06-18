@@ -10,6 +10,15 @@ const String kApiBaseUrl = String.fromEnvironment(
   defaultValue: 'http://localhost:8080/api/v1',
 );
 
+/// Feature flag for the migration off Firebase: when true, auth (login,
+/// register, session, role routing) goes through the REST backend instead of
+/// Firebase. Off by default so the Firebase-backed screens keep working until
+/// they are migrated. Enable with `--dart-define=USE_API_AUTH=true`.
+const bool kUseApiAuth = bool.fromEnvironment(
+  'USE_API_AUTH',
+  defaultValue: false,
+);
+
 /// Central HTTP client for the Go backend.
 ///
 /// Responsibilities:
