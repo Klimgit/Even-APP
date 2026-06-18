@@ -414,7 +414,7 @@ open http://localhost:9001
 ---
 ## 9. Работа над сервисом
 
-**Пошаговая инструкция «добавить новую ручку»** (контракт, sqlc, ogen, gateway, swagger merge, тесты): [ADDING_ENDPOINT.md](ADDING_ENDPOINT.md).
+**Пошаговая инструкция «добавить новую ручку»** (контракт, sqlc, ogen, **handler-stub-gen**, gateway, swagger merge, тесты): [ADDING_ENDPOINT.md](ADDING_ENDPOINT.md).
 
 ### Структура сервиса (как в [cloudtraining](https://github.com/Klimgit/cloudtraining))
 
@@ -760,7 +760,7 @@ just -f services/auth/Justfile install-tools   # один раз: ogen + migrate
 just -f services/auth/Justfile swagger         # перегенерация
 ```
 
-Общие фрагменты спеки: `_shared/openapi/`. Генератор-хелпер: `_misc/openapi-handler-gen/`.
+Общие фрагменты спеки: `_shared/openapi/`. Генераторы: `_misc/openapi-handler-gen/` (spec handler), `_misc/handler-stub-gen/` (заглушки `http_api_gen.go` для новых методов).
 
 `internal/gen/` в `.gitignore` — генерируется локально.
 

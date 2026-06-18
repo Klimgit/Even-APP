@@ -5,10 +5,10 @@ import (
 	"errors"
 
 	"github.com/even-app/even-app/libs/http/middleware"
-	"github.com/google/uuid"
 	"github.com/even-app/even-app/services/lexicon/internal/domain"
 	http_v1 "github.com/even-app/even-app/services/lexicon/internal/gen/http/v1"
 	"github.com/even-app/even-app/services/lexicon/internal/service"
+	"github.com/google/uuid"
 )
 
 var _ http_v1.Handler = (*HTTPHandler)(nil)
@@ -19,6 +19,17 @@ type HTTPHandler struct {
 
 func NewHTTPHandler(svc *service.LexiconService) *HTTPHandler {
 	return &HTTPHandler{svc: svc}
+}
+
+func (h *HTTPHandler) requireTeacher(ctx context.Context) error {
+	claims, ok := middleware.ClaimsFromContext(ctx)
+	if !ok {
+		return domain.ErrUnauthorized
+	}
+	if claims.Role != "teacher" && !claims.IsAdmin {
+		return domain.ErrForbidden
+	}
+	return nil
 }
 
 func (h *HTTPHandler) requireAdmin(ctx context.Context) error {
@@ -494,6 +505,66 @@ func (h *HTTPHandler) DeletePlatformLexemeMedia(ctx context.Context, params http
 		return nil, err
 	}
 	return &http_v1.DeletePlatformLexemeMediaNoContent{}, nil
+}
+
+func (h *HTTPHandler) ListTeacherLexicon(ctx context.Context, params http_v1.ListTeacherLexiconParams) (http_v1.ListTeacherLexiconRes, error) {
+	if err := h.requireTeacher(ctx); err != nil {
+		return nil, err
+	}
+	page, limit := 1, 20
+	if v, ok := params.Page.Get(); ok {
+		page = v
+	}
+	if v, ok := params.Limit.Get(); ok {
+		limit = v
+	}
+	q := ""
+	if v, ok := params.Q.Get(); ok {
+		q = v
+	}
+	result, err := h.svc.ListLexemes(ctx, params.Code, q, page, limit)
+	if err != nil {
+		return nil, err
+	}
+	return &http_v1.LexemeListResponse{
+		Items: mapFullLexemes(result.Items),
+		Total: result.Total,
+		Page:  page,
+		Limit: limit,
+	}, nil
+}
+
+func (h *HTTPHandler) GetTeacherLexeme(ctx context.Context, params http_v1.GetTeacherLexemeParams) (http_v1.GetTeacherLexemeRes, error) {
+	if err := h.requireTeacher(ctx); err != nil {
+		return nil, err
+	}
+	full, err := h.svc.GetLexeme(ctx, params.LexemeId)
+	if err != nil {
+		return nil, err
+	}
+	out := mapFullLexeme(full)
+	return &out, nil
+}
+
+func (h *HTTPHandler) GetTeacherLexemeUsage(ctx context.Context, params http_v1.GetTeacherLexemeUsageParams) (http_v1.GetTeacherLexemeUsageRes, error) {
+	if err := h.requireTeacher(ctx); err != nil {
+		return nil, err
+	}
+	usage, err := h.svc.GetLexemeUsage(ctx, params.LexemeId, params.CourseID)
+	if err != nil {
+		return nil, err
+	}
+	items := make([]http_v1.LexemeUsage, 0, len(usage.Usages))
+	for _, u := range usage.Usages {
+		items = append(items, http_v1.LexemeUsage{
+			LessonID:     u.LessonID,
+			LessonTitle:  u.LessonTitle,
+			BlockID:      u.BlockID,
+			DisplayLabel: u.DisplayLabel,
+			UsageKind:    http_v1.LexemeUsageUsageKind(u.UsageKind),
+		})
+	}
+	return &http_v1.LexemeUsageResponse{LexemeID: params.LexemeId, Usages: items}, nil
 }
 
 func notFound(msg string) *http_v1.ErrorResponse {

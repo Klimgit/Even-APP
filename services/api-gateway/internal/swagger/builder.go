@@ -17,6 +17,12 @@ var dedupPaths = []string{
 var dedupSchemas = []string{
 	"ErrorResponse",
 	"HealthResponse",
+	"Language",
+	"Course",
+	"Lesson",
+	"LessonSection",
+	"LessonBlock",
+	"Lexeme",
 }
 
 var dedupResponses = []string{

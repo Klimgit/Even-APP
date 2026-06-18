@@ -11,9 +11,13 @@ import (
 	"github.com/even-app/even-app/libs/core/logger"
 	"github.com/even-app/even-app/libs/http/middleware"
 	"github.com/even-app/even-app/libs/http/server"
+	libjwt "github.com/even-app/even-app/libs/jwt"
 	"github.com/even-app/even-app/libs/postgres"
-	apiv1 "github.com/even-app/even-app/services/learning/api/http/v1"
 	"github.com/even-app/even-app/services/learning/internal/config"
+	http_v1 "github.com/even-app/even-app/services/learning/internal/gen/http/v1"
+	learnhandler "github.com/even-app/even-app/services/learning/internal/handler"
+	"github.com/even-app/even-app/services/learning/internal/repository"
+	"github.com/even-app/even-app/services/learning/internal/service"
 	"github.com/joho/godotenv"
 )
 
@@ -35,18 +39,33 @@ func main() {
 	}
 	defer pool.Close()
 
+	var contentPool *repository.ContentReader
+	if cfg.HasContentDB() {
+		cp, err := postgres.NewPool(ctx, cfg.ContentDatabaseURL)
+		if err != nil {
+			log.Fatalf("content database: %v", err)
+		}
+		defer cp.Close()
+		contentPool = repository.NewContentReader(cp)
+	}
+
+	jwtMgr := libjwt.NewManager(cfg.JWTSecret, cfg.AccessTTL())
 	ready := func(ctx context.Context) error { return pool.Ping(ctx) }
+
+	learnSvc := service.NewLearningService(pool, contentPool)
+	httpHandler := learnhandler.NewHTTPHandler(learnSvc)
+	secHandler := learnhandler.NewSecurityHandler(jwtMgr)
+
+	oasServer, err := http_v1.NewServer(httpHandler, secHandler)
+	if err != nil {
+		log.Fatalf("ogen server: %v", err)
+	}
 
 	mux := http.NewServeMux()
 	server.RegisterHealth(mux, "learning", "/api/v1/courses/health")
 	server.RegisterReady(mux, ready, "/api/v1/courses/ready")
-	if len(apiv1.OpenAPISpec) > 0 {
-		spec := apiv1.OpenAPISpec
-		mux.HandleFunc("GET /api/v1/openapi.yaml", func(w http.ResponseWriter, _ *http.Request) {
-			w.Header().Set("Content-Type", "application/yaml")
-			_, _ = w.Write(spec)
-		})
-	}
+	mux.Handle("GET /api/v1/openapi.yaml", http_v1.SpecHandler())
+	mux.Handle("/", oasServer)
 
 	handler := middleware.CORS(middleware.Recovery(logr, middleware.Logging(logr, mux)))
 

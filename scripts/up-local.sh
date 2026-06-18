@@ -57,9 +57,9 @@ start media \
 start lexicon \
   "HTTP_PORT=8082 DATABASE_URL='${LEXICON_DATABASE_URL}' LOG_LEVEL='${LOG_LEVEL:-info}' ./bin/lexicon"
 start content \
-  "HTTP_PORT=8083 DATABASE_URL='${CONTENT_DATABASE_URL}' LOG_LEVEL='${LOG_LEVEL:-info}' ./bin/content"
+  "HTTP_PORT=8083 DATABASE_URL='${CONTENT_DATABASE_URL}' JWT_SECRET='${JWT_SECRET}' LOG_LEVEL='${LOG_LEVEL:-info}' ./bin/content"
 start learning \
-  "HTTP_PORT=8084 DATABASE_URL='${LEARNING_DATABASE_URL}' JWT_SECRET='${JWT_SECRET}' LOG_LEVEL='${LOG_LEVEL:-info}' ./bin/learning"
+  "HTTP_PORT=8084 DATABASE_URL='${LEARNING_DATABASE_URL}' CONTENT_DATABASE_URL='${CONTENT_DATABASE_URL}' JWT_SECRET='${JWT_SECRET}' LOG_LEVEL='${LOG_LEVEL:-info}' ./bin/learning"
 
 # Backends must be up before gateway ready check passes
 sleep 2
@@ -77,9 +77,18 @@ until curl -sf http://localhost:8080/api/v1/ready >/dev/null 2>&1; do
   sleep 1
 done
 
+echo "→ dev seed (cleanup + dev accounts + evn/ru + Even alphabet)..."
+./scripts/seed-dev.sh
+
 echo ""
 echo "✓ Even-APP running locally (binaries on host)"
 echo "  Gateway http://localhost:8080"
+echo "  Flutter just mobile-web  →  http://localhost:5173"
+echo ""
+# shellcheck source=lib/bootstrap-admin.sh
+source "$ROOT/scripts/lib/bootstrap-admin.sh"
+bootstrap_print_dev_accounts
+echo ""
 echo "  Logs     tail -f .dev/logs/*.log"
 echo "  Stop     ./scripts/down-local.sh"
 echo ""

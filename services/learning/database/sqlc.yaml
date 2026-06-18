@@ -11,6 +11,36 @@ overrides:
         go_type:
           import: "time"
           type: "Time"
+      - db_type: "pg_catalog.timestamp"
+        go_type:
+          import: "time"
+          type: "Time"
+      - db_type: "uuid"
+        nullable: true
+        go_type:
+          import: "github.com/google/uuid"
+          type: "UUID"
+          pointer: true
+      - db_type: "timestamptz"
+        nullable: true
+        go_type:
+          import: "time"
+          type: "Time"
+          pointer: true
+      - db_type: "pg_catalog.timestamp"
+        nullable: true
+        go_type:
+          import: "time"
+          type: "Time"
+          pointer: true
+      - db_type: "pg_catalog.bpchar"
+        go_type:
+          type: "string"
+      - db_type: "pg_catalog.bpchar"
+        nullable: true
+        go_type:
+          type: "string"
+          pointer: true
 
 sql:
   - engine: "postgresql"
@@ -25,3 +55,17 @@ sql:
         omit_unused_structs: true
         emit_sql_as_comment: true
         emit_pointers_for_null_types: true
+        query_parameter_limit: 0
+  - engine: "postgresql"
+    queries: "./queries/content/"
+    schema: "./schema/content/"
+    gen:
+      go:
+        package: "contentquery"
+        out: "../internal/gen/contentquery/"
+        sql_package: "pgx/v5"
+        sql_driver: "github.com/jackc/pgx/v5"
+        omit_unused_structs: true
+        emit_sql_as_comment: true
+        emit_pointers_for_null_types: true
+        query_parameter_limit: 0

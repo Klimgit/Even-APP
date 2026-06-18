@@ -204,6 +204,7 @@ services:
       <<: *service-env
       HTTP_PORT: 8083
       DATABASE_URL: postgres://${POSTGRES_USER:-even}:${POSTGRES_PASSWORD:-even}@postgres:5432/even_content?sslmode=disable
+      JWT_SECRET: ${JWT_SECRET:-dev-change-me}
     ports:
       - "8083:8083"
     depends_on:
@@ -224,6 +225,8 @@ services:
       <<: *service-env
       HTTP_PORT: 8084
       DATABASE_URL: postgres://${POSTGRES_USER:-even}:${POSTGRES_PASSWORD:-even}@postgres:5432/even_learning?sslmode=disable
+      CONTENT_DATABASE_URL: postgres://${POSTGRES_USER:-even}:${POSTGRES_PASSWORD:-even}@postgres:5432/even_content?sslmode=disable
+      JWT_SECRET: ${JWT_SECRET:-dev-change-me}
     ports:
       - "8084:8084"
     depends_on:

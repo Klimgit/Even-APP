@@ -1,0 +1,288 @@
+package main
+
+import (
+	"bytes"
+	"fmt"
+	"go/ast"
+	"go/format"
+	"go/parser"
+	"go/token"
+	"os"
+	"path/filepath"
+	"sort"
+	"strings"
+)
+
+const genFileName = "http_api_gen.go"
+
+func main() {
+	if len(os.Args) != 5 {
+		panic("usage: handler-stub-gen <oas_server_gen.go> <handler_dir> <gen_import> <gen_package>")
+	}
+	oasServer := os.Args[1]
+	handlerDir := os.Args[2]
+	genImport := os.Args[3]
+	genPackage := os.Args[4]
+
+	methods, err := parseHandlerMethods(oasServer, genPackage)
+	if err != nil {
+		panic(err)
+	}
+	existing, err := existingHandlerMethods(handlerDir)
+	if err != nil {
+		panic(err)
+	}
+
+	var stubs []handlerMethod
+	for _, m := range methods {
+		if existing[m.Name] {
+			continue
+		}
+		stubs = append(stubs, m)
+	}
+
+	outPath := filepath.Join(handlerDir, genFileName)
+	if err := writeGenFile(outPath, genImport, genPackage, stubs); err != nil {
+		panic(err)
+	}
+	if len(stubs) == 0 {
+		fmt.Printf("handler-stub-gen: all %d Handler methods implemented, wrote empty %s\n", len(methods), genFileName)
+	} else {
+		fmt.Printf("handler-stub-gen: generated %d stub(s) in %s\n", len(stubs), genFileName)
+	}
+}
+
+type handlerMethod struct {
+	Name    string
+	Params  string
+	Results string
+}
+
+func parseHandlerMethods(path, genPackage string) ([]handlerMethod, error) {
+	fset := token.NewFileSet()
+	f, err := parser.ParseFile(fset, path, nil, 0)
+	if err != nil {
+		return nil, fmt.Errorf("parse %s: %w", path, err)
+	}
+
+	var out []handlerMethod
+	for _, decl := range f.Decls {
+		gen, ok := decl.(*ast.GenDecl)
+		if !ok || gen.Tok != token.TYPE {
+			continue
+		}
+		for _, spec := range gen.Specs {
+			ts, ok := spec.(*ast.TypeSpec)
+			if !ok || ts.Name.Name != "Handler" {
+				continue
+			}
+			iface, ok := ts.Type.(*ast.InterfaceType)
+			if !ok {
+				continue
+			}
+			for _, m := range iface.Methods.List {
+				if len(m.Names) == 0 {
+					continue
+				}
+				name := m.Names[0].Name
+				if name == "NewError" {
+					continue
+				}
+				ft, ok := m.Type.(*ast.FuncType)
+				if !ok {
+					continue
+				}
+				out = append(out, handlerMethod{
+					Name:    name,
+					Params:  qualifyFieldList(fset, ft.Params, genPackage),
+					Results: qualifyFieldList(fset, ft.Results, genPackage),
+				})
+			}
+		}
+	}
+	if len(out) == 0 {
+		return nil, fmt.Errorf("no Handler methods found in %s", path)
+	}
+	sort.Slice(out, func(i, j int) bool { return out[i].Name < out[j].Name })
+	return out, nil
+}
+
+func qualifyFieldList(fset *token.FileSet, fields *ast.FieldList, genPackage string) string {
+	if fields == nil {
+		return ""
+	}
+	var parts []string
+	for _, f := range fields.List {
+		t := string(astExpr(fset, qualifyType(f.Type, genPackage)))
+		if len(f.Names) == 0 {
+			parts = append(parts, t)
+			continue
+		}
+		for _, n := range f.Names {
+			parts = append(parts, n.Name+" "+t)
+		}
+	}
+	return strings.Join(parts, ", ")
+}
+
+func qualifyType(e ast.Expr, genPackage string) ast.Expr {
+	switch t := e.(type) {
+	case *ast.Ident:
+		if t.Name == "error" {
+			return e
+		}
+		if t.IsExported() {
+			return &ast.SelectorExpr{X: ast.NewIdent(genPackage), Sel: ast.NewIdent(t.Name)}
+		}
+		return e
+	case *ast.StarExpr:
+		return &ast.StarExpr{Star: t.Star, X: qualifyType(t.X, genPackage)}
+	case *ast.SelectorExpr:
+		if id, ok := t.X.(*ast.Ident); ok && id.Name == "context" {
+			return e
+		}
+		return e
+	case *ast.ArrayType:
+		return &ast.ArrayType{Len: t.Len, Elt: qualifyType(t.Elt, genPackage)}
+	case *ast.MapType:
+		return &ast.MapType{
+			Key:   qualifyType(t.Key, genPackage),
+			Value: qualifyType(t.Value, genPackage),
+		}
+	default:
+		return e
+	}
+}
+
+func astExpr(fset *token.FileSet, e ast.Expr) []byte {
+	var buf bytes.Buffer
+	if err := format.Node(&buf, fset, e); err != nil {
+		return []byte(fmt.Sprint(e))
+	}
+	return buf.Bytes()
+}
+
+func existingHandlerMethods(handlerDir string) (map[string]bool, error) {
+	entries, err := os.ReadDir(handlerDir)
+	if err != nil {
+		return nil, err
+	}
+
+	found := make(map[string]bool)
+	fset := token.NewFileSet()
+	for _, e := range entries {
+		if e.IsDir() || !strings.HasSuffix(e.Name(), ".go") || e.Name() == genFileName {
+			continue
+		}
+		path := filepath.Join(handlerDir, e.Name())
+		f, err := parser.ParseFile(fset, path, nil, 0)
+		if err != nil {
+			return nil, fmt.Errorf("parse %s: %w", path, err)
+		}
+		for _, decl := range f.Decls {
+			fn, ok := decl.(*ast.FuncDecl)
+			if !ok || fn.Recv == nil || len(fn.Recv.List) == 0 {
+				continue
+			}
+			recv := fn.Recv.List[0].Type
+			switch t := recv.(type) {
+			case *ast.StarExpr:
+				if id, ok := t.X.(*ast.Ident); ok && id.Name == "HTTPHandler" {
+					found[fn.Name.Name] = true
+				}
+			case *ast.Ident:
+				if t.Name == "HTTPHandler" {
+					found[fn.Name.Name] = true
+				}
+			}
+		}
+	}
+	return found, nil
+}
+
+func writeGenFile(path, genImport, genPackage string, stubs []handlerMethod) error {
+	var b strings.Builder
+	b.WriteString("// Code generated by handler-stub-gen. DO NOT EDIT.\n")
+	b.WriteString("// Implement business logic in http_api.go (or other hand-written files), then re-run `just swagger`.\n\n")
+	b.WriteString("package handler\n\n")
+	if len(stubs) == 0 {
+		b.WriteString("// All Handler methods are implemented in hand-written files.\n")
+		return os.WriteFile(path, []byte(b.String()), 0o644)
+	}
+
+	b.WriteString("import (\n")
+	b.WriteString("\t\"context\"\n")
+	b.WriteString("\t\"fmt\"\n\n")
+	b.WriteString(fmt.Sprintf("\t%s \"%s\"\n", genPackage, genImport))
+	b.WriteString(")\n\n")
+
+	for _, m := range stubs {
+		b.WriteString(fmt.Sprintf("func (h *HTTPHandler) %s(%s)", m.Name, m.Params))
+		if m.Results != "" {
+			b.WriteString(" (" + m.Results + ")")
+		}
+		b.WriteString(" {\n")
+		b.WriteString(fmt.Sprintf("\treturn %s\n", zeroReturns(m.Results, genPackage, m.Name)))
+		b.WriteString("}\n\n")
+	}
+
+	b.WriteString("func notImplemented(name string) error {\n")
+	b.WriteString("\treturn fmt.Errorf(\"not implemented: %s\", name)\n")
+	b.WriteString("}\n")
+
+	formatted, err := format.Source([]byte(b.String()))
+	if err != nil {
+		return fmt.Errorf("format generated source: %w", err)
+	}
+	return os.WriteFile(path, formatted, 0o644)
+}
+
+func zeroReturns(results, genPackage, method string) string {
+	if results == "" {
+		return fmt.Sprintf("notImplemented(%q)", method)
+	}
+	parts := splitResultTypes(results)
+	exprs := make([]string, len(parts))
+	for i, p := range parts {
+		exprs[i] = zeroValue(strings.TrimSpace(p), genPackage)
+	}
+	exprs[len(exprs)-1] = fmt.Sprintf("notImplemented(%q)", method)
+	return strings.Join(exprs, ", ")
+}
+
+func splitResultTypes(results string) []string {
+	if !strings.Contains(results, ",") {
+		return []string{results}
+	}
+	var parts []string
+	depth := 0
+	start := 0
+	for i, r := range results {
+		switch r {
+		case '(', '[', '{':
+			depth++
+		case ')', ']', '}':
+			depth--
+		case ',':
+			if depth == 0 {
+				parts = append(parts, strings.TrimSpace(results[start:i]))
+				start = i + 1
+			}
+		}
+	}
+	parts = append(parts, strings.TrimSpace(results[start:]))
+	return parts
+}
+
+func zeroValue(typ, genPackage string) string {
+	switch {
+	case typ == "error":
+		return "nil"
+	case strings.HasPrefix(typ, "*"):
+		return "nil"
+	case strings.HasPrefix(typ, genPackage+"."):
+		return "nil"
+	default:
+		return "nil"
+	}
+}

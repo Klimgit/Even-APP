@@ -19,6 +19,7 @@ func TestIsPublic(t *testing.T) {
 		{"POST", "/api/v1/auth/refresh", true},
 		{"GET", "/api/v1/auth/me", false},
 		{"GET", "/api/v1/auth/demo/public", true},
+		{"GET", "/api/v1/auth/demo/notes", true},
 		{"GET", "/api/v1/auth/demo/me", false},
 		{"GET", "/api/v1/auth/demo/teacher", false},
 		{"GET", "/api/v1/auth/demo/admin/stats", false},

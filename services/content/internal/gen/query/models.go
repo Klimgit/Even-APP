@@ -3,3 +3,57 @@
 //   sqlc v1.31.1
 
 package query
+
+import (
+	"time"
+
+	"github.com/google/uuid"
+)
+
+type Course struct {
+	ID               uuid.UUID
+	Title            string
+	TargetLanguageID uuid.UUID
+	UiLanguageID     uuid.UUID
+	OwnerID          uuid.UUID
+	IsPublished      bool
+	CreatedAt        time.Time
+	UpdatedAt        time.Time
+}
+
+type CourseInviteCode struct {
+	CourseID  uuid.UUID
+	Code      string
+	CreatedAt time.Time
+}
+
+type Lesson struct {
+	ID          uuid.UUID
+	CourseID    uuid.UUID
+	Title       string
+	SortOrder   int32
+	Version     int32
+	Status      string
+	PublishedAt *time.Time
+	UpdatedAt   time.Time
+}
+
+type LessonBlock struct {
+	ID           uuid.UUID
+	LessonID     uuid.UUID
+	SectionID    *uuid.UUID
+	SortOrder    int32
+	DisplayLabel *string
+	Title        *string
+	BlockType    string
+	Config       []byte
+	IsHomework   bool
+}
+
+type LessonSection struct {
+	ID          uuid.UUID
+	LessonID    uuid.UUID
+	Title       string
+	SortOrder   int32
+	SectionKind string
+}

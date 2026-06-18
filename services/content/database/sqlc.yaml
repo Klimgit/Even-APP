@@ -7,10 +7,32 @@ overrides:
         go_type:
           import: "github.com/google/uuid"
           type: "UUID"
+      - db_type: "pg_catalog.timestamp"
+        go_type:
+          import: "time"
+          type: "Time"
       - db_type: "timestamptz"
         go_type:
           import: "time"
           type: "Time"
+      - db_type: "uuid"
+        nullable: true
+        go_type:
+          import: "github.com/google/uuid"
+          type: "UUID"
+          pointer: true
+      - db_type: "pg_catalog.timestamp"
+        nullable: true
+        go_type:
+          import: "time"
+          type: "Time"
+          pointer: true
+      - db_type: "timestamptz"
+        nullable: true
+        go_type:
+          import: "time"
+          type: "Time"
+          pointer: true
 
 sql:
   - engine: "postgresql"

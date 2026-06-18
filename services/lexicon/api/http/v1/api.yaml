@@ -1313,6 +1313,137 @@ paths:
         default:
           $ref: "#/components/responses/DefaultError"
 
+  /api/v1/teacher/languages/{code}/lexicon:
+    get:
+      operationId: listTeacherLexicon
+      tags: [TeacherLexicon]
+      summary: Search lexemes for teacher picker (read-only)
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: code
+          in: path
+          required: true
+          schema:
+            type: string
+        - name: q
+          in: query
+          schema:
+            type: string
+        - name: page
+          in: query
+          schema:
+            type: integer
+        - name: limit
+          in: query
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/LexemeListResponse"
+        "401":
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "403":
+          description: Teacher required
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        default:
+          $ref: "#/components/responses/DefaultError"
+
+  /api/v1/teacher/lexemes/{lexemeId}:
+    get:
+      operationId: getTeacherLexeme
+      tags: [TeacherLexicon]
+      summary: Get lexeme for teacher picker (read-only)
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: lexemeId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Lexeme"
+        "401":
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "403":
+          description: Teacher required
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "404":
+          description: Not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        default:
+          $ref: "#/components/responses/DefaultError"
+
+  /api/v1/teacher/lexemes/{lexemeId}/usage:
+    get:
+      operationId: getTeacherLexemeUsage
+      tags: [TeacherLexicon]
+      summary: Where lexeme is used in a course
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: lexemeId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+        - name: course_id
+          in: query
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/LexemeUsageResponse"
+        "401":
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "403":
+          description: Teacher required
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        default:
+          $ref: "#/components/responses/DefaultError"
+
 components:
   securitySchemes:
     bearerAuth:
@@ -1690,6 +1821,36 @@ components:
           type: integer
         limit:
           type: integer
+
+    LexemeUsageResponse:
+      type: object
+      required: [lexeme_id, usages]
+      properties:
+        lexeme_id:
+          type: string
+          format: uuid
+        usages:
+          type: array
+          items:
+            $ref: "#/components/schemas/LexemeUsage"
+
+    LexemeUsage:
+      type: object
+      required: [lesson_id, lesson_title, block_id, display_label, usage_kind]
+      properties:
+        lesson_id:
+          type: string
+          format: uuid
+        lesson_title:
+          type: string
+        block_id:
+          type: string
+          format: uuid
+        display_label:
+          type: string
+        usage_kind:
+          type: string
+          enum: [introduced, exercised, referenced]
 
     ErrorResponse:
       type: object

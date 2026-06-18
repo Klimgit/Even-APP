@@ -1,6 +1,8 @@
 go 1.25.0
 
 use (
+	./_misc/handler-stub-gen
+	./_misc/openapi-handler-gen
 	./libs/config
 	./libs/core
 	./libs/http

@@ -2,22 +2,24 @@ package handler
 
 import (
 	"context"
+	"errors"
 	"time"
 
 	"github.com/even-app/even-app/libs/http/middleware"
+	libjwt "github.com/even-app/even-app/libs/jwt"
 	"github.com/even-app/even-app/services/media/internal/domain"
 	http_v1 "github.com/even-app/even-app/services/media/internal/gen/http/v1"
-	"github.com/even-app/even-app/services/media/internal/service"
+	mediasvc "github.com/even-app/even-app/services/media/internal/service"
 	"github.com/google/uuid"
 )
 
 var _ http_v1.Handler = (*HTTPHandler)(nil)
 
 type HTTPHandler struct {
-	svc *service.MediaService
+	svc *mediasvc.MediaService
 }
 
-func NewHTTPHandler(svc *service.MediaService) *HTTPHandler {
+func NewHTTPHandler(svc *mediasvc.MediaService) *HTTPHandler {
 	return &HTTPHandler{svc: svc}
 }
 
@@ -145,6 +147,184 @@ func (h *HTTPHandler) DeletePlatformMedia(ctx context.Context, params http_v1.De
 		return nil, err
 	}
 	return &http_v1.DeletePlatformMediaNoContent{}, nil
+}
+
+func teacherFromContext(ctx context.Context) (libjwt.Claims, bool) {
+	claims, ok := middleware.ClaimsFromContext(ctx)
+	if !ok {
+		return claims, false
+	}
+	if claims.Role != "teacher" && !claims.IsAdmin {
+		return claims, false
+	}
+	return claims, true
+}
+
+func (h *HTTPHandler) TeacherMediaPresign(ctx context.Context, req *http_v1.PresignRequest) (http_v1.TeacherMediaPresignRes, error) {
+	claims, ok := teacherFromContext(ctx)
+	if !ok {
+		return nil, domain.ErrForbidden
+	}
+	result, err := h.svc.TeacherPresign(ctx, domain.PresignInput{
+		Filename: req.Filename, MimeType: req.MimeType, SizeBytes: req.SizeBytes,
+		LanguageID: req.LanguageID.String(), UserID: claims.UserID,
+	})
+	if err != nil {
+		r := errBody(err.Error())
+		return &r, nil
+	}
+	id, _ := uuid.Parse(result.MediaAssetID)
+	return &http_v1.PresignResponse{
+		UploadURL: result.UploadURL, ObjectKey: result.ObjectKey, MediaAssetID: id,
+	}, nil
+}
+
+func (h *HTTPHandler) TeacherMediaConfirm(ctx context.Context, req *http_v1.ConfirmRequest) (*http_v1.MediaAsset, error) {
+	claims, ok := teacherFromContext(ctx)
+	if !ok {
+		return nil, domain.ErrForbidden
+	}
+	a, err := h.svc.TeacherConfirm(ctx, confirmInput(req, claims.UserID, false))
+	if err != nil {
+		return nil, err
+	}
+	asset, err := h.assetFromDomain(ctx, a)
+	if err != nil {
+		return nil, err
+	}
+	return &asset, nil
+}
+
+func (h *HTTPHandler) ListTeacherMedia(ctx context.Context, params http_v1.ListTeacherMediaParams) (*http_v1.MediaListResponse, error) {
+	claims, ok := teacherFromContext(ctx)
+	if !ok {
+		return nil, domain.ErrForbidden
+	}
+	page, limit := 0, 0
+	if v, ok := params.Page.Get(); ok {
+		page = v
+	}
+	if v, ok := params.Limit.Get(); ok {
+		limit = v
+	}
+	q, kind, langCode := "", "", ""
+	if v, ok := params.Q.Get(); ok {
+		q = v
+	}
+	if v, ok := params.Kind.Get(); ok {
+		kind = v
+	}
+	if v, ok := params.LanguageCode.Get(); ok {
+		langCode = v
+	}
+	items, total, err := h.svc.TeacherList(ctx, mediasvc.TeacherListFilter{
+		OwnerID: claims.UserID, LanguageCode: langCode, Query: q, Kind: kind, Page: page, Limit: limit,
+	})
+	if err != nil {
+		return nil, err
+	}
+	dtos := make([]http_v1.MediaAsset, 0, len(items))
+	for i := range items {
+		asset, err := h.assetFromDomain(ctx, &items[i])
+		if err != nil {
+			return nil, err
+		}
+		dtos = append(dtos, asset)
+	}
+	return &http_v1.MediaListResponse{
+		Items: dtos, Total: total, Page: max1(page), Limit: maxLimit(limit),
+	}, nil
+}
+
+func (h *HTTPHandler) GetTeacherMedia(ctx context.Context, params http_v1.GetTeacherMediaParams) (http_v1.GetTeacherMediaRes, error) {
+	claims, ok := teacherFromContext(ctx)
+	if !ok {
+		return nil, domain.ErrForbidden
+	}
+	a, err := h.svc.TeacherGetByID(ctx, params.ID, claims.UserID)
+	if err != nil {
+		return nil, domain.ErrNotFound
+	}
+	if a.IsExpired() {
+		return nil, domain.ErrNotFound
+	}
+	asset, err := h.assetFromDomain(ctx, a)
+	if err != nil {
+		return nil, err
+	}
+	return &asset, nil
+}
+
+func (h *HTTPHandler) PatchTeacherMedia(ctx context.Context, req *http_v1.PatchMediaRequest, params http_v1.PatchTeacherMediaParams) (*http_v1.MediaAsset, error) {
+	claims, ok := teacherFromContext(ctx)
+	if !ok {
+		return nil, domain.ErrForbidden
+	}
+	a, err := h.svc.TeacherPatch(ctx, params.ID, claims.UserID, patchInput(req))
+	if err != nil {
+		if errors.Is(err, domain.ErrNotFound) {
+			return nil, domain.ErrNotFound
+		}
+		return nil, err
+	}
+	asset, err := h.assetFromDomain(ctx, a)
+	if err != nil {
+		return nil, err
+	}
+	return &asset, nil
+}
+
+func (h *HTTPHandler) DeleteTeacherMedia(ctx context.Context, params http_v1.DeleteTeacherMediaParams) error {
+	claims, ok := teacherFromContext(ctx)
+	if !ok {
+		return domain.ErrForbidden
+	}
+	err := h.svc.TeacherDelete(ctx, params.ID, claims.UserID)
+	if errors.Is(err, domain.ErrNotFound) {
+		return domain.ErrNotFound
+	}
+	return err
+}
+
+func (h *HTTPHandler) ListTeacherPlatformMedia(ctx context.Context, params http_v1.ListTeacherPlatformMediaParams) (*http_v1.MediaListResponse, error) {
+	if _, ok := teacherFromContext(ctx); !ok {
+		return nil, domain.ErrForbidden
+	}
+	langID, err := h.svc.LanguageIDByCode(ctx, params.Code)
+	if err != nil {
+		return nil, domain.ErrNotFound
+	}
+	page, limit := 0, 0
+	if v, ok := params.Page.Get(); ok {
+		page = v
+	}
+	if v, ok := params.Limit.Get(); ok {
+		limit = v
+	}
+	q, kind := "", ""
+	if v, ok := params.Q.Get(); ok {
+		q = v
+	}
+	if v, ok := params.Kind.Get(); ok {
+		kind = v
+	}
+	items, total, err := h.svc.List(ctx, domain.ListFilter{
+		LanguageID: langID, Query: q, Kind: kind, Page: page, Limit: limit,
+	})
+	if err != nil {
+		return nil, err
+	}
+	dtos := make([]http_v1.MediaAsset, 0, len(items))
+	for i := range items {
+		asset, err := h.assetFromDomain(ctx, &items[i])
+		if err != nil {
+			return nil, err
+		}
+		dtos = append(dtos, asset)
+	}
+	return &http_v1.MediaListResponse{
+		Items: dtos, Total: total, Page: max1(page), Limit: maxLimit(limit),
+	}, nil
 }
 
 func (h *HTTPHandler) assetFromDomain(ctx context.Context, a *domain.MediaAsset) (http_v1.MediaAsset, error) {
