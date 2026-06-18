@@ -206,6 +206,26 @@ just run-auth-local                              # foreground, Ctrl+C для о�
 | `CONTENT_DATABASE_URL` | DSN для `even_content` |
 | `LEARNING_DATABASE_URL` | DSN для `even_learning` |
 
+### Cross-DB (read-only вторые подключения)
+
+Некоторые сервисы читают чужие БД напрямую (MVP без event bus). В Docker compose задаётся автоматически; при `go run` на хосте — те же DSN с `localhost:5432`.
+
+| Сервис | Переменная | Зачем |
+|--------|------------|-------|
+| **learning** | `CONTENT_DATABASE_URL` | join курса, snapshots уроков/блоков |
+| **learning** | `LEXICON_DATABASE_URL` | `target_language` в списке курсов, `resolved_lexemes` в уроке |
+| **content** | `LEARNING_DATABASE_URL` | список учеников, прогресс, enroll по invite/email |
+| **content** | `AUTH_DATABASE_URL` | lookup user по email для `POST /teacher/students` |
+| **lexicon** | `CONTENT_DATABASE_URL` | `GET /teacher/lexemes/{id}/usage` — scan block configs |
+
+Языки дублируются в `even_lexicon` и `even_media`. После bootstrap: `just seed-languages` (или `scripts/seed-languages.sh`) — создаёт evn/ru в lexicon через API и синхронизирует строки в media DB.
+
+### CORS (gateway)
+
+| Переменная | Описание |
+|------------|----------|
+| `CORS_ALLOWED_ORIGINS` | Список origin через запятую (`http://127.0.0.1:5174,http://localhost:5173`). Пусто = `*` (локальная разработка). |
+
 На хосте в DSN всегда `localhost:5432`. Внутри Docker compose подставляет `postgres:5432` сам.
 
 ### MinIO / S3
@@ -332,7 +352,7 @@ migrate create -ext sql -dir services/auth/database/migrations -seq add_users_ta
 - Middleware `libs/http/middleware`:
   - **Logging** — каждый HTTP-запрос: method, path, status, duration_ms;
   - **Recovery** — panic → 500 + stack в лог;
-  - **CORS** — `*` для локальной разработки.
+  - **CORS** — `CORS_ALLOWED_ORIGINS` (allowlist) или `*` если не задано;
 
 Пример строки лога запроса:
 

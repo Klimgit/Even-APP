@@ -546,6 +546,72 @@ func (h *HTTPHandler) GetTeacherLexeme(ctx context.Context, params http_v1.GetTe
 	return &out, nil
 }
 
+func (h *HTTPHandler) ListPlatformGrammarTopics(ctx context.Context, params http_v1.ListPlatformGrammarTopicsParams) (http_v1.ListPlatformGrammarTopicsRes, error) {
+	if err := h.requireAdmin(ctx); err != nil {
+		return nil, err
+	}
+	rows, err := h.svc.ListGrammarTopics(ctx, params.Code)
+	if err != nil {
+		return nil, err
+	}
+	out := http_v1.ListPlatformGrammarTopicsOKApplicationJSON(mapGrammarTopics(rows))
+	return &out, nil
+}
+
+func (h *HTTPHandler) CreatePlatformGrammarTopic(ctx context.Context, req *http_v1.CreateGrammarTopicRequest, params http_v1.CreatePlatformGrammarTopicParams) (http_v1.CreatePlatformGrammarTopicRes, error) {
+	if err := h.requireAdmin(ctx); err != nil {
+		return nil, err
+	}
+	desc := ""
+	if v, ok := req.Description.Get(); ok {
+		desc = v
+	}
+	sortOrder := int32(0)
+	if v, ok := req.SortOrder.Get(); ok {
+		sortOrder = int32(v)
+	}
+	row, err := h.svc.CreateGrammarTopic(ctx, params.Code, req.Title, desc, sortOrder)
+	if err != nil {
+		return nil, err
+	}
+	out := mapGrammarTopic(row)
+	return &out, nil
+}
+
+func (h *HTTPHandler) PatchPlatformGrammarTopic(ctx context.Context, req *http_v1.PatchGrammarTopicRequest, params http_v1.PatchPlatformGrammarTopicParams) (http_v1.PatchPlatformGrammarTopicRes, error) {
+	if err := h.requireAdmin(ctx); err != nil {
+		return nil, err
+	}
+	var title, desc *string
+	var sortOrder *int32
+	if v, ok := req.Title.Get(); ok {
+		title = &v
+	}
+	if v, ok := req.Description.Get(); ok {
+		desc = &v
+	}
+	if v, ok := req.SortOrder.Get(); ok {
+		n := int32(v)
+		sortOrder = &n
+	}
+	row, err := h.svc.PatchGrammarTopic(ctx, params.TopicId, title, desc, sortOrder)
+	if err != nil {
+		return nil, err
+	}
+	out := mapGrammarTopic(row)
+	return &out, nil
+}
+
+func (h *HTTPHandler) DeletePlatformGrammarTopic(ctx context.Context, params http_v1.DeletePlatformGrammarTopicParams) (http_v1.DeletePlatformGrammarTopicRes, error) {
+	if err := h.requireAdmin(ctx); err != nil {
+		return nil, err
+	}
+	if err := h.svc.DeleteGrammarTopic(ctx, params.TopicId); err != nil {
+		return nil, err
+	}
+	return &http_v1.DeletePlatformGrammarTopicNoContent{}, nil
+}
+
 func (h *HTTPHandler) GetTeacherLexemeUsage(ctx context.Context, params http_v1.GetTeacherLexemeUsageParams) (http_v1.GetTeacherLexemeUsageRes, error) {
 	if err := h.requireTeacher(ctx); err != nil {
 		return nil, err

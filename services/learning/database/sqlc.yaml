@@ -69,3 +69,16 @@ sql:
         emit_sql_as_comment: true
         emit_pointers_for_null_types: true
         query_parameter_limit: 0
+  - engine: "postgresql"
+    queries: "./queries/lexicon/"
+    schema: "./schema/lexicon/"
+    gen:
+      go:
+        package: "lexiconquery"
+        out: "../internal/gen/lexiconquery/"
+        sql_package: "pgx/v5"
+        sql_driver: "github.com/jackc/pgx/v5"
+        omit_unused_structs: true
+        emit_sql_as_comment: true
+        emit_pointers_for_null_types: true
+        query_parameter_limit: 0

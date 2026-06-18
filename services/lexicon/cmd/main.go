@@ -17,6 +17,7 @@ import (
 	http_v1 "github.com/even-app/even-app/services/lexicon/internal/gen/http/v1"
 	"github.com/even-app/even-app/services/lexicon/internal/gen/query"
 	lexhandler "github.com/even-app/even-app/services/lexicon/internal/handler"
+	"github.com/even-app/even-app/services/lexicon/internal/repository"
 	"github.com/even-app/even-app/services/lexicon/internal/service"
 	"github.com/joho/godotenv"
 )
@@ -39,11 +40,21 @@ func main() {
 	}
 	defer pool.Close()
 
+	var contentReader *repository.ContentReader
+	if cfg.HasContentDB() {
+		contentPool, err := postgres.NewPool(ctx, cfg.ContentDatabaseURL)
+		if err != nil {
+			log.Fatalf("content database: %v", err)
+		}
+		defer contentPool.Close()
+		contentReader = repository.NewContentReader(contentPool)
+	}
+
 	jwtMgr := libjwt.NewManager(cfg.JWTSecret, cfg.AccessTTL())
 	ready := func(ctx context.Context) error { return pool.Ping(ctx) }
 
 	querier := query.New(pool)
-	lexSvc := service.NewLexiconService(querier)
+	lexSvc := service.NewLexiconService(querier, contentReader)
 	httpHandler := lexhandler.NewHTTPHandler(lexSvc)
 	secHandler := lexhandler.NewSecurityHandler(jwtMgr)
 

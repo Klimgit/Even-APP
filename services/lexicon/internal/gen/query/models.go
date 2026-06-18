@@ -20,6 +20,16 @@ type AlphabetLetter struct {
 	Transcription *string
 }
 
+type GrammarTopic struct {
+	ID          uuid.UUID
+	LanguageID  uuid.UUID
+	Title       string
+	Description string
+	SortOrder   int32
+	CreatedAt   time.Time
+	UpdatedAt   time.Time
+}
+
 type Language struct {
 	ID         uuid.UUID
 	Code       string

@@ -49,10 +49,20 @@ func main() {
 		contentPool = repository.NewContentReader(cp)
 	}
 
+	var lexiconPool *repository.LexiconReader
+	if cfg.HasLexiconDB() {
+		lp, err := postgres.NewPool(ctx, cfg.LexiconDatabaseURL)
+		if err != nil {
+			log.Fatalf("lexicon database: %v", err)
+		}
+		defer lp.Close()
+		lexiconPool = repository.NewLexiconReader(lp)
+	}
+
 	jwtMgr := libjwt.NewManager(cfg.JWTSecret, cfg.AccessTTL())
 	ready := func(ctx context.Context) error { return pool.Ping(ctx) }
 
-	learnSvc := service.NewLearningService(pool, contentPool)
+	learnSvc := service.NewLearningService(pool, contentPool, lexiconPool)
 	httpHandler := learnhandler.NewHTTPHandler(learnSvc)
 	secHandler := learnhandler.NewSecurityHandler(jwtMgr)
 

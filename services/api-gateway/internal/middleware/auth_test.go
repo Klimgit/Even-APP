@@ -26,6 +26,7 @@ func TestIsPublic(t *testing.T) {
 		{"GET", "/languages", true},
 		{"GET", "/languages/evn", true},
 		{"GET", "/languages/evn/alphabet", true},
+		{"GET", "/api/v1/courses/public", true},
 		{"GET", "/languages/evn/media", false},
 		{"GET", "/api/v1/platform/languages/evn/media", false},
 		{"GET", "/api/v1/auth/health", true},

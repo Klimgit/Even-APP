@@ -107,6 +107,21 @@ mobile-run:
 mobile-test:
     cd apps/mobile && flutter test
 
+# --- Colleague UI (frontend/flutter — Even-APP Go API) ---
+
+# Backend + colleague Flutter web (run `just up` in another terminal if dev fails)
+dev:
+    @chmod +x scripts/frontend-flutter-web.sh && ./scripts/frontend-flutter-web.sh
+
+frontend-flutter-web:
+    @chmod +x scripts/frontend-flutter-web.sh && ./scripts/frontend-flutter-web.sh
+
+frontend-flutter-chrome:
+    FLUTTER_WEB_DEVICE=chrome ./scripts/frontend-flutter-web.sh
+
+frontend-admin:
+    @chmod +x scripts/frontend-admin-dev.sh && ./scripts/frontend-admin-dev.sh
+
 # Postgres + MinIO only (for go run on host). Stop app containers first if ports busy.
 infra-up:
     docker compose up -d postgres minio minio-init

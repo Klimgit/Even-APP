@@ -464,10 +464,24 @@ func (h *HTTPHandler) ListTeacherCourseStudents(ctx context.Context, params http
 	if err != nil {
 		return nil, err
 	}
-	if _, err := h.svc.GetCourse(ctx, params.CourseId, t.UserID, t.IsAdmin); err != nil {
+	rows, err := h.svc.ListCourseStudents(ctx, params.CourseId, t.UserID, t.IsAdmin)
+	if err != nil {
 		return nil, err
 	}
-	out := http_v1.ListTeacherCourseStudentsOKApplicationJSON([]http_v1.Student{})
+	out := http_v1.ListTeacherCourseStudentsOKApplicationJSON(mapStudents(rows))
+	return &out, nil
+}
+
+func (h *HTTPHandler) EnrollTeacherStudent(ctx context.Context, req *http_v1.EnrollStudentRequest) (http_v1.EnrollTeacherStudentRes, error) {
+	t, err := h.teacher(ctx)
+	if err != nil {
+		return nil, err
+	}
+	row, err := h.svc.EnrollStudent(ctx, req.CourseID, req.Email, t.UserID, t.IsAdmin)
+	if err != nil {
+		return nil, err
+	}
+	out := mapStudent(row)
 	return &out, nil
 }
 

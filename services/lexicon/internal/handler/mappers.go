@@ -3,8 +3,8 @@ package handler
 import (
 	"encoding/json"
 
-	"github.com/even-app/even-app/services/lexicon/internal/gen/query"
 	http_v1 "github.com/even-app/even-app/services/lexicon/internal/gen/http/v1"
+	"github.com/even-app/even-app/services/lexicon/internal/gen/query"
 	"github.com/even-app/even-app/services/lexicon/internal/service"
 )
 
@@ -65,6 +65,24 @@ func mapSounds(rows []query.Sound) []http_v1.Sound {
 	out := make([]http_v1.Sound, len(rows))
 	for i, r := range rows {
 		out[i] = mapSound(r)
+	}
+	return out
+}
+
+func mapGrammarTopic(row query.GrammarTopic) http_v1.GrammarTopic {
+	out := http_v1.GrammarTopic{
+		ID: row.ID, LanguageID: row.LanguageID, Title: row.Title, SortOrder: int(row.SortOrder),
+	}
+	if row.Description != "" {
+		out.Description = http_v1.NewOptString(row.Description)
+	}
+	return out
+}
+
+func mapGrammarTopics(rows []query.GrammarTopic) []http_v1.GrammarTopic {
+	out := make([]http_v1.GrammarTopic, len(rows))
+	for i, r := range rows {
+		out[i] = mapGrammarTopic(r)
 	}
 	return out
 }

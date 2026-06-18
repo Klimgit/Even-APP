@@ -170,6 +170,28 @@ func mapFormsCoverage(rows []service.FormCoverage) []http_v1.FormsCoverage {
 	return out
 }
 
+func mapStudent(v service.StudentView) http_v1.Student {
+	out := http_v1.Student{
+		ID: v.ID, Email: v.Email,
+		EnrolledCourses: make([]http_v1.StudentEnrolledCourse, len(v.EnrolledCourses)),
+	}
+	if v.DisplayName != nil {
+		out.DisplayName = http_v1.NewOptString(*v.DisplayName)
+	}
+	for i, c := range v.EnrolledCourses {
+		out.EnrolledCourses[i] = http_v1.StudentEnrolledCourse{ID: c.ID, Title: c.Title}
+	}
+	return out
+}
+
+func mapStudents(rows []service.StudentView) []http_v1.Student {
+	out := make([]http_v1.Student, len(rows))
+	for i, row := range rows {
+		out[i] = mapStudent(row)
+	}
+	return out
+}
+
 func mapStudentProgress(v service.StudentProgressView) http_v1.StudentProgress {
 	lessons := make([]http_v1.StudentProgressLesson, len(v.Lessons))
 	for i, l := range v.Lessons {

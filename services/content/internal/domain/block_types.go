@@ -29,6 +29,18 @@ var gradableBlockTypes = map[string]struct{}{
 	"listen_sentence_type":       {},
 }
 
+// IsKnownBlockType reports whether blockType is in the MVP catalog.
+func IsKnownBlockType(blockType string) bool {
+	for _, cat := range MVPBlockTypeCatalog() {
+		for _, t := range cat.Types {
+			if t.BlockType == blockType {
+				return true
+			}
+		}
+	}
+	return false
+}
+
 // IsGradableBlockType reports whether a block type is scored in MVP.
 func IsGradableBlockType(blockType string) bool {
 	_, ok := gradableBlockTypes[blockType]

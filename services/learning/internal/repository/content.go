@@ -43,6 +43,31 @@ func (r *ContentReader) GetCourseByID(ctx context.Context, id uuid.UUID) (domain
 	return mapCourseIDRow(row), nil
 }
 
+func (r *ContentReader) ListPublishedCourses(ctx context.Context) ([]domain.CourseView, error) {
+	rows, err := r.queries.ListPublishedCourses(ctx)
+	if err != nil {
+		return nil, err
+	}
+	out := make([]domain.CourseView, 0, len(rows))
+	for _, row := range rows {
+		inviteCode := ""
+		if row.InviteCode != nil {
+			inviteCode = *row.InviteCode
+		}
+		out = append(out, domain.CourseView{
+			ID: row.ID, Title: row.Title,
+			TargetLanguageID: row.TargetLanguageID,
+			TargetLangCode:   row.TargetLanguageCode,
+			TargetLangName:   row.TargetLanguageName,
+			UILanguageID:     row.UiLanguageID,
+			OwnerID:          row.OwnerID,
+			IsPublished:      row.IsPublished,
+			InviteCode:       inviteCode,
+		})
+	}
+	return out, nil
+}
+
 func (r *ContentReader) ListPublishedLessons(ctx context.Context, courseID uuid.UUID) ([]contentquery.Lesson, error) {
 	return r.queries.ListPublishedLessonsByCourse(ctx, contentquery.ListPublishedLessonsByCourseParams{CourseID: courseID})
 }

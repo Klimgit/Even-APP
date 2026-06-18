@@ -9,16 +9,18 @@ import (
 
 	"github.com/even-app/even-app/services/lexicon/internal/domain"
 	"github.com/even-app/even-app/services/lexicon/internal/gen/query"
+	"github.com/even-app/even-app/services/lexicon/internal/repository"
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
 )
 
 type LexiconService struct {
-	q *query.Queries
+	q       *query.Queries
+	content *repository.ContentReader
 }
 
-func NewLexiconService(q *query.Queries) *LexiconService {
-	return &LexiconService{q: q}
+func NewLexiconService(q *query.Queries, content *repository.ContentReader) *LexiconService {
+	return &LexiconService{q: q, content: content}
 }
 
 func mediaRefURL(id uuid.UUID) string {

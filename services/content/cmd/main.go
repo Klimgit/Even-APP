@@ -17,6 +17,7 @@ import (
 	http_v1 "github.com/even-app/even-app/services/content/internal/gen/http/v1"
 	"github.com/even-app/even-app/services/content/internal/gen/query"
 	contenthandler "github.com/even-app/even-app/services/content/internal/handler"
+	"github.com/even-app/even-app/services/content/internal/repository"
 	"github.com/even-app/even-app/services/content/internal/service"
 	"github.com/joho/godotenv"
 )
@@ -39,11 +40,31 @@ func main() {
 	}
 	defer pool.Close()
 
+	var learningReader *repository.LearningReader
+	if cfg.HasLearningDB() {
+		lp, err := postgres.NewPool(ctx, cfg.LearningDatabaseURL)
+		if err != nil {
+			log.Fatalf("learning database: %v", err)
+		}
+		defer lp.Close()
+		learningReader = repository.NewLearningReader(lp)
+	}
+
+	var authReader *repository.AuthReader
+	if cfg.HasAuthDB() {
+		ap, err := postgres.NewPool(ctx, cfg.AuthDatabaseURL)
+		if err != nil {
+			log.Fatalf("auth database: %v", err)
+		}
+		defer ap.Close()
+		authReader = repository.NewAuthReader(ap)
+	}
+
 	jwtMgr := libjwt.NewManager(cfg.JWTSecret, cfg.AccessTTL())
 	ready := func(ctx context.Context) error { return pool.Ping(ctx) }
 
 	querier := query.New(pool)
-	contentSvc := service.NewContentService(querier)
+	contentSvc := service.NewContentService(querier, learningReader, authReader)
 	httpHandler := contenthandler.NewHTTPHandler(contentSvc)
 	secHandler := contenthandler.NewSecurityHandler(jwtMgr)
 

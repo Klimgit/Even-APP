@@ -751,6 +751,39 @@ paths:
         default:
           $ref: "#/components/responses/DefaultError"
 
+  /api/v1/teacher/students:
+    post:
+      operationId: enrollTeacherStudent
+      tags: [Teacher, Students]
+      summary: Enroll student by email in a course (owner)
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/EnrollStudentRequest"
+      responses:
+        "201":
+          description: Created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Student"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "409":
+          $ref: "#/components/responses/Conflict"
+        default:
+          $ref: "#/components/responses/DefaultError"
+
   /api/v1/teacher/students/{studentId}/progress:
     get:
       operationId: getTeacherStudentProgress
@@ -1200,6 +1233,16 @@ components:
       properties:
         invite_code:
           type: string
+
+    EnrollStudentRequest:
+      type: object
+      required: [email, course_id]
+      properties:
+        email:
+          type: string
+        course_id:
+          type: string
+          format: uuid
 
     StudentEnrolledCourse:
       type: object

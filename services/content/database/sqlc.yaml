@@ -47,3 +47,29 @@ sql:
         omit_unused_structs: true
         emit_sql_as_comment: true
         emit_pointers_for_null_types: true
+  - engine: "postgresql"
+    queries: "./queries/learning/"
+    schema: "./schema/learning/"
+    gen:
+      go:
+        package: "learningquery"
+        out: "../internal/gen/learningquery/"
+        sql_package: "pgx/v5"
+        sql_driver: "github.com/jackc/pgx/v5"
+        omit_unused_structs: true
+        emit_sql_as_comment: true
+        emit_pointers_for_null_types: true
+        query_parameter_limit: 0
+  - engine: "postgresql"
+    queries: "./queries/auth/"
+    schema: "./schema/auth/"
+    gen:
+      go:
+        package: "authquery"
+        out: "../internal/gen/authquery/"
+        sql_package: "pgx/v5"
+        sql_driver: "github.com/jackc/pgx/v5"
+        omit_unused_structs: true
+        emit_sql_as_comment: true
+        emit_pointers_for_null_types: true
+        query_parameter_limit: 0

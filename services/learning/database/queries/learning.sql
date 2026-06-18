@@ -155,3 +155,16 @@ WHERE ubp.user_id = $1
 SELECT (snapshot->>'title')::text AS title
 FROM published_lesson_snapshots
 WHERE lesson_id = $1;
+
+-- name: GetProgressSummary :one
+SELECT
+    (SELECT COUNT(*)::int FROM course_enrollments ce WHERE ce.user_id = $1 AND ce.status = 'active') AS enrolled_courses,
+    (SELECT COUNT(*)::int FROM user_vocabulary uv WHERE uv.user_id = $1) AS dictionary_words,
+    (SELECT COUNT(*)::int FROM user_review_items uri WHERE uri.user_id = $1 AND uri.status = 'pending' AND uri.due_at <= now()) AS review_due,
+    (SELECT COUNT(*)::int FROM user_block_progress ubp WHERE ubp.user_id = $1 AND ubp.status = 'completed') AS completed_blocks;
+
+-- name: ListEnrollmentsByCourse :many
+SELECT user_id, course_id, status, enrolled_at, enrolled_by
+FROM course_enrollments
+WHERE course_id = $1 AND status = 'active'
+ORDER BY enrolled_at DESC;
