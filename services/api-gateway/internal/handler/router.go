@@ -29,6 +29,30 @@ func New(cfg config.Config, jwtMgr *libjwt.Manager) (http.Handler, error) {
 	}
 
 	mediaBase := strings.TrimRight(cfg.MediaURL, "/") + "/"
+	authBase := strings.TrimRight(cfg.AuthURL, "/") + "/"
+	lexiconBase := strings.TrimRight(cfg.LexiconURL, "/") + "/"
+
+	if err := proxy.Mount(mux, "/api/v1/platform/users/", authBase); err != nil {
+		return nil, err
+	}
+	if err := proxy.MountPattern(mux, "/api/v1/platform/users", authBase); err != nil {
+		return nil, err
+	}
+	if err := proxy.Mount(mux, "/api/v1/teacher/media/", mediaBase); err != nil {
+		return nil, err
+	}
+	if err := proxy.MountPattern(mux, "/api/v1/teacher/media", mediaBase); err != nil {
+		return nil, err
+	}
+	if err := proxy.MountPattern(mux, "/api/v1/teacher/languages/{code}/lexicon", lexiconBase); err != nil {
+		return nil, err
+	}
+	if err := proxy.MountPattern(mux, "/api/v1/teacher/languages/{code}/media/platform", mediaBase); err != nil {
+		return nil, err
+	}
+	if err := proxy.Mount(mux, "/api/v1/teacher/lexemes/", lexiconBase); err != nil {
+		return nil, err
+	}
 	if err := proxy.MountPattern(mux, "/api/v1/platform/languages/{code}/media", mediaBase); err != nil {
 		return nil, err
 	}
@@ -53,6 +77,16 @@ func New(cfg config.Config, jwtMgr *libjwt.Manager) (http.Handler, error) {
 	}
 	for _, r := range routes {
 		if err := proxy.Mount(mux, r.prefix, r.target); err != nil {
+			return nil, err
+		}
+	}
+	// Exact paths without trailing slash (Go mux prefix routes redirect otherwise).
+	for _, pattern := range []struct{ pattern, target string }{
+		{"/api/v1/courses", cfg.LearningURL + "/"},
+		{"/api/v1/review", cfg.LearningURL + "/"},
+		{"/api/v1/dictionary", cfg.LearningURL + "/"},
+	} {
+		if err := proxy.MountPattern(mux, pattern.pattern, pattern.target); err != nil {
 			return nil, err
 		}
 	}

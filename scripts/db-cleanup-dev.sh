@@ -4,7 +4,9 @@ set -euo pipefail
 
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 PG_USER="${POSTGRES_USER:-even}"
-KEEP_EMAIL="${PLATFORM_ADMIN_EMAIL:-platform-admin@even.local}"
+TEACHER_EMAIL="${DEV_TEACHER_EMAIL:-teacher@even.local}"
+STUDENT_EMAIL="${DEV_STUDENT_EMAIL:-student@even.local}"
+ADMIN_EMAIL="${PLATFORM_ADMIN_EMAIL:-admin@even.local}"
 
 echo "=== DB cleanup (dev) ==="
 
@@ -32,7 +34,7 @@ SQL
 
 docker compose -f "$ROOT/docker-compose.yml" exec -T postgres psql -U "$PG_USER" -d even_auth -v ON_ERROR_STOP=1 <<SQL
 DELETE FROM users
-WHERE email <> '$KEEP_EMAIL'
+WHERE email NOT IN ('$TEACHER_EMAIL', '$STUDENT_EMAIL', '$ADMIN_EMAIL')
   AND (
     email LIKE '%@example.com'
     OR email LIKE 'seed-%'
@@ -40,11 +42,12 @@ WHERE email <> '$KEEP_EMAIL'
     OR email LIKE 'lexicon-test-%'
     OR email LIKE 'manual-test@%'
     OR email LIKE 't%@ex.com'
+    OR email LIKE 'verify-%'
   );
 SQL
 
 echo "  ✓ lexicon: only evn/ru (if present), no tst*, no test lexemes/sounds"
 echo "  ✓ media: only evn/ru languages"
-echo "  ✓ auth: removed ephemeral test users (kept $KEEP_EMAIL)"
+echo "  ✓ auth: removed ephemeral test users (kept $TEACHER_EMAIL, $STUDENT_EMAIL, $ADMIN_EMAIL)"
 echo ""
 echo "=== Cleanup done ==="

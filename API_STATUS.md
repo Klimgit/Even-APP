@@ -163,253 +163,110 @@
 
 ---
 
-## ⬜ MVP — нужно реализовать
+### Public languages — `lexicon` (:8082)
 
-Рекомендуемый порядок: **public languages → platform users/lexicon → teacher media/editor → student flow → seed урока «Знакомство»**.
+Gateway: `/languages/` → lexicon. Без JWT.
 
----
-
-### Public — языки (`lexicon`)
-
-Без JWT (кроме если позже решите иначе). Gateway: `/languages/` → lexicon.
-
-| Метод | Путь | Response |
-|-------|------|----------|
-| GET | `/languages` | `LanguageDTO[]` |
-| GET | `/languages/{code}` | `LanguageDTO` |
-| GET | `/languages/{code}/alphabet` | `AlphabetLetterDTO[]` |
-
-```typescript
-LanguageDTO {
-  id, code, name, native_name, direction: "ltr"|"rtl", is_active
-}
-AlphabetLetterDTO {
-  id, language_id, character, upper_char?, sort_order, label?
-}
-```
+| Метод | Путь | Статус |
+|-------|------|--------|
+| GET | `/languages` | 200 |
+| GET | `/languages/{code}` | 200 |
+| GET | `/languages/{code}/alphabet` | 200 |
 
 ---
 
-### Platform — пользователи (`lexicon`)
+### Platform users — `auth` (:8081)
 
-| Метод | Путь | Auth | Body / Query | Response |
-|-------|------|------|--------------|----------|
-| GET | `/platform/users` | admin | `?q=`, `?role=`, `?page=`, `?limit=` | `{ items: UserDTO[], total }` |
-| PATCH | `/platform/users/{userId}` | admin | `{ role?, is_admin? }` | `UserDTO` |
+Gateway: `/api/v1/platform/users` → auth (не lexicon).
 
----
+| Метод | Путь | Auth | Статус |
+|-------|------|------|--------|
+| GET | `/platform/users` | admin | 200 `{ items, total }` |
+| PATCH | `/platform/users/{userId}` | admin | 200 `UserDTO` |
 
-### Platform — языки, алфавит, звуки (`lexicon`)
-
-| Метод | Путь | Auth | Примечание |
-|-------|------|------|------------|
-| GET | `/platform/languages` | admin | `LanguageDTO[]` |
-| POST | `/platform/languages` | admin | body: `code, name, native_name, direction` → 201 |
-| PATCH | `/platform/languages/{code}` | admin | partial → `LanguageDTO` |
-| GET | `/platform/languages/{code}/alphabet` | admin | `AlphabetLetterDTO[]` |
-| POST | `/platform/languages/{code}/alphabet` | admin | body: `character, upper_char?, sort_order, label?` → 201 |
-| PATCH | `/platform/alphabet/{letterId}` | admin | partial → `AlphabetLetterDTO` |
-| DELETE | `/platform/alphabet/{letterId}` | admin | 204 |
-| POST | `/platform/languages/{code}/alphabet/reorder` | admin | body: `{ letter_ids: string[] }` → 204 |
-| GET | `/platform/languages/{code}/sounds` | admin | `SoundDTO[]` |
-| POST | `/platform/languages/{code}/sounds` | admin | body: `ipa?, description?, audio_media_id?` → 201 |
-| PATCH | `/platform/sounds/{soundId}` | admin | partial → `SoundDTO` |
-| DELETE | `/platform/sounds/{soundId}` | admin | 204 |
-| POST | `/platform/alphabet/{letterId}/sounds` | admin | body: `{ sound_id }` → 204 |
-| DELETE | `/platform/alphabet/{letterId}/sounds/{soundId}` | admin | 204 |
-
-```typescript
-SoundDTO { id, language_id, ipa?, description?, audio_url? }
-```
+Query GET: `?q=`, `?role=`, `?page=`, `?limit=`.
 
 ---
 
-### Platform — лексикон (`lexicon`)
+### Platform lexicon — `lexicon` (:8082)
 
-| Метод | Путь | Auth | Body / Response |
-|-------|------|------|-----------------|
-| GET | `/platform/languages/{code}/lexicon` | admin | query `?q=`, `?page=`, `?limit=` → `{ items: LexemeDTO[], total }` |
-| POST | `/platform/languages/{code}/lexicon` | admin | `CreateLexemeRequest` → 201 `LexemeDTO` |
-| GET | `/platform/lexemes/{lexemeId}` | admin | `LexemeDTO` |
-| PATCH | `/platform/lexemes/{lexemeId}` | admin | partial → `LexemeDTO` |
-| DELETE | `/platform/lexemes/{lexemeId}` | admin | 204 |
-| POST | `/platform/lexemes/{lexemeId}/forms` | admin | `{ form, tags? }` → `LexemeFormDTO` |
-| PATCH | `/platform/lexeme-forms/{formId}` | admin | partial → `LexemeFormDTO` |
-| DELETE | `/platform/lexeme-forms/{formId}` | admin | 204 |
-| POST | `/platform/lexemes/{lexemeId}/translations` | admin | `{ target_language_id, text, target_lexeme_id? }` → `LexemeTranslationDTO` |
-| DELETE | `/platform/lexeme-translations/{translationId}` | admin | 204 |
-| POST | `/platform/lexemes/{lexemeId}/media` | admin | `{ media_asset_id, kind, label?, is_primary?, form_id? }` → `LexemeMediaDTO` |
-| DELETE | `/platform/lexeme-media/{lexemeMediaId}` | admin | 204 |
+Языки, алфавит, звуки, лексикон (29 ручек). Gateway: `/api/v1/platform/*` → lexicon.
 
-```typescript
-LexemeDTO {
-  id, language_id, lemma, part_of_speech?, notes?,
-  translations: LexemeTranslationDTO[],
-  forms: LexemeFormDTO[],
-  media: LexemeMediaDTO[],
-  primary_image_url?, primary_audio_url?
-}
-CreateLexemeRequest {
-  lemma, part_of_speech?, notes?,
-  translations?: { target_language_id, text }[]
-}
-```
+| Группа | Пути | Auth |
+|--------|------|------|
+| Languages | `GET/POST/PATCH /platform/languages`, alphabet CRUD, reorder | admin |
+| Sounds | `GET/POST/PATCH/DELETE /platform/.../sounds`, letter links | admin |
+| Lexicon | `GET/POST /platform/languages/{code}/lexicon`, lexeme/forms/translations/media CRUD | admin |
+
+**Проверка:** `just verify-api` (секции 4–8).
 
 ---
 
-### Teacher — медиа (`content` или `lexicon` по решению)
+### Teacher lexicon picker — `lexicon` (:8082)
 
-`scope=teacher`, `owner_id=current_user`. Те же DTO, что platform media (`PresignRequest`, `ConfirmMediaRequest`, `MediaAssetDTO`).
+Read-only для редактора. Gateway: `/api/v1/teacher/languages/{code}/lexicon`, `/api/v1/teacher/lexemes/` → lexicon.
+
+| Метод | Путь | Auth | Статус |
+|-------|------|------|--------|
+| GET | `/teacher/languages/{code}/lexicon` | teacher | 200 |
+| GET | `/teacher/lexemes/{lexemeId}` | teacher | 200 |
+| GET | `/teacher/lexemes/{lexemeId}/usage` | teacher | 200 (MVP: `usages: []`) |
+
+---
+
+### Teacher media — `media` (:8085)
+
+`scope=teacher`, `owner_id=current_user`. Gateway: `/api/v1/teacher/media/` → media.
 
 | Метод | Путь | Auth | Статус |
 |-------|------|------|--------|
 | POST | `/teacher/media/presign` | teacher | 200 |
 | POST | `/teacher/media/confirm` | teacher | 201 |
-| GET | `/teacher/media` | teacher | 200 `MediaListResponse` |
-| GET | `/teacher/media/{mediaAssetId}` | teacher (owner) | 200 |
-| PATCH | `/teacher/media/{mediaAssetId}` | teacher (owner) | 200 |
-| DELETE | `/teacher/media/{mediaAssetId}` | teacher (owner) | 204 |
-| GET | `/teacher/languages/{code}/media/platform` | teacher | 200 read-only platform picker |
-
-Query для GET `/teacher/media`: `?q=`, `?kind=`, `?language_code=`, `?page=`, `?limit=`.
+| GET | `/teacher/media` | teacher | 200 |
+| GET | `/teacher/media/{id}` | teacher (owner) | 200 |
+| PATCH | `/teacher/media/{id}` | teacher (owner) | 200 |
+| DELETE | `/teacher/media/{id}` | teacher (owner) | 204 |
+| GET | `/teacher/languages/{code}/media/platform` | teacher | 200 read-only picker |
 
 ---
 
-### Teacher — lexicon picker (`content` → lexicon read-only)
+### Content editor — `content` (:8083)
 
-| Метод | Путь | Auth | Response |
-|-------|------|------|----------|
-| GET | `/teacher/languages/{code}/lexicon` | teacher | `{ items: LexemeDTO[], total }` |
-| GET | `/teacher/lexemes/{lexemeId}` | teacher | `LexemeDTO` |
-| GET | `/teacher/lexemes/{lexemeId}/usage` | teacher | query `?course_id=` required |
+Gateway: `/api/v1/teacher/*` (кроме media/lexicon picker) → content. ~29 ручек.
 
-```json
-{
-  "lexeme_id": "uuid",
-  "usages": [{
-    "lesson_id", "lesson_title", "block_id",
-    "display_label", "usage_kind": "introduced|exercised|referenced"
-  }]
-}
-```
+| Группа | Пути | Auth |
+|--------|------|------|
+| Block types | `GET /teacher/block-types` | teacher |
+| Courses | CRUD + publish, lessons CRUD + publish | owner |
+| Sections/blocks | CRUD, reorder | owner |
+| Coverage | `/teacher/courses/{id}/lexicon`, by-lesson, forms-coverage | owner |
+| Invite | get/regenerate invite code | owner |
+| Students | list students, progress (read-only stubs → learning) | owner |
+
+Контракт JSON `config` для 17 MVP block types: [`services/content/docs/BLOCK_TYPES.md`](services/content/docs/BLOCK_TYPES.md).
 
 ---
 
-### Teacher — block types (`content`)
+### Learning (student flow) — `learning` (:8084)
 
-| Метод | Путь | Auth | Response |
-|-------|------|------|----------|
-| GET | `/teacher/block-types` | teacher | `BlockTypeCategoryDTO[]` |
+Gateway: `/api/v1/courses/`, `/lessons/`, `/progress/`, `/review/`, `/dictionary/` → learning.
 
-Каталог типов блоков для редактора (MVP: 6 content + 11 gradable типов, см. [MVP.md](MVP.md)).
+| Метод | Путь | Auth | Статус |
+|-------|------|------|--------|
+| POST | `/courses/join` | student | 201 |
+| GET | `/courses`, `/courses/{id}`, `/courses/{id}/lessons`, `/courses/{id}/outline` | enrollment | 200 |
+| GET | `/lessons/{id}`, `/lessons/{id}/flow` | enrollment | 200 |
+| POST | `/progress/blocks/{id}/attempt` | enrollment | 200 (11 gradable types) |
+| GET | `/progress/lessons/{id}` | enrollment | 200 |
+| GET | `/review` | JWT | 200 |
+| GET | `/dictionary` | JWT | 200 |
 
----
+Learning читает опубликованные уроки из `even_content` через `CONTENT_DATABASE_URL` (snapshots при join).
 
-### Teacher — курсы и уроки (`content`)
-
-| Метод | Путь | Auth | Body / Response |
-|-------|------|------|-----------------|
-| GET | `/teacher/courses` | teacher | `CourseDTO[]` |
-| POST | `/teacher/courses` | teacher | `{ title, target_language_id, ui_language_id }` → 201 |
-| GET | `/teacher/courses/{courseId}` | owner | `CourseDTO` |
-| PATCH | `/teacher/courses/{courseId}` | owner | partial → `CourseDTO` |
-| DELETE | `/teacher/courses/{courseId}` | owner | 204 |
-| POST | `/teacher/courses/{courseId}/publish` | owner | `CourseDTO` |
-| GET | `/teacher/courses/{courseId}/lessons` | owner | `LessonDTO[]` (summary) |
-| POST | `/teacher/courses/{courseId}/lessons` | owner | `{ title, sort_order? }` → 201 |
-| GET | `/teacher/lessons/{lessonId}` | owner | `LessonDTO` (full + sections + blocks) |
-| PATCH | `/teacher/lessons/{lessonId}` | owner | partial; header `If-Match: <version>` |
-| DELETE | `/teacher/lessons/{lessonId}` | owner | 204 |
-| POST | `/teacher/lessons/{lessonId}/publish` | owner | `LessonDTO` |
-| POST | `/teacher/lessons/{lessonId}/sections` | owner | `{ title, section_kind?, sort_order? }` → 201 |
-| PATCH | `/teacher/sections/{sectionId}` | owner | partial → `LessonSectionDTO` |
-| DELETE | `/teacher/sections/{sectionId}` | owner | 204 |
-| POST | `/teacher/lessons/{lessonId}/sections/reorder` | owner | `{ section_ids: string[] }` → 204 |
-| POST | `/teacher/lessons/{lessonId}/blocks` | owner | `CreateLessonBlockRequest` → 201 |
-| GET | `/teacher/blocks/{blockId}` | owner | `LessonBlockDTO` |
-| PATCH | `/teacher/blocks/{blockId}` | owner | partial config → `LessonBlockDTO` |
-| DELETE | `/teacher/blocks/{blockId}` | owner | 204 |
-| POST | `/teacher/lessons/{lessonId}/blocks/reorder` | owner | `{ block_ids: string[] }` → 204 |
-
-```typescript
-CourseDTO {
-  id, title, target_language_id, ui_language_id,
-  owner_id, is_published, invite_code?
-}
-LessonDTO {
-  id, course_id, title, sort_order, version,
-  status: "draft"|"published", sections: LessonSectionDTO[]
-}
-LessonBlockDTO {
-  id, section_id?, sort_order, display_label?, title?,
-  block_type, config: Record<string, unknown>,
-  is_homework, is_gradable
-}
-```
+**Seed + e2e:** `just seed-znakomstvo`, `just verify-api` (секция 15).
 
 ---
 
-### Teacher — coverage, invite, students (`content`)
+## ⬜ Phase 2 — вне MVP
 
-| Метод | Путь | Auth | Response |
-|-------|------|------|----------|
-| GET | `/teacher/courses/{courseId}/lexicon` | owner | `{ introduced_count, exercised_count, lexeme_count }` |
-| GET | `/teacher/courses/{courseId}/lexicon/by-lesson` | owner | `CourseLexiconByLessonDTO[]` |
-| GET | `/teacher/courses/{courseId}/lexicon/forms-coverage` | owner | `FormsCoverageDTO[]` |
-| GET | `/teacher/courses/{courseId}/invite-code` | owner | `{ invite_code }` |
-| POST | `/teacher/courses/{courseId}/invite-code/regenerate` | owner | `{ invite_code }` |
-| GET | `/teacher/courses/{courseId}/students` | owner | `StudentDTO[]` |
-| GET | `/teacher/students/{studentId}/progress` | owner | `StudentProgressDTO` |
-
----
-
-### Student — enrollment и уроки (`learning`)
-
-| Метод | Путь | Auth | Body / Response |
-|-------|------|------|-----------------|
-| POST | `/courses/join` | student | `{ invite_code }` → 201 `JoinCourseResponse` |
-| GET | `/courses` | JWT | `CourseListItemDTO[]` |
-| GET | `/courses/{courseId}` | enrollment | `CourseDTO` |
-| GET | `/courses/{courseId}/lessons` | enrollment | `{ items: [{ id, title, sort_order, completed_percent }] }` |
-| GET | `/lessons/{lessonId}` | enrollment | `LessonDTO` (published) |
-| GET | `/lessons/{lessonId}/flow` | enrollment | `LessonFlowDTO` |
-
-```typescript
-JoinCourseRequest { invite_code: string }
-JoinCourseResponse { course_id, enrollment_id }
-LessonFlowDTO {
-  lesson_id, version,
-  items: ( { kind: "lesson_block", block } | { kind: "review_injection", review } )[]
-}
-```
-
-**Flow:** после каждых 3 gradable-блоков — 1 review injection (`due_at <= now()`).
-
----
-
-### Student — progress, review, dictionary (`learning`)
-
-| Метод | Путь | Auth | Body / Response |
-|-------|------|------|-----------------|
-| POST | `/progress/blocks/{blockId}/attempt` | enrollment | `BlockAttemptRequest` → `BlockAttemptResponse` |
-| GET | `/progress/lessons/{lessonId}` | enrollment | `{ lesson_id, blocks: UserBlockProgressDTO[] }` |
-| GET | `/review` | JWT | query `?status=`, `?due_only=` → `ReviewListResponse` |
-| GET | `/dictionary` | JWT | query `?course_id=` → `VocabularyEntryDTO[]` |
-
-```typescript
-BlockAttemptRequest {
-  sub_item_index?: number,
-  response: Record<string, unknown>,
-  context?: "lesson"|"review_tab"|"injected"
-}
-BlockAttemptResponse {
-  is_correct, score, correct_answer?, block_progress
-}
-ReviewListResponse { pending_count, due_count, items: ReviewItemDTO[] }
-VocabularyEntryDTO { lexeme: LexemeDTO, first_seen_at, mastery }
-```
-
-Side effects attempt: `block_attempts`, `user_block_progress`, `user_review_items`, `user_vocabulary`.
-
----
 

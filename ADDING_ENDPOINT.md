@@ -203,6 +203,7 @@ just -f services/<svc>/Justfile sqlc
 
 1. `ogen` → `internal/gen/http/v1/` (роутер, типы, `Handler` interface)
 2. `openapi-handler-gen` → `openapi_handler.go` (отдача `GET /api/v1/openapi.yaml` на сервисе)
+3. `handler-stub-gen` → `internal/handler/http_api_gen.go` (заглушки для **новых** методов `Handler`, которых ещё нет в `http_api.go`)
 
 Если `openapi-handler-gen` падает с ошибкой go.work — запустить ogen вручную, затем из **корня репо**:
 
@@ -219,6 +220,16 @@ go run ./_misc/openapi-handler-gen/ \
 ---
 
 ## 8. Handler — `internal/handler/http_api.go`
+
+После `just swagger` для **новых** ручек автоматически появляются заглушки в `http_api_gen.go`:
+
+```go
+func (h *HTTPHandler) DemoNotes(ctx context.Context) (*http_v1.DemoNotesResponse, error) {
+    return nil, notImplemented("DemoNotes")
+}
+```
+
+Проект собирается сразу. Реализуй бизнес-логику в `http_api.go` — при следующем `just swagger` заглушка исчезнет (метод уже есть в hand-written файлах).
 
 Реализовать методы интерфейса `http_v1.Handler` (имена = `operationId` в PascalCase).
 

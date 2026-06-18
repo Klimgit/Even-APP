@@ -25,6 +25,31 @@ func (q *Queries) CountUsers(ctx context.Context) (int32, error) {
 	return count, err
 }
 
+const countUsersFiltered = `-- name: CountUsersFiltered :one
+SELECT count(*)::int AS count
+FROM users
+WHERE ($1::text IS NULL OR $1 = '' OR email ILIKE '%' || $1 || '%' OR display_name ILIKE '%' || $1 || '%')
+  AND ($2::text IS NULL OR $2 = '' OR role = $2)
+`
+
+type CountUsersFilteredParams struct {
+	Column1 string
+	Column2 string
+}
+
+// CountUsersFiltered
+//
+//	SELECT count(*)::int AS count
+//	FROM users
+//	WHERE ($1::text IS NULL OR $1 = '' OR email ILIKE '%' || $1 || '%' OR display_name ILIKE '%' || $1 || '%')
+//	  AND ($2::text IS NULL OR $2 = '' OR role = $2)
+func (q *Queries) CountUsersFiltered(ctx context.Context, arg CountUsersFilteredParams) (int32, error) {
+	row := q.db.QueryRow(ctx, countUsersFiltered, arg.Column1, arg.Column2)
+	var count int32
+	err := row.Scan(&count)
+	return count, err
+}
+
 const createUser = `-- name: CreateUser :one
 INSERT INTO users (email, password_hash, display_name, role)
 VALUES ($1, $2, $3, $4)
@@ -110,6 +135,101 @@ type GetUserByIDParams struct {
 //	WHERE id = $1
 func (q *Queries) GetUserByID(ctx context.Context, arg GetUserByIDParams) (User, error) {
 	row := q.db.QueryRow(ctx, getUserByID, arg.ID)
+	var i User
+	err := row.Scan(
+		&i.ID,
+		&i.Email,
+		&i.PasswordHash,
+		&i.DisplayName,
+		&i.Role,
+		&i.IsAdmin,
+		&i.CreatedAt,
+	)
+	return i, err
+}
+
+const listUsers = `-- name: ListUsers :many
+SELECT id, email, password_hash, display_name, role, is_admin, created_at
+FROM users
+WHERE ($1::text IS NULL OR $1 = '' OR email ILIKE '%' || $1 || '%' OR display_name ILIKE '%' || $1 || '%')
+  AND ($2::text IS NULL OR $2 = '' OR role = $2)
+ORDER BY created_at DESC
+LIMIT $4 OFFSET $3
+`
+
+type ListUsersParams struct {
+	Column1 string
+	Column2 string
+	Offset  int32
+	Limit   int32
+}
+
+// ListUsers
+//
+//	SELECT id, email, password_hash, display_name, role, is_admin, created_at
+//	FROM users
+//	WHERE ($1::text IS NULL OR $1 = '' OR email ILIKE '%' || $1 || '%' OR display_name ILIKE '%' || $1 || '%')
+//	  AND ($2::text IS NULL OR $2 = '' OR role = $2)
+//	ORDER BY created_at DESC
+//	LIMIT $4 OFFSET $3
+func (q *Queries) ListUsers(ctx context.Context, arg ListUsersParams) ([]User, error) {
+	rows, err := q.db.Query(ctx, listUsers,
+		arg.Column1,
+		arg.Column2,
+		arg.Offset,
+		arg.Limit,
+	)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []User
+	for rows.Next() {
+		var i User
+		if err := rows.Scan(
+			&i.ID,
+			&i.Email,
+			&i.PasswordHash,
+			&i.DisplayName,
+			&i.Role,
+			&i.IsAdmin,
+			&i.CreatedAt,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const updateUserPlatform = `-- name: UpdateUserPlatform :one
+UPDATE users
+SET
+  role = COALESCE($2, role),
+  is_admin = COALESCE($3, is_admin)
+WHERE id = $1
+RETURNING id, email, password_hash, display_name, role, is_admin, created_at
+`
+
+type UpdateUserPlatformParams struct {
+	ID      uuid.UUID
+	Role    *string
+	IsAdmin *bool
+}
+
+// UpdateUserPlatform
+//
+//	UPDATE users
+//	SET
+//	  role = COALESCE($2, role),
+//	  is_admin = COALESCE($3, is_admin)
+//	WHERE id = $1
+//	RETURNING id, email, password_hash, display_name, role, is_admin, created_at
+func (q *Queries) UpdateUserPlatform(ctx context.Context, arg UpdateUserPlatformParams) (User, error) {
+	row := q.db.QueryRow(ctx, updateUserPlatform, arg.ID, arg.Role, arg.IsAdmin)
 	var i User
 	err := row.Scan(
 		&i.ID,

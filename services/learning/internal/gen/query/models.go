@@ -3,3 +3,59 @@
 //   sqlc v1.31.1
 
 package query
+
+import (
+	"time"
+
+	"github.com/google/uuid"
+)
+
+type CourseEnrollment struct {
+	ID         uuid.UUID
+	UserID     uuid.UUID
+	CourseID   uuid.UUID
+	Status     string
+	EnrolledAt time.Time
+	EnrolledBy *uuid.UUID
+}
+
+type PublishedLessonSnapshot struct {
+	LessonID    uuid.UUID
+	CourseID    uuid.UUID
+	Version     int32
+	Snapshot    []byte
+	PublishedAt time.Time
+	UpdatedAt   time.Time
+}
+
+type UserBlockProgress struct {
+	UserID        uuid.UUID
+	LessonBlockID uuid.UUID
+	Status        string
+	Score         float32
+	Attempts      int32
+	LastAttemptAt *time.Time
+}
+
+type UserReviewItem struct {
+	UserID         uuid.UUID
+	LessonBlockID  uuid.UUID
+	SubItemIndex   int32
+	Status         string
+	FailureCount   int32
+	ConsecutiveOk  int32
+	FirstFailedAt  *time.Time
+	LastFailedAt   *time.Time
+	LastAttemptAt  *time.Time
+	DueAt          time.Time
+	SourceLessonID uuid.UUID
+	CourseID       uuid.UUID
+}
+
+type UserVocabulary struct {
+	UserID      uuid.UUID
+	LexemeID    uuid.UUID
+	CourseID    *uuid.UUID
+	FirstSeenAt time.Time
+	Mastery     float32
+}

@@ -40,8 +40,28 @@ build-all: sqlc-all
     go build -o bin/learning ./services/learning/cmd
 
 test:
-    go test -C libs/jwt . -count=1
-    go test -C libs/media . -count=1
+    #!/usr/bin/env bash
+    set -euo pipefail
+    pkgs=(
+      ./libs/jwt/...
+      ./libs/media/...
+      ./services/api-gateway/...
+      ./services/auth/internal/service/...
+      ./services/content/internal/domain/...
+      ./services/learning/internal/domain/...
+      ./services/learning/internal/service/...
+      ./services/learning/internal/handler/...
+    )
+    for pkg in "${pkgs[@]}"; do
+      echo "→ go test $pkg"
+      go test "$pkg" -count=1
+    done
+
+test-dev-accounts:
+    @./scripts/test-dev-accounts.sh
+
+test-learning-outline:
+    @./scripts/test-learning-outline.sh
 
 test-integration:
     @./scripts/ci-integration.sh
@@ -65,6 +85,27 @@ compose-down:
 
 compose-logs:
     docker compose logs -f
+
+# --- Flutter UI ---
+
+mobile-bootstrap:
+    @chmod +x scripts/flutter-bootstrap.sh && ./scripts/flutter-bootstrap.sh
+
+mobile-pub-get:
+    cd apps/mobile && flutter pub get
+
+mobile-web:
+    @chmod +x scripts/mobile-web.sh && ./scripts/mobile-web.sh
+
+# Chrome with Flutter debugger (may fail with AppConnectionException on some setups)
+mobile-web-chrome:
+    FLUTTER_WEB_DEVICE=chrome ./scripts/mobile-web.sh
+
+mobile-run:
+    cd apps/mobile && flutter run
+
+mobile-test:
+    cd apps/mobile && flutter test
 
 # Postgres + MinIO only (for go run on host). Stop app containers first if ports busy.
 infra-up:
@@ -129,6 +170,12 @@ seed-bootstrap: seed-dev
 
 seed-dev:
     @./scripts/seed-dev.sh
+
+seed-znakomstvo:
+    @./scripts/seed-znakomstvo.sh
+
+verify-mvp-corners:
+    @./scripts/verify-mvp-corners.sh
 
 db-cleanup-dev:
     @./scripts/db-cleanup-dev.sh

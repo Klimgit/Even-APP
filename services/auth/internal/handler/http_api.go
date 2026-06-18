@@ -81,6 +81,80 @@ func (h *HTTPHandler) GetMe(ctx context.Context) (http_v1.GetMeRes, error) {
 	return &user, nil
 }
 
+func (h *HTTPHandler) ListPlatformUsers(ctx context.Context, params http_v1.ListPlatformUsersParams) (http_v1.ListPlatformUsersRes, error) {
+	claims, ok := middleware.ClaimsFromContext(ctx)
+	if !ok {
+		return nil, domain.ErrUnauthorized
+	}
+	q, role := "", ""
+	if v, ok := params.Q.Get(); ok {
+		q = v
+	}
+	if v, ok := params.Role.Get(); ok {
+		role = string(v)
+	}
+	page, limit := 1, 20
+	if v, ok := params.Page.Get(); ok {
+		page = v
+	}
+	if v, ok := params.Limit.Get(); ok {
+		limit = v
+	}
+	out, err := h.svc.ListPlatformUsers(ctx, claims.IsAdmin, q, role, page, limit)
+	if err != nil {
+		if errors.Is(err, domain.ErrForbidden) {
+			return forbiddenListPlatformUsers()
+		}
+		return nil, err
+	}
+	items := make([]http_v1.User, 0, len(out.Items))
+	for _, u := range out.Items {
+		items = append(items, mapUser(u))
+	}
+	return &http_v1.UserListResponse{Items: items, Total: out.Total}, nil
+}
+
+func (h *HTTPHandler) PatchPlatformUser(ctx context.Context, req *http_v1.PatchPlatformUserRequest, params http_v1.PatchPlatformUserParams) (http_v1.PatchPlatformUserRes, error) {
+	claims, ok := middleware.ClaimsFromContext(ctx)
+	if !ok {
+		return nil, domain.ErrUnauthorized
+	}
+	in := service.PatchPlatformUserInput{}
+	if v, ok := req.Role.Get(); ok {
+		s := string(v)
+		in.Role = &s
+	}
+	if v, ok := req.IsAdmin.Get(); ok {
+		in.IsAdmin = &v
+	}
+	u, err := h.svc.PatchPlatformUser(ctx, claims.IsAdmin, params.UserId, in)
+	if err != nil {
+		if errors.Is(err, domain.ErrForbidden) {
+			return forbiddenPatchPlatformUser()
+		}
+		if errors.Is(err, domain.ErrNotFound) {
+			return notFoundPatchPlatformUser()
+		}
+		return nil, err
+	}
+	user := mapUser(*u)
+	return &user, nil
+}
+
+func (h *HTTPHandler) DemoNotes(ctx context.Context) (*http_v1.DemoNotesResponse, error) {
+	notes, err := h.svc.ListDemoNotes(ctx)
+	if err != nil {
+		return nil, err
+	}
+	items := make([]http_v1.DemoNote, 0, len(notes))
+	for _, n := range notes {
+		items = append(items, http_v1.DemoNote{
+			ID: n.ID, Text: n.Text, CreatedAt: n.CreatedAt,
+		})
+	}
+	return &http_v1.DemoNotesResponse{Items: items}, nil
+}
+
 func (h *HTTPHandler) DemoPublic(ctx context.Context) (*http_v1.DemoPublicResponse, error) {
 	count, err := h.svc.DemoPublic(ctx)
 	if err != nil {
@@ -203,5 +277,20 @@ func forbiddenDemoTeacher() (*http_v1.DemoTeacherForbidden, error) {
 
 func forbiddenDemoAdminStats() (*http_v1.DemoAdminStatsForbidden, error) {
 	r := http_v1.DemoAdminStatsForbidden(errBody("platform admin required"))
+	return &r, nil
+}
+
+func forbiddenListPlatformUsers() (*http_v1.ListPlatformUsersForbidden, error) {
+	r := http_v1.ListPlatformUsersForbidden(errBody("platform admin required"))
+	return &r, nil
+}
+
+func forbiddenPatchPlatformUser() (*http_v1.PatchPlatformUserForbidden, error) {
+	r := http_v1.PatchPlatformUserForbidden(errBody("platform admin required"))
+	return &r, nil
+}
+
+func notFoundPatchPlatformUser() (*http_v1.PatchPlatformUserNotFound, error) {
+	r := http_v1.PatchPlatformUserNotFound(errBody("user not found"))
 	return &r, nil
 }

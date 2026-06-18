@@ -235,6 +235,206 @@ paths:
         default:
           $ref: "#/components/responses/DefaultError"
 
+  /api/v1/teacher/media/presign:
+    post:
+      operationId: teacherMediaPresign
+      tags: [TeacherMedia]
+      summary: Presign upload URL (teacher)
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/PresignRequest"
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PresignResponse"
+        "403":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        default:
+          $ref: "#/components/responses/DefaultError"
+
+  /api/v1/teacher/media/confirm:
+    post:
+      operationId: teacherMediaConfirm
+      tags: [TeacherMedia]
+      summary: Confirm teacher media upload
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ConfirmRequest"
+      responses:
+        "201":
+          description: Created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/MediaAsset"
+        default:
+          $ref: "#/components/responses/DefaultError"
+
+  /api/v1/teacher/media:
+    get:
+      operationId: listTeacherMedia
+      tags: [TeacherMedia]
+      summary: List teacher media library
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: q
+          in: query
+          schema:
+            type: string
+        - name: kind
+          in: query
+          schema:
+            type: string
+        - name: language_code
+          in: query
+          schema:
+            type: string
+        - name: page
+          in: query
+          schema:
+            type: integer
+        - name: limit
+          in: query
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/MediaListResponse"
+        default:
+          $ref: "#/components/responses/DefaultError"
+
+  /api/v1/teacher/media/{id}:
+    get:
+      operationId: getTeacherMedia
+      tags: [TeacherMedia]
+      summary: Get teacher media asset
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/MediaAsset"
+        "404":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        default:
+          $ref: "#/components/responses/DefaultError"
+    patch:
+      operationId: patchTeacherMedia
+      tags: [TeacherMedia]
+      summary: Update teacher media
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/PatchMediaRequest"
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/MediaAsset"
+        default:
+          $ref: "#/components/responses/DefaultError"
+    delete:
+      operationId: deleteTeacherMedia
+      tags: [TeacherMedia]
+      summary: Delete teacher media
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        "204":
+          description: No content
+        default:
+          $ref: "#/components/responses/DefaultError"
+
+  /api/v1/teacher/languages/{code}/media/platform:
+    get:
+      operationId: listTeacherPlatformMedia
+      tags: [TeacherMedia]
+      summary: Read-only platform media picker
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: code
+          in: path
+          required: true
+          schema:
+            type: string
+        - name: q
+          in: query
+          schema:
+            type: string
+        - name: kind
+          in: query
+          schema:
+            type: string
+        - name: page
+          in: query
+          schema:
+            type: integer
+        - name: limit
+          in: query
+          schema:
+            type: integer
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/MediaListResponse"
+        default:
+          $ref: "#/components/responses/DefaultError"
+
 components:
   securitySchemes:
     bearerAuth:

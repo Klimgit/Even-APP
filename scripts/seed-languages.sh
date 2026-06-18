@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Bootstrap evn + ru via lexicon API. Uses fixed platform-admin@even.local.
+# Bootstrap evn + ru via lexicon API. Uses fixed admin@even.local.
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"

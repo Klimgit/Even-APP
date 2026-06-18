@@ -26,13 +26,19 @@ until curl -sf http://localhost:8080/api/v1/ready >/dev/null 2>&1; do
   sleep 2
 done
 
-echo "→ dev seed (cleanup + evn/ru + Even alphabet)..."
+echo "→ dev seed (cleanup + dev accounts + evn/ru + Even alphabet)..."
 ./scripts/seed-dev.sh
 
 echo ""
 echo "✓ Even-APP is up"
 echo ""
 echo "  Gateway   http://localhost:8080"
+echo "  Flutter   just mobile-web  →  http://localhost:5173"
+echo ""
+# shellcheck source=lib/bootstrap-admin.sh
+source "$ROOT/scripts/lib/bootstrap-admin.sh"
+bootstrap_print_dev_accounts
+echo ""
 echo "  Auth      http://localhost:8081"
 echo "  Media     http://localhost:8085"
 echo "  Lexicon   http://localhost:8082"

@@ -18,7 +18,9 @@ swagger:
     set -euo pipefail
     mkdir -p {{ gen_swagger_out }}
     ogen --target {{ gen_swagger_out }} --package http_v1 --config api/http/v1/.ogen.yml --clean api/http/v1/api.yaml
-    cd ../.. && go run ./_misc/openapi-handler-gen/ services/lexicon/{{ gen_swagger_out }}/openapi_handler.go http_v1 openapi.yaml
+    cd ../..
+    go run ./_misc/openapi-handler-gen/ services/lexicon/{{ gen_swagger_out }}/openapi_handler.go http_v1 openapi.yaml
+    go run ./_misc/handler-stub-gen/ services/lexicon/internal/gen/http/v1/oas_server_gen.go services/lexicon/internal/handler github.com/even-app/even-app/services/lexicon/internal/gen/http/v1 http_v1
 
 sqlc:
     @cd database && sqlc generate

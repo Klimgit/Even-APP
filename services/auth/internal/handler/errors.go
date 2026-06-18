@@ -18,6 +18,7 @@ var errToHTTPStatus = map[error]int{
 	domain.ErrConflict:     409,
 	domain.ErrUnauthorized: 401,
 	domain.ErrForbidden:    403,
+	domain.ErrValidation:   400,
 }
 
 func (h *HTTPHandler) NewError(ctx context.Context, err error) *http_v1.DefaultErrorStatusCode {

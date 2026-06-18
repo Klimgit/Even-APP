@@ -18,7 +18,7 @@ code() { curl -s -o "$BODY" -w "%{http_code}" "$@"; }
 # shellcheck source=lib/bootstrap-admin.sh
 source "$ROOT/scripts/lib/bootstrap-admin.sh"
 bootstrap_ensure_admin || { fail "bootstrap admin"; exit 1; }
-pass "login platform-admin@even.local"
+pass "login ${PLATFORM_ADMIN_EMAIL:-admin@even.local}"
 
 export EVN_MEDIA_ID=$(docker compose exec -T postgres psql -U even -d even_media -tAc "SELECT id FROM languages WHERE code='evn'")
 export RU_LEX_ID=$(docker compose exec -T postgres psql -U even -d even_lexicon -tAc "SELECT id FROM languages WHERE code='ru'")
@@ -179,7 +179,86 @@ c=$(code -H "Authorization: Bearer invalid" "$GW/api/v1/platform/languages")
 c=$(code -H "Authorization: Bearer $STOKEN" "$GW/api/v1/platform/languages"); expect 403 "$c" "student platform"
 
 echo ""
-echo "=== 11. Cleanup verify lang ==="
+echo "=== 11. Platform users ==="
+c=$(code -H "Authorization: Bearer $TOKEN" "$GW/api/v1/platform/users?limit=5"); expect 200 "$c" "GET /platform/users"
+c=$(code -H "Authorization: Bearer $TOKEN" -X PATCH "$GW/api/v1/platform/users/$USER_ID" \
+  -H 'Content-Type: application/json' -d '{"display_name":"Platform Admin"}'); expect 200 "$c" "PATCH /platform/users/{id}"
+c=$(code -H "Authorization: Bearer $STOKEN" "$GW/api/v1/platform/users"); expect 403 "$c" "student platform/users"
+
+echo ""
+echo "=== 12. Teacher lexicon (read-only) ==="
+c=$(code -H "Authorization: Bearer $TOKEN" -X POST "$GW/api/v1/platform/languages/evn/lexicon" \
+  -H 'Content-Type: application/json' \
+  -d "{\"lemma\":\"teacherpick$RANDOM\",\"translations\":[{\"target_language_id\":\"$RU_LEX_ID\",\"text\":\"пикер\"}]}")
+expect 201 "$c" "POST evn lexeme for teacher picker"
+PICK_LEX=$(python3 -c "import json; print(json.load(open('$BODY'))['id'])")
+c=$(code -H "Authorization: Bearer $TOKEN" "$GW/api/v1/teacher/languages/evn/lexicon?q=teacherpick"); expect 200 "$c" "GET teacher/languages/evn/lexicon"
+c=$(code -H "Authorization: Bearer $TOKEN" "$GW/api/v1/teacher/lexemes/$PICK_LEX"); expect 200 "$c" "GET teacher/lexemes/{id}"
+c=$(code -H "Authorization: Bearer $TOKEN" "$GW/api/v1/teacher/lexemes/$PICK_LEX/usage?course_id=00000000-0000-4000-8000-000000000001"); expect 200 "$c" "GET teacher/lexemes/{id}/usage"
+
+echo ""
+echo "=== 13. Teacher media ==="
+c=$(code -H "Authorization: Bearer $TOKEN" -X POST "$GW/api/v1/teacher/media/presign" \
+  -H 'Content-Type: application/json' \
+  -d "{\"filename\":\"t.png\",\"mime_type\":\"image/png\",\"size_bytes\":68,\"language_id\":\"$EVN_MEDIA_ID\"}")
+expect 200 "$c" "POST teacher/media/presign"
+TOBJ=$(python3 -c "import json; print(json.load(open('$BODY'))['object_key'])")
+TUP=$(python3 -c "import json; print(json.load(open('$BODY'))['upload_url'])")
+TMID=$(python3 -c "import json; print(json.load(open('$BODY'))['media_asset_id'])")
+c=$(code -X PUT "$TUP" -H 'Content-Type: image/png' --data-binary @/tmp/verify.png); expect 200 "$c" "PUT teacher media MinIO"
+c=$(code -H "Authorization: Bearer $TOKEN" -X POST "$GW/api/v1/teacher/media/confirm" \
+  -H 'Content-Type: application/json' \
+  -d "{\"object_key\":\"$TOBJ\",\"mime_type\":\"image/png\",\"size_bytes\":68,\"display_name\":\"Teacher\",\"language_id\":\"$EVN_MEDIA_ID\",\"ttl_seconds\":86400}")
+expect 201 "$c" "POST teacher/media/confirm"
+c=$(code -H "Authorization: Bearer $TOKEN" "$GW/api/v1/teacher/media"); expect 200 "$c" "GET teacher/media"
+c=$(code -H "Authorization: Bearer $TOKEN" "$GW/api/v1/teacher/media/$TMID"); expect 200 "$c" "GET teacher/media/{id}"
+c=$(code -H "Authorization: Bearer $TOKEN" -X PATCH "$GW/api/v1/teacher/media/$TMID" \
+  -H 'Content-Type: application/json' -d '{"display_name":"Teacher v2"}'); expect 200 "$c" "PATCH teacher/media/{id}"
+c=$(code -H "Authorization: Bearer $TOKEN" "$GW/api/v1/teacher/languages/evn/media/platform"); expect 200 "$c" "GET teacher/languages/evn/media/platform"
+c=$(code -H "Authorization: Bearer $TOKEN" -X DELETE "$GW/api/v1/teacher/media/$TMID"); expect 204 "$c" "DELETE teacher/media/{id}"
+
+echo ""
+echo "=== 14. Content teacher ==="
+c=$(code -H "Authorization: Bearer $TOKEN" "$GW/api/v1/teacher/block-types"); expect 200 "$c" "GET teacher/block-types"
+python3 -c "import json; d=json.load(open('$BODY')); assert len(d)>=2" || fail "block-types categories"
+pass "block-types catalog"
+
+echo ""
+echo "=== 15. Seed «Знакомство» + learning e2e ==="
+# shellcheck disable=SC1091
+source "$ROOT/scripts/seed-znakomstvo.sh"
+c=$(code -H "Authorization: Bearer $TOKEN" "$GW/api/v1/teacher/courses/$ZNAKOMSTVO_COURSE_ID/lexicon"); expect 200 "$c" "GET course lexicon coverage"
+c=$(code -H "Authorization: Bearer $TOKEN" "$GW/api/v1/teacher/courses/$ZNAKOMSTVO_COURSE_ID/invite-code"); expect 200 "$c" "GET invite code"
+
+JOIN_STU="verify-join-$RANDOM@example.com"
+c=$(code -X POST "$GW/api/v1/auth/register" -H 'Content-Type: application/json' \
+  -d "{\"email\":\"$JOIN_STU\",\"password\":\"password123\",\"role\":\"student\"}"); expect 201 "$c" "register join student"
+c=$(code -X POST "$GW/api/v1/auth/login" -H 'Content-Type: application/json' \
+  -d "{\"email\":\"$JOIN_STU\",\"password\":\"password123\"}"); expect 200 "$c" "login join student"
+JTOKEN=$(python3 -c "import json; print(json.load(open('$BODY'))['access_token'])")
+
+c=$(code -H "Authorization: Bearer $JTOKEN" -X POST "$GW/api/v1/courses/join" \
+  -H 'Content-Type: application/json' \
+  -d "{\"invite_code\":\"$ZNAKOMSTVO_INVITE_CODE\"}"); expect 201 "$c" "POST /courses/join"
+c=$(code -H "Authorization: Bearer $JTOKEN" "$GW/api/v1/courses"); expect 200 "$c" "GET /courses"
+c=$(code -H "Authorization: Bearer $JTOKEN" "$GW/api/v1/courses/$ZNAKOMSTVO_COURSE_ID"); expect 200 "$c" "GET /courses/{id}"
+c=$(code -H "Authorization: Bearer $JTOKEN" "$GW/api/v1/courses/$ZNAKOMSTVO_COURSE_ID/lessons"); expect 200 "$c" "GET /courses/{id}/lessons"
+c=$(code -H "Authorization: Bearer $JTOKEN" "$GW/api/v1/courses/$ZNAKOMSTVO_COURSE_ID/outline"); expect 200 "$c" "GET /courses/{id}/outline"
+python3 -c "import json; d=json.load(open('$BODY')); assert d.get('lessons') and len(d['lessons'])>=1" || fail "outline lessons empty"
+pass "course outline tree"
+c=$(code -H "Authorization: Bearer $JTOKEN" "$GW/api/v1/lessons/$ZNAKOMSTVO_LESSON_ID"); expect 200 "$c" "GET /lessons/{id}"
+c=$(code -H "Authorization: Bearer $JTOKEN" "$GW/api/v1/lessons/$ZNAKOMSTVO_LESSON_ID/flow"); expect 200 "$c" "GET /lessons/{id}/flow"
+c=$(code -H "Authorization: Bearer $JTOKEN" -X POST "$GW/api/v1/progress/blocks/$ZNAKOMSTVO_GRADABLE_BLOCK_ID/attempt" \
+  -H 'Content-Type: application/json' \
+  -d '{"response":{"selected_index":0}}'); expect 200 "$c" "POST block attempt"
+python3 -c "import json; d=json.load(open('$BODY')); assert d.get('is_correct') is True" || fail "attempt not correct"
+pass "gradable attempt scored"
+c=$(code -H "Authorization: Bearer $JTOKEN" "$GW/api/v1/progress/lessons/$ZNAKOMSTVO_LESSON_ID"); expect 200 "$c" "GET lesson progress"
+c=$(code -H "Authorization: Bearer $JTOKEN" "$GW/api/v1/review"); expect 200 "$c" "GET /review"
+c=$(code -H "Authorization: Bearer $JTOKEN" "$GW/api/v1/dictionary?course_id=$ZNAKOMSTVO_COURSE_ID"); expect 200 "$c" "GET /dictionary"
+
+echo ""
+echo "=== 16. Cleanup verify lang ==="
 docker compose exec -T postgres psql -U even -d even_lexicon -c \
   "DELETE FROM languages WHERE code='$V_CODE';" >/dev/null
 pass "removed $V_CODE"
