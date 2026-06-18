@@ -12,13 +12,23 @@ bin/
 .idea/
 .vscode/
 
-# Flutter
-apps/mobile/.dart_tool/
-apps/mobile/build/
-apps/mobile/.flutter-plugins
-apps/mobile/.flutter-plugins-dependencies
-apps/mobile/.metadata
-web/
+# Frontend — Flutter app (frontend/flutter)
+frontend/flutter/.dart_tool/
+frontend/flutter/build/
+frontend/flutter/.flutter-plugins
+frontend/flutter/.flutter-plugins-dependencies
+frontend/flutter/android/.gradle/
+frontend/flutter/android/app/.cxx/
+frontend/flutter/ios/Pods/
+frontend/flutter/*.log
+
+# Frontend — admin panel (frontend/admin)
+frontend/admin/node_modules/
+frontend/admin/build/
 
 # OS
 .DS_Store
+
+# Secrets — never commit service account keys
+frontend/admin/src/firebase/serviceAccountKey.json
+**/serviceAccountKey.json
