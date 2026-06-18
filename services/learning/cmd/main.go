@@ -67,7 +67,7 @@ func main() {
 	mux.Handle("GET /api/v1/openapi.yaml", http_v1.SpecHandler())
 	mux.Handle("/", oasServer)
 
-	handler := middleware.CORS(middleware.Recovery(logr, middleware.Logging(logr, mux)))
+	handler := middleware.Recovery(logr, middleware.Logging(logr, mux))
 
 	if err := server.Run(ctx, server.Options{
 		ServiceName: "learning",

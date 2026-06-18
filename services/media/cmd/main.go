@@ -9,15 +9,15 @@ import (
 	"syscall"
 
 	"github.com/even-app/even-app/libs/core/logger"
-	libjwt "github.com/even-app/even-app/libs/jwt"
 	"github.com/even-app/even-app/libs/http/middleware"
 	"github.com/even-app/even-app/libs/http/server"
+	libjwt "github.com/even-app/even-app/libs/jwt"
 	"github.com/even-app/even-app/libs/postgres"
 	libs3 "github.com/even-app/even-app/libs/s3"
 	"github.com/even-app/even-app/services/media/internal/config"
-	mediahandler "github.com/even-app/even-app/services/media/internal/handler"
 	http_v1 "github.com/even-app/even-app/services/media/internal/gen/http/v1"
 	"github.com/even-app/even-app/services/media/internal/gen/query"
+	mediahandler "github.com/even-app/even-app/services/media/internal/handler"
 	"github.com/even-app/even-app/services/media/internal/service"
 	"github.com/joho/godotenv"
 )
@@ -64,7 +64,7 @@ func main() {
 	mux.Handle("GET /api/v1/openapi.yaml", http_v1.SpecHandler())
 	mux.Handle("/", oasServer)
 
-	handler := middleware.CORS(middleware.Recovery(logr, middleware.Logging(logr, mux)))
+	handler := middleware.Recovery(logr, middleware.Logging(logr, mux))
 
 	if err := server.Run(ctx, server.Options{
 		ServiceName: "media",

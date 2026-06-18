@@ -36,17 +36,47 @@ func Recovery(log *slog.Logger, next http.Handler) http.Handler {
 }
 
 // CORS allows all origins for local dev (tighten in prod).
+// Headers are applied on WriteHeader so reverse-proxied upstream CORS is not duplicated.
 func CORS(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		w.Header().Set("Access-Control-Allow-Origin", "*")
-		w.Header().Set("Access-Control-Allow-Methods", "GET, POST, PUT, PATCH, DELETE, OPTIONS")
-		w.Header().Set("Access-Control-Allow-Headers", "Authorization, Content-Type")
 		if r.Method == http.MethodOptions {
+			setCORSHeaders(w)
 			w.WriteHeader(http.StatusNoContent)
 			return
 		}
-		next.ServeHTTP(w, r)
+		next.ServeHTTP(&corsWriter{ResponseWriter: w}, r)
 	})
+}
+
+func setCORSHeaders(w http.ResponseWriter) {
+	h := w.Header()
+	h.Del("Access-Control-Allow-Origin")
+	h.Del("Access-Control-Allow-Methods")
+	h.Del("Access-Control-Allow-Headers")
+	h.Set("Access-Control-Allow-Origin", "*")
+	h.Set("Access-Control-Allow-Methods", "GET, POST, PUT, PATCH, DELETE, OPTIONS")
+	h.Set("Access-Control-Allow-Headers", "Authorization, Content-Type")
+}
+
+type corsWriter struct {
+	http.ResponseWriter
+	headerWritten bool
+}
+
+func (w *corsWriter) WriteHeader(statusCode int) {
+	if !w.headerWritten {
+		setCORSHeaders(w.ResponseWriter)
+		w.headerWritten = true
+	}
+	w.ResponseWriter.WriteHeader(statusCode)
+}
+
+func (w *corsWriter) Write(b []byte) (int, error) {
+	if !w.headerWritten {
+		setCORSHeaders(w.ResponseWriter)
+		w.headerWritten = true
+	}
+	return w.ResponseWriter.Write(b)
 }
 
 type statusWriter struct {

@@ -9,14 +9,14 @@ import (
 	"syscall"
 
 	"github.com/even-app/even-app/libs/core/logger"
-	libjwt "github.com/even-app/even-app/libs/jwt"
 	"github.com/even-app/even-app/libs/http/middleware"
 	"github.com/even-app/even-app/libs/http/server"
+	libjwt "github.com/even-app/even-app/libs/jwt"
 	"github.com/even-app/even-app/libs/postgres"
 	"github.com/even-app/even-app/services/auth/internal/config"
-	authhandler "github.com/even-app/even-app/services/auth/internal/handler"
-	"github.com/even-app/even-app/services/auth/internal/gen/query"
 	http_v1 "github.com/even-app/even-app/services/auth/internal/gen/http/v1"
+	"github.com/even-app/even-app/services/auth/internal/gen/query"
+	authhandler "github.com/even-app/even-app/services/auth/internal/handler"
 	"github.com/even-app/even-app/services/auth/internal/service"
 	"github.com/joho/godotenv"
 )
@@ -58,7 +58,7 @@ func main() {
 	mux.Handle("GET /api/v1/openapi.yaml", http_v1.SpecHandler())
 	mux.Handle("/", oasServer)
 
-	handler := middleware.CORS(middleware.Recovery(logr, middleware.Logging(logr, mux)))
+	handler := middleware.Recovery(logr, middleware.Logging(logr, mux))
 
 	if err := server.Run(ctx, server.Options{
 		ServiceName: "auth",
