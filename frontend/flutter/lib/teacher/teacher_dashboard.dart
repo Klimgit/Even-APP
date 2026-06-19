@@ -122,7 +122,7 @@ class _TeacherDashboardState extends State<TeacherDashboard> {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            _sideItem('Мои классы', _TeacherSection.classes),
+            _sideItem('Мои курсы', _TeacherSection.classes),
             const SizedBox(height: 8),
             _sideItem('Ученики', _TeacherSection.students),
             const SizedBox(height: 8),
@@ -211,10 +211,10 @@ class _ClassesSectionState extends State<_ClassesSection> {
         children: [
           Row(
             children: [
-              _tab('Мои классы', !_showPublic,
+              _tab('Мои курсы', !_showPublic,
                   () => setState(() => _showPublic = false)),
               const SizedBox(width: 24),
-              _tab('Публичные классы', _showPublic,
+              _tab('Публичные курсы', _showPublic,
                   () => setState(() => _showPublic = true)),
             ],
           ),
@@ -335,7 +335,7 @@ class _ClassesSectionState extends State<_ClassesSection> {
         child: Row(
           children: [
             const Text(
-              'Создать новый класс',
+              'Создать новый курс',
               style: TextStyle(fontSize: 14, fontWeight: FontWeight.w500),
             ),
             const Spacer(),
@@ -354,7 +354,7 @@ class _ClassesSectionState extends State<_ClassesSection> {
       context: context,
       builder: (context) => StatefulBuilder(
         builder: (context, setDialogState) => AlertDialog(
-          title: const Text('Новый класс'),
+          title: const Text('Новый курс'),
           content: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
@@ -362,7 +362,7 @@ class _ClassesSectionState extends State<_ClassesSection> {
                 controller: controller,
                 autofocus: true,
                 decoration: const InputDecoration(
-                  hintText: 'Название класса',
+                  hintText: 'Название курса',
                 ),
               ),
               const SizedBox(height: 8),
