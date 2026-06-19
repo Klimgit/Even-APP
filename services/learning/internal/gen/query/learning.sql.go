@@ -307,7 +307,45 @@ SELECT
          SELECT COUNT(*)::int
          FROM jsonb_array_elements(pls.snapshot->'blocks') AS elem
          WHERE COALESCE((elem->>'is_gradable')::bool, false) = true
-     )) AS completed_lessons
+     )) AS completed_lessons,
+    (SELECT COUNT(*)::int
+     FROM published_lesson_snapshots pls
+     JOIN course_enrollments ce ON ce.course_id = pls.course_id AND ce.user_id = $1 AND ce.status = 'active'
+     WHERE (
+         SELECT COUNT(*)::int
+         FROM jsonb_array_elements(pls.snapshot->'blocks') AS elem
+         WHERE COALESCE((elem->>'is_gradable')::bool, false) = true
+     ) > 0
+     AND (
+         SELECT COUNT(*) FILTER (WHERE ubp.status = 'completed')::int
+         FROM user_block_progress ubp
+         WHERE ubp.user_id = $1
+           AND ubp.lesson_block_id IN (
+               SELECT (elem->>'id')::uuid
+               FROM jsonb_array_elements(pls.snapshot->'blocks') AS elem
+               WHERE COALESCE((elem->>'is_gradable')::bool, false) = true
+           )
+     ) > 0
+     AND (
+         SELECT COUNT(*) FILTER (WHERE ubp.status = 'completed')::int
+         FROM user_block_progress ubp
+         WHERE ubp.user_id = $1
+           AND ubp.lesson_block_id IN (
+               SELECT (elem->>'id')::uuid
+               FROM jsonb_array_elements(pls.snapshot->'blocks') AS elem
+               WHERE COALESCE((elem->>'is_gradable')::bool, false) = true
+           )
+     ) < (
+         SELECT COUNT(*)::int
+         FROM jsonb_array_elements(pls.snapshot->'blocks') AS elem
+         WHERE COALESCE((elem->>'is_gradable')::bool, false) = true
+     )) AS in_progress_lessons,
+    (SELECT COALESCE(AVG(ubp.score), 0)::float8
+     FROM user_block_progress ubp
+     WHERE ubp.user_id = $1 AND ubp.status = 'completed') AS average_score,
+    (SELECT COALESCE(SUM(ubp.time_spent_seconds), 0)::int
+     FROM user_block_progress ubp
+     WHERE ubp.user_id = $1) AS time_spent_seconds
 `
 
 type GetProgressSummaryParams struct {
@@ -315,11 +353,14 @@ type GetProgressSummaryParams struct {
 }
 
 type GetProgressSummaryRow struct {
-	EnrolledCourses  int32
-	DictionaryWords  int32
-	ReviewDue        int32
-	CompletedBlocks  int32
-	CompletedLessons int32
+	EnrolledCourses   int32
+	DictionaryWords   int32
+	ReviewDue         int32
+	CompletedBlocks   int32
+	CompletedLessons  int32
+	InProgressLessons int32
+	AverageScore      float64
+	TimeSpentSeconds  int32
 }
 
 // GetProgressSummary
@@ -350,7 +391,45 @@ type GetProgressSummaryRow struct {
 //	         SELECT COUNT(*)::int
 //	         FROM jsonb_array_elements(pls.snapshot->'blocks') AS elem
 //	         WHERE COALESCE((elem->>'is_gradable')::bool, false) = true
-//	     )) AS completed_lessons
+//	     )) AS completed_lessons,
+//	    (SELECT COUNT(*)::int
+//	     FROM published_lesson_snapshots pls
+//	     JOIN course_enrollments ce ON ce.course_id = pls.course_id AND ce.user_id = $1 AND ce.status = 'active'
+//	     WHERE (
+//	         SELECT COUNT(*)::int
+//	         FROM jsonb_array_elements(pls.snapshot->'blocks') AS elem
+//	         WHERE COALESCE((elem->>'is_gradable')::bool, false) = true
+//	     ) > 0
+//	     AND (
+//	         SELECT COUNT(*) FILTER (WHERE ubp.status = 'completed')::int
+//	         FROM user_block_progress ubp
+//	         WHERE ubp.user_id = $1
+//	           AND ubp.lesson_block_id IN (
+//	               SELECT (elem->>'id')::uuid
+//	               FROM jsonb_array_elements(pls.snapshot->'blocks') AS elem
+//	               WHERE COALESCE((elem->>'is_gradable')::bool, false) = true
+//	           )
+//	     ) > 0
+//	     AND (
+//	         SELECT COUNT(*) FILTER (WHERE ubp.status = 'completed')::int
+//	         FROM user_block_progress ubp
+//	         WHERE ubp.user_id = $1
+//	           AND ubp.lesson_block_id IN (
+//	               SELECT (elem->>'id')::uuid
+//	               FROM jsonb_array_elements(pls.snapshot->'blocks') AS elem
+//	               WHERE COALESCE((elem->>'is_gradable')::bool, false) = true
+//	           )
+//	     ) < (
+//	         SELECT COUNT(*)::int
+//	         FROM jsonb_array_elements(pls.snapshot->'blocks') AS elem
+//	         WHERE COALESCE((elem->>'is_gradable')::bool, false) = true
+//	     )) AS in_progress_lessons,
+//	    (SELECT COALESCE(AVG(ubp.score), 0)::float8
+//	     FROM user_block_progress ubp
+//	     WHERE ubp.user_id = $1 AND ubp.status = 'completed') AS average_score,
+//	    (SELECT COALESCE(SUM(ubp.time_spent_seconds), 0)::int
+//	     FROM user_block_progress ubp
+//	     WHERE ubp.user_id = $1) AS time_spent_seconds
 func (q *Queries) GetProgressSummary(ctx context.Context, arg GetProgressSummaryParams) (GetProgressSummaryRow, error) {
 	row := q.db.QueryRow(ctx, getProgressSummary, arg.UserID)
 	var i GetProgressSummaryRow
@@ -360,6 +439,9 @@ func (q *Queries) GetProgressSummary(ctx context.Context, arg GetProgressSummary
 		&i.ReviewDue,
 		&i.CompletedBlocks,
 		&i.CompletedLessons,
+		&i.InProgressLessons,
+		&i.AverageScore,
+		&i.TimeSpentSeconds,
 	)
 	return i, err
 }
@@ -390,7 +472,7 @@ func (q *Queries) GetPublishedLessonSnapshot(ctx context.Context, arg GetPublish
 }
 
 const getUserBlockProgress = `-- name: GetUserBlockProgress :one
-SELECT user_id, lesson_block_id, status, score, attempts, last_attempt_at FROM user_block_progress
+SELECT user_id, lesson_block_id, status, score, attempts, last_attempt_at, time_spent_seconds FROM user_block_progress
 WHERE user_id = $1 AND lesson_block_id = $2
 `
 
@@ -401,7 +483,7 @@ type GetUserBlockProgressParams struct {
 
 // GetUserBlockProgress
 //
-//	SELECT user_id, lesson_block_id, status, score, attempts, last_attempt_at FROM user_block_progress
+//	SELECT user_id, lesson_block_id, status, score, attempts, last_attempt_at, time_spent_seconds FROM user_block_progress
 //	WHERE user_id = $1 AND lesson_block_id = $2
 func (q *Queries) GetUserBlockProgress(ctx context.Context, arg GetUserBlockProgressParams) (UserBlockProgress, error) {
 	row := q.db.QueryRow(ctx, getUserBlockProgress, arg.UserID, arg.LessonBlockID)
@@ -413,6 +495,7 @@ func (q *Queries) GetUserBlockProgress(ctx context.Context, arg GetUserBlockProg
 		&i.Score,
 		&i.Attempts,
 		&i.LastAttemptAt,
+		&i.TimeSpentSeconds,
 	)
 	return i, err
 }
@@ -662,7 +745,7 @@ func (q *Queries) ListReviewItems(ctx context.Context, arg ListReviewItemsParams
 }
 
 const listUserBlockProgressForLesson = `-- name: ListUserBlockProgressForLesson :many
-SELECT ubp.user_id, ubp.lesson_block_id, ubp.status, ubp.score, ubp.attempts, ubp.last_attempt_at
+SELECT ubp.user_id, ubp.lesson_block_id, ubp.status, ubp.score, ubp.attempts, ubp.last_attempt_at, ubp.time_spent_seconds
 FROM user_block_progress ubp
 JOIN (
     SELECT (elem->>'id')::uuid AS block_id
@@ -680,7 +763,7 @@ type ListUserBlockProgressForLessonParams struct {
 
 // ListUserBlockProgressForLesson
 //
-//	SELECT ubp.user_id, ubp.lesson_block_id, ubp.status, ubp.score, ubp.attempts, ubp.last_attempt_at
+//	SELECT ubp.user_id, ubp.lesson_block_id, ubp.status, ubp.score, ubp.attempts, ubp.last_attempt_at, ubp.time_spent_seconds
 //	FROM user_block_progress ubp
 //	JOIN (
 //	    SELECT (elem->>'id')::uuid AS block_id
@@ -705,6 +788,7 @@ func (q *Queries) ListUserBlockProgressForLesson(ctx context.Context, arg ListUs
 			&i.Score,
 			&i.Attempts,
 			&i.LastAttemptAt,
+			&i.TimeSpentSeconds,
 		); err != nil {
 			return nil, err
 		}
@@ -877,34 +961,37 @@ func (q *Queries) UpsertReviewItemOnFailure(ctx context.Context, arg UpsertRevie
 }
 
 const upsertUserBlockProgress = `-- name: UpsertUserBlockProgress :one
-INSERT INTO user_block_progress (user_id, lesson_block_id, status, score, attempts, last_attempt_at)
-VALUES ($1, $2, $3, $4, $5, now())
+INSERT INTO user_block_progress (user_id, lesson_block_id, status, score, attempts, last_attempt_at, time_spent_seconds)
+VALUES ($1, $2, $3, $4, $5, now(), $6)
 ON CONFLICT (user_id, lesson_block_id) DO UPDATE SET
     status = EXCLUDED.status,
     score = EXCLUDED.score,
     attempts = EXCLUDED.attempts,
-    last_attempt_at = now()
-RETURNING user_id, lesson_block_id, status, score, attempts, last_attempt_at
+    last_attempt_at = now(),
+    time_spent_seconds = user_block_progress.time_spent_seconds + EXCLUDED.time_spent_seconds
+RETURNING user_id, lesson_block_id, status, score, attempts, last_attempt_at, time_spent_seconds
 `
 
 type UpsertUserBlockProgressParams struct {
-	UserID        uuid.UUID
-	LessonBlockID uuid.UUID
-	Status        string
-	Score         float32
-	Attempts      int32
+	UserID           uuid.UUID
+	LessonBlockID    uuid.UUID
+	Status           string
+	Score            float32
+	Attempts         int32
+	TimeSpentSeconds int32
 }
 
 // UpsertUserBlockProgress
 //
-//	INSERT INTO user_block_progress (user_id, lesson_block_id, status, score, attempts, last_attempt_at)
-//	VALUES ($1, $2, $3, $4, $5, now())
+//	INSERT INTO user_block_progress (user_id, lesson_block_id, status, score, attempts, last_attempt_at, time_spent_seconds)
+//	VALUES ($1, $2, $3, $4, $5, now(), $6)
 //	ON CONFLICT (user_id, lesson_block_id) DO UPDATE SET
 //	    status = EXCLUDED.status,
 //	    score = EXCLUDED.score,
 //	    attempts = EXCLUDED.attempts,
-//	    last_attempt_at = now()
-//	RETURNING user_id, lesson_block_id, status, score, attempts, last_attempt_at
+//	    last_attempt_at = now(),
+//	    time_spent_seconds = user_block_progress.time_spent_seconds + EXCLUDED.time_spent_seconds
+//	RETURNING user_id, lesson_block_id, status, score, attempts, last_attempt_at, time_spent_seconds
 func (q *Queries) UpsertUserBlockProgress(ctx context.Context, arg UpsertUserBlockProgressParams) (UserBlockProgress, error) {
 	row := q.db.QueryRow(ctx, upsertUserBlockProgress,
 		arg.UserID,
@@ -912,6 +999,7 @@ func (q *Queries) UpsertUserBlockProgress(ctx context.Context, arg UpsertUserBlo
 		arg.Status,
 		arg.Score,
 		arg.Attempts,
+		arg.TimeSpentSeconds,
 	)
 	var i UserBlockProgress
 	err := row.Scan(
@@ -921,6 +1009,7 @@ func (q *Queries) UpsertUserBlockProgress(ctx context.Context, arg UpsertUserBlo
 		&i.Score,
 		&i.Attempts,
 		&i.LastAttemptAt,
+		&i.TimeSpentSeconds,
 	)
 	return i, err
 }

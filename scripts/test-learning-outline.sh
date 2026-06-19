@@ -33,8 +33,10 @@ python3 - "$BODY" <<'PY'
 import json, sys
 d = json.load(open(sys.argv[1]))
 assert d.get("course_id"), "missing course_id"
-assert d.get("lessons"), "missing lessons"
-lesson = d["lessons"][0]
+assert d.get("modules"), "missing modules"
+module = d["modules"][0]
+assert module.get("lessons"), "missing lessons in module"
+lesson = module["lessons"][0]
 assert lesson.get("sections"), "missing sections"
 blocks = lesson["sections"][0].get("blocks") or []
 assert blocks, "missing blocks"

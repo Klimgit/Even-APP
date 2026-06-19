@@ -8,8 +8,10 @@ import (
 	"github.com/google/uuid"
 )
 
+type Lesson = query.GetLessonByIDRow
+
 type LessonFull struct {
-	Lesson   query.Lesson
+	Lesson   Lesson
 	Sections []SectionFull
 }
 
@@ -18,7 +20,7 @@ type SectionFull struct {
 	Blocks  []query.LessonBlock
 }
 
-func (s *ContentService) buildLessonFull(ctx context.Context, lesson query.Lesson) (LessonFull, error) {
+func (s *ContentService) buildLessonFull(ctx context.Context, lesson Lesson) (LessonFull, error) {
 	sections, err := s.q.ListSectionsByLessonID(ctx, lesson.ID)
 	if err != nil {
 		return LessonFull{}, err
@@ -44,46 +46,94 @@ func (s *ContentService) buildLessonFull(ctx context.Context, lesson query.Lesso
 	return LessonFull{Lesson: lesson, Sections: outSections}, nil
 }
 
-func (s *ContentService) ListLessons(ctx context.Context, courseID, userID uuid.UUID, isAdmin bool) ([]query.Lesson, error) {
+func (s *ContentService) ListLessons(ctx context.Context, courseID, userID uuid.UUID, isAdmin bool) ([]Lesson, error) {
 	if err := s.assertCourseOwner(ctx, courseID, userID, isAdmin); err != nil {
 		return nil, err
 	}
-	return s.q.ListLessonsByCourseID(ctx, courseID)
+	rows, err := s.q.ListLessonsByCourseID(ctx, courseID)
+	if err != nil {
+		return nil, err
+	}
+	out := make([]Lesson, len(rows))
+	for i, r := range rows {
+		out[i] = Lesson(r)
+	}
+	return out, nil
 }
 
-func (s *ContentService) CreateLesson(ctx context.Context, courseID, userID uuid.UUID, isAdmin bool, title string, sortOrder *int32) (query.Lesson, error) {
+func (s *ContentService) CreateLessonInCourse(ctx context.Context, courseID, userID uuid.UUID, isAdmin bool, title string, sortOrder *int32, moduleID *uuid.UUID) (Lesson, error) {
 	if err := s.assertCourseOwner(ctx, courseID, userID, isAdmin); err != nil {
-		return query.Lesson{}, err
+		return Lesson{}, err
+	}
+	modID := uuid.Nil
+	if moduleID != nil {
+		modID = *moduleID
+	} else {
+		mod, err := s.ensureDefaultModule(ctx, courseID)
+		if err != nil {
+			return Lesson{}, err
+		}
+		modID = mod.ID
+	}
+	return s.CreateLesson(ctx, modID, userID, isAdmin, title, sortOrder)
+}
+
+func (s *ContentService) ListPlatformCourses(ctx context.Context, search *string, page, limit int) ([]query.ListAllCoursesRow, int32, error) {
+	if page < 1 {
+		page = 1
+	}
+	if limit < 1 {
+		limit = 20
+	}
+	total, err := s.q.CountAllCourses(ctx, search)
+	if err != nil {
+		return nil, 0, err
+	}
+	rows, err := s.q.ListAllCourses(ctx, query.ListAllCoursesParams{
+		Search: search, Limit: int32(limit), Offset: int32((page - 1) * limit),
+	})
+	return rows, total, err
+}
+
+func (s *ContentService) CreateLesson(ctx context.Context, moduleID, userID uuid.UUID, isAdmin bool, title string, sortOrder *int32) (Lesson, error) {
+	if err := s.assertModuleOwner(ctx, moduleID, userID, isAdmin); err != nil {
+		return Lesson{}, err
+	}
+	mod, err := s.q.GetModuleByID(ctx, moduleID)
+	if err != nil {
+		return Lesson{}, mapNotFound(err)
 	}
 	if title == "" {
-		return query.Lesson{}, domain.ErrValidation
+		return Lesson{}, domain.ErrValidation
 	}
 	order := int32(0)
 	if sortOrder != nil {
 		order = *sortOrder
 	} else {
-		max, err := s.q.MaxLessonSortOrder(ctx, courseID)
+		max, err := s.q.MaxLessonSortOrderByModule(ctx, moduleID)
 		if err != nil {
-			return query.Lesson{}, err
+			return Lesson{}, err
 		}
 		order = int32(max + 1)
 	}
-	return s.q.CreateLesson(ctx, query.CreateLessonParams{
-		CourseID:  courseID,
-		Title:     title,
-		SortOrder: order,
+	row, err := s.q.CreateLesson(ctx, query.CreateLessonParams{
+		CourseID: mod.CourseID, ModuleID: moduleID, Title: title, SortOrder: order,
 	})
+	if err != nil {
+		return Lesson{}, err
+	}
+	return Lesson(row), nil
 }
 
 func (s *ContentService) GetLesson(ctx context.Context, lessonID, userID uuid.UUID, isAdmin bool) (LessonFull, error) {
 	if err := s.assertLessonOwner(ctx, lessonID, userID, isAdmin); err != nil {
 		return LessonFull{}, err
 	}
-	lesson, err := s.q.GetLessonByID(ctx, lessonID)
+	row, err := s.q.GetLessonByID(ctx, lessonID)
 	if err != nil {
 		return LessonFull{}, mapNotFound(err)
 	}
-	return s.buildLessonFull(ctx, lesson)
+	return s.buildLessonFull(ctx, Lesson(row))
 }
 
 func (s *ContentService) PatchLesson(ctx context.Context, lessonID, userID uuid.UUID, isAdmin bool, expectedVersion int32, params query.UpdateLessonParams) (LessonFull, error) {
@@ -102,7 +152,7 @@ func (s *ContentService) PatchLesson(ctx context.Context, lessonID, userID uuid.
 		}
 		return LessonFull{}, err
 	}
-	return s.buildLessonFull(ctx, lesson)
+	return s.buildLessonFull(ctx, Lesson(lesson))
 }
 
 func (s *ContentService) DeleteLesson(ctx context.Context, lessonID, userID uuid.UUID, isAdmin bool) error {
@@ -120,7 +170,7 @@ func (s *ContentService) PublishLesson(ctx context.Context, lessonID, userID uui
 	if err != nil {
 		return LessonFull{}, mapNotFound(err)
 	}
-	return s.buildLessonFull(ctx, lesson)
+	return s.buildLessonFull(ctx, Lesson(lesson))
 }
 
 func (s *ContentService) CreateSection(ctx context.Context, lessonID, userID uuid.UUID, isAdmin bool, title, kind string, sortOrder *int32) (query.LessonSection, error) {

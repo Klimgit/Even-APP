@@ -19,14 +19,17 @@ func TestMapCourseOutline(t *testing.T) {
 	out := mapCourseOutline(service.CourseOutline{
 		CourseID: courseID, Title: "Course", ProgressPercent: 33.3,
 		CurrentLessonID: &currentLesson, CurrentBlockID: &currentBlock,
-		Lessons: []service.OutlineLesson{{
-			ID: lessonID, Title: "L1", SortOrder: 1, ProgressPercent: 50,
-			Sections: []service.OutlineSection{{
-				ID: sectionID, Title: "Section", SortOrder: 0, ProgressPercent: 50,
-				Blocks: []service.OutlineBlock{{
-					ID: blockID, LessonID: lessonID, DisplayLabel: &label, Title: "Task",
-					SortOrder: 0, BlockType: "prompt_choose_word", IsGradable: true,
-					Status: "in_progress", ProgressPercent: 50, IsCurrent: true,
+		Modules: []service.OutlineModule{{
+			ID: courseID, Title: "Module", SortOrder: 0, ProgressPercent: 50,
+			Lessons: []service.OutlineLesson{{
+				ID: lessonID, Title: "L1", SortOrder: 1, ProgressPercent: 50,
+				Sections: []service.OutlineSection{{
+					ID: sectionID, Title: "Section", SortOrder: 0, ProgressPercent: 50,
+					Blocks: []service.OutlineBlock{{
+						ID: blockID, LessonID: lessonID, DisplayLabel: &label, Title: "Task",
+						SortOrder: 0, BlockType: "prompt_choose_word", IsGradable: true,
+						Status: "in_progress", ProgressPercent: 50, IsCurrent: true,
+					}},
 				}},
 			}},
 		}},
@@ -38,10 +41,10 @@ func TestMapCourseOutline(t *testing.T) {
 	if !out.CurrentLessonID.IsSet() || out.CurrentLessonID.Value != currentLesson {
 		t.Fatalf("current lesson not mapped: %+v", out.CurrentLessonID)
 	}
-	if len(out.Lessons) != 1 || len(out.Lessons[0].Sections) != 1 || len(out.Lessons[0].Sections[0].Blocks) != 1 {
-		t.Fatalf("tree not mapped: %+v", out.Lessons)
+	if len(out.Modules) != 1 || len(out.Modules[0].Lessons) != 1 || len(out.Modules[0].Lessons[0].Sections) != 1 || len(out.Modules[0].Lessons[0].Sections[0].Blocks) != 1 {
+		t.Fatalf("tree not mapped: %+v", out.Modules)
 	}
-	block := out.Lessons[0].Sections[0].Blocks[0]
+	block := out.Modules[0].Lessons[0].Sections[0].Blocks[0]
 	if !block.DisplayLabel.IsSet() || block.DisplayLabel.Value != label {
 		t.Fatalf("display label not mapped: %+v", block.DisplayLabel)
 	}

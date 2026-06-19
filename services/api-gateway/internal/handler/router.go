@@ -32,6 +32,8 @@ func New(cfg config.Config, jwtMgr *libjwt.Manager) (http.Handler, error) {
 	authBase := strings.TrimRight(cfg.AuthURL, "/") + "/"
 	lexiconBase := strings.TrimRight(cfg.LexiconURL, "/") + "/"
 
+	contentBase := strings.TrimRight(cfg.ContentURL, "/") + "/"
+
 	if err := proxy.Mount(mux, "/api/v1/platform/users/", authBase); err != nil {
 		return nil, err
 	}
@@ -39,6 +41,15 @@ func New(cfg config.Config, jwtMgr *libjwt.Manager) (http.Handler, error) {
 		return nil, err
 	}
 	if err := proxy.MountPattern(mux, "/api/v1/platform/stats", authBase); err != nil {
+		return nil, err
+	}
+	if err := proxy.MountPattern(mux, "/api/v1/platform/audit", authBase); err != nil {
+		return nil, err
+	}
+	if err := proxy.MountPattern(mux, "/api/v1/platform/courses", contentBase); err != nil {
+		return nil, err
+	}
+	if err := proxy.MountPattern(mux, "/api/v1/platform/enrollments", contentBase); err != nil {
 		return nil, err
 	}
 	if err := proxy.Mount(mux, "/api/v1/teacher/media/", mediaBase); err != nil {
@@ -55,6 +66,15 @@ func New(cfg config.Config, jwtMgr *libjwt.Manager) (http.Handler, error) {
 	}
 	if err := proxy.Mount(mux, "/api/v1/teacher/lexemes/", lexiconBase); err != nil {
 		return nil, err
+	}
+	for _, prefix := range []string{
+		"/api/v1/teacher/lexeme-forms/",
+		"/api/v1/teacher/lexeme-translations/",
+		"/api/v1/teacher/lexeme-media/",
+	} {
+		if err := proxy.Mount(mux, prefix, lexiconBase); err != nil {
+			return nil, err
+		}
 	}
 	if err := proxy.MountPattern(mux, "/api/v1/platform/languages/{code}/media", mediaBase); err != nil {
 		return nil, err

@@ -57,6 +57,13 @@ type CourseView struct {
 	InviteCode       string
 }
 
+type ModuleView struct {
+	ID        uuid.UUID
+	CourseID  uuid.UUID
+	Title     string
+	SortOrder int
+}
+
 type LessonSummary struct {
 	ID               uuid.UUID
 	Title            string

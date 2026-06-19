@@ -167,7 +167,7 @@ func (s *ContentService) syncPublishedLessonsForCourse(ctx context.Context, cour
 		if lesson.Status != "published" {
 			continue
 		}
-		full, err := s.buildLessonFull(ctx, lesson)
+		full, err := s.buildLessonFull(ctx, Lesson(lesson))
 		if err != nil {
 			return err
 		}

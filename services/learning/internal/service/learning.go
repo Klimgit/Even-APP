@@ -155,6 +155,14 @@ type CourseOutline struct {
 	ProgressPercent float64
 	CurrentLessonID *uuid.UUID
 	CurrentBlockID  *uuid.UUID
+	Modules         []OutlineModule
+}
+
+type OutlineModule struct {
+	ID              uuid.UUID
+	Title           string
+	SortOrder       int
+	ProgressPercent float64
 	Lessons         []OutlineLesson
 }
 
@@ -209,83 +217,143 @@ func (s *LearningService) GetCourseOutline(ctx context.Context, userID, courseID
 
 	outline := &CourseOutline{
 		CourseID: courseID, Title: course.Title, ProgressPercent: coursePct,
-		Lessons: make([]OutlineLesson, 0, len(snaps)),
+		Modules: make([]OutlineModule, 0),
 	}
-	var currentLessonID *uuid.UUID
-	var currentBlockID *uuid.UUID
+
+	lessonModuleIDs := map[uuid.UUID]uuid.UUID{}
+	modulesMeta := []domain.ModuleView{}
+	if s.content.Available() {
+		if mods, err := s.content.ListCourseModules(ctx, courseID); err == nil {
+			modulesMeta = mods
+		}
+		if ids, err := s.content.LessonModuleIDs(ctx, courseID); err == nil {
+			lessonModuleIDs = ids
+		}
+	}
+
+	lessonsByModule := map[uuid.UUID][]OutlineLesson{}
+	defaultModuleID := courseID
 
 	for _, snapRow := range snaps {
 		snap, err := repository.SnapshotFromRow(snapRow.Snapshot)
 		if err != nil {
 			continue
 		}
-		progRows, err := s.q.ListUserBlockProgressForLesson(ctx, query.ListUserBlockProgressForLessonParams{
-			UserID: userID, LessonID: snap.ID,
-		})
-		if err != nil {
-			return nil, err
+		lesson := s.buildOutlineLesson(ctx, userID, snap)
+		modID := lessonModuleIDs[snap.ID]
+		if modID == uuid.Nil {
+			modID = defaultModuleID
 		}
-		byBlock := map[uuid.UUID]query.UserBlockProgress{}
-		for _, r := range progRows {
-			byBlock[r.LessonBlockID] = r
-		}
-
-		lesson := OutlineLesson{
-			ID: snap.ID, Title: snap.Title, SortOrder: snap.SortOrder,
-			ProgressPercent: s.lessonCompletedPercent(ctx, userID, snap.ID),
-			Sections:        make([]OutlineSection, 0),
-		}
-
-		blocksBySection := map[uuid.UUID][]OutlineBlock{}
-		orphanBlocks := make([]OutlineBlock, 0)
-
-		for _, b := range snap.Blocks {
-			ob := outlineBlockFromSnap(snap.ID, b, byBlock[b.ID])
-			if b.SectionID != nil {
-				blocksBySection[*b.SectionID] = append(blocksBySection[*b.SectionID], ob)
-			} else {
-				orphanBlocks = append(orphanBlocks, ob)
-			}
-		}
-
-		for _, sec := range snap.Sections {
-			secBlocks := blocksBySection[sec.ID]
-			lesson.Sections = append(lesson.Sections, OutlineSection{
-				ID: sec.ID, Title: sec.Title, SortOrder: sec.SortOrder,
-				ProgressPercent: sectionProgressPercent(secBlocks),
-				Blocks:          secBlocks,
-			})
-		}
-		if len(orphanBlocks) > 0 {
-			if len(lesson.Sections) == 0 {
-				lesson.Sections = append(lesson.Sections, OutlineSection{
-					ID: snap.ID, Title: "Content", SortOrder: 0,
-					ProgressPercent: sectionProgressPercent(orphanBlocks),
-					Blocks:          orphanBlocks,
-				})
-			} else {
-				lesson.Sections[0].Blocks = append(orphanBlocks, lesson.Sections[0].Blocks...)
-				lesson.Sections[0].ProgressPercent = sectionProgressPercent(lesson.Sections[0].Blocks)
-			}
-		}
-		outline.Lessons = append(outline.Lessons, lesson)
+		lessonsByModule[modID] = append(lessonsByModule[modID], lesson)
 	}
 
-	currentLessonID, currentBlockID = pickCurrentOutlineBlock(outline.Lessons)
+	if len(modulesMeta) > 0 {
+		for _, mod := range modulesMeta {
+			lessons := lessonsByModule[mod.ID]
+			outline.Modules = append(outline.Modules, OutlineModule{
+				ID: mod.ID, Title: mod.Title, SortOrder: mod.SortOrder,
+				ProgressPercent: moduleProgressPercent(lessons),
+				Lessons:         lessons,
+			})
+		}
+	} else {
+		allLessons := lessonsByModule[defaultModuleID]
+		outline.Modules = []OutlineModule{{
+			ID: courseID, Title: course.Title, SortOrder: 0,
+			ProgressPercent: moduleProgressPercent(allLessons),
+			Lessons:         allLessons,
+		}}
+	}
+
+	allLessons := flattenOutlineLessons(outline.Modules)
+	currentLessonID, currentBlockID := pickCurrentOutlineBlock(allLessons)
 
 	if currentBlockID != nil {
 		outline.CurrentLessonID = currentLessonID
 		outline.CurrentBlockID = currentBlockID
-		for li := range outline.Lessons {
-			for si := range outline.Lessons[li].Sections {
-				for bi := range outline.Lessons[li].Sections[si].Blocks {
-					b := &outline.Lessons[li].Sections[si].Blocks[bi]
-					b.IsCurrent = b.ID == *currentBlockID
+		for mi := range outline.Modules {
+			for li := range outline.Modules[mi].Lessons {
+				for si := range outline.Modules[mi].Lessons[li].Sections {
+					for bi := range outline.Modules[mi].Lessons[li].Sections[si].Blocks {
+						b := &outline.Modules[mi].Lessons[li].Sections[si].Blocks[bi]
+						b.IsCurrent = b.ID == *currentBlockID
+					}
 				}
 			}
 		}
 	}
 	return outline, nil
+}
+
+func (s *LearningService) buildOutlineLesson(ctx context.Context, userID uuid.UUID, snap domain.LessonSnapshot) OutlineLesson {
+	progRows, err := s.q.ListUserBlockProgressForLesson(ctx, query.ListUserBlockProgressForLessonParams{
+		UserID: userID, LessonID: snap.ID,
+	})
+	byBlock := map[uuid.UUID]query.UserBlockProgress{}
+	if err == nil {
+		for _, r := range progRows {
+			byBlock[r.LessonBlockID] = r
+		}
+	}
+
+	lesson := OutlineLesson{
+		ID: snap.ID, Title: snap.Title, SortOrder: snap.SortOrder,
+		ProgressPercent: s.lessonCompletedPercent(ctx, userID, snap.ID),
+		Sections:        make([]OutlineSection, 0),
+	}
+
+	blocksBySection := map[uuid.UUID][]OutlineBlock{}
+	orphanBlocks := make([]OutlineBlock, 0)
+
+	for _, b := range snap.Blocks {
+		ob := outlineBlockFromSnap(snap.ID, b, byBlock[b.ID])
+		if b.SectionID != nil {
+			blocksBySection[*b.SectionID] = append(blocksBySection[*b.SectionID], ob)
+		} else {
+			orphanBlocks = append(orphanBlocks, ob)
+		}
+	}
+
+	for _, sec := range snap.Sections {
+		secBlocks := blocksBySection[sec.ID]
+		lesson.Sections = append(lesson.Sections, OutlineSection{
+			ID: sec.ID, Title: sec.Title, SortOrder: sec.SortOrder,
+			ProgressPercent: sectionProgressPercent(secBlocks),
+			Blocks:          secBlocks,
+		})
+	}
+	if len(orphanBlocks) > 0 {
+		if len(lesson.Sections) == 0 {
+			lesson.Sections = append(lesson.Sections, OutlineSection{
+				ID: snap.ID, Title: "Content", SortOrder: 0,
+				ProgressPercent: sectionProgressPercent(orphanBlocks),
+				Blocks:          orphanBlocks,
+			})
+		} else {
+			lesson.Sections[0].Blocks = append(orphanBlocks, lesson.Sections[0].Blocks...)
+			lesson.Sections[0].ProgressPercent = sectionProgressPercent(lesson.Sections[0].Blocks)
+		}
+	}
+	return lesson
+}
+
+func flattenOutlineLessons(modules []OutlineModule) []OutlineLesson {
+	out := make([]OutlineLesson, 0)
+	for _, m := range modules {
+		out = append(out, m.Lessons...)
+	}
+	return out
+}
+
+func moduleProgressPercent(lessons []OutlineLesson) float64 {
+	if len(lessons) == 0 {
+		return 100
+	}
+	var sum float64
+	for _, l := range lessons {
+		sum += l.ProgressPercent
+	}
+	return sum / float64(len(lessons))
 }
 
 func pickCurrentOutlineBlock(lessons []OutlineLesson) (lessonID, blockID *uuid.UUID) {
@@ -439,9 +507,10 @@ type ReviewItemView struct {
 }
 
 type AttemptInput struct {
-	SubItemIndex int
-	Response     map[string]any
-	Context      string
+	SubItemIndex     int
+	Response         map[string]any
+	Context          string
+	TimeSpentSeconds int
 }
 
 type AttemptResult struct {
@@ -520,6 +589,7 @@ func (s *LearningService) SubmitBlockAttempt(ctx context.Context, userID, blockI
 	prog, err := qtx.UpsertUserBlockProgress(ctx, query.UpsertUserBlockProgressParams{
 		UserID: userID, LessonBlockID: blockID, Status: status,
 		Score: float32(prevScore), Attempts: int32(attempts),
+		TimeSpentSeconds: int32(in.TimeSpentSeconds),
 	})
 	if err != nil {
 		return nil, err
@@ -652,17 +722,43 @@ type VocabularyEntry struct {
 	Mastery    float64
 }
 
-func (s *LearningService) ListDictionary(ctx context.Context, userID uuid.UUID, courseID *uuid.UUID) ([]VocabularyEntry, error) {
+func (s *LearningService) ListDictionary(ctx context.Context, userID uuid.UUID, courseID *uuid.UUID, search string) ([]VocabularyEntry, error) {
 	rows, err := s.q.ListVocabulary(ctx, query.ListVocabularyParams{
 		UserID: userID, CourseID: courseID,
 	})
 	if err != nil {
 		return nil, err
 	}
-	out := make([]VocabularyEntry, 0, len(rows))
+	ids := make([]uuid.UUID, 0, len(rows))
+	rowByID := make(map[uuid.UUID]query.UserVocabulary, len(rows))
 	for _, r := range rows {
+		ids = append(ids, r.LexemeID)
+		rowByID[r.LexemeID] = r
+	}
+	if s.lexicon.Available() && len(ids) > 0 && strings.TrimSpace(search) != "" {
+		filtered, err := s.lexicon.FilterLexemeIDsBySearch(ctx, ids, search)
+		if err == nil {
+			ids = filtered
+		}
+	}
+	lexMap := map[uuid.UUID]repository.LexemeView{}
+	if s.lexicon.Available() && len(ids) > 0 {
+		if m, err := s.lexicon.LexemesByIDs(ctx, ids); err == nil {
+			lexMap = m
+		}
+	}
+	out := make([]VocabularyEntry, 0, len(ids))
+	for _, id := range ids {
+		r, ok := rowByID[id]
+		if !ok {
+			continue
+		}
+		lemma := id.String()[:8]
+		if lx, ok := lexMap[id]; ok {
+			lemma = lx.Lemma
+		}
 		out = append(out, VocabularyEntry{
-			LexemeID: r.LexemeID, Lemma: r.LexemeID.String()[:8],
+			LexemeID: id, Lemma: lemma,
 			LanguageID: uuid.Nil, FirstSeen: r.FirstSeenAt, Mastery: float64(r.Mastery),
 		})
 	}
@@ -715,11 +811,15 @@ type PublicCourseListItem struct {
 	IsPublished    bool
 }
 
-func (s *LearningService) ListPublicCourses(ctx context.Context) ([]PublicCourseListItem, error) {
+func (s *LearningService) ListPublicCourses(ctx context.Context, search string) ([]PublicCourseListItem, error) {
 	if !s.content.Available() {
 		return nil, errors.New("content service not configured")
 	}
-	courses, err := s.content.ListPublishedCourses(ctx)
+	var q *string
+	if search != "" {
+		q = &search
+	}
+	courses, err := s.content.ListPublishedCourses(ctx, q)
 	if err != nil {
 		return nil, err
 	}
@@ -746,11 +846,14 @@ func (s *LearningService) ListPublicCourses(ctx context.Context) ([]PublicCourse
 }
 
 type ProgressSummary struct {
-	EnrolledCourses  int
-	DictionaryWords  int
-	ReviewDue        int
-	CompletedBlocks  int
-	CompletedLessons int
+	EnrolledCourses   int
+	DictionaryWords   int
+	ReviewDue         int
+	CompletedBlocks   int
+	CompletedLessons  int
+	InProgressLessons int
+	AverageScore      float64
+	TimeSpentSeconds  int
 }
 
 func (s *LearningService) GetProgressSummary(ctx context.Context, userID uuid.UUID) (ProgressSummary, error) {
@@ -759,11 +862,14 @@ func (s *LearningService) GetProgressSummary(ctx context.Context, userID uuid.UU
 		return ProgressSummary{}, err
 	}
 	return ProgressSummary{
-		EnrolledCourses:  int(row.EnrolledCourses),
-		DictionaryWords:  int(row.DictionaryWords),
-		ReviewDue:        int(row.ReviewDue),
-		CompletedBlocks:  int(row.CompletedBlocks),
-		CompletedLessons: int(row.CompletedLessons),
+		EnrolledCourses:   int(row.EnrolledCourses),
+		DictionaryWords:   int(row.DictionaryWords),
+		ReviewDue:         int(row.ReviewDue),
+		CompletedBlocks:   int(row.CompletedBlocks),
+		CompletedLessons:  int(row.CompletedLessons),
+		InProgressLessons: int(row.InProgressLessons),
+		AverageScore:      row.AverageScore,
+		TimeSpentSeconds:  int(row.TimeSpentSeconds),
 	}, nil
 }
 

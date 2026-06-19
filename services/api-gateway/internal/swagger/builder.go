@@ -27,6 +27,11 @@ var dedupSchemas = []string{
 
 var dedupResponses = []string{
 	"DefaultError",
+	"BadRequest",
+	"Unauthorized",
+	"Forbidden",
+	"NotFound",
+	"Conflict",
 }
 
 var dedupSecuritySchemes = []string{

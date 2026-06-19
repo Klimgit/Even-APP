@@ -76,6 +76,11 @@ paths:
       operationId: listPublicCourses
       tags: [Student, Courses, Public]
       summary: List published public courses open for self-enrollment
+      parameters:
+        - name: q
+          in: query
+          schema:
+            type: string
       responses:
         "200":
           description: OK
@@ -506,6 +511,11 @@ paths:
           schema:
             type: string
             format: uuid
+        - name: q
+          in: query
+          schema:
+            type: string
+            description: Filter by lemma (case-insensitive substring)
       responses:
         "200":
           description: OK
@@ -641,7 +651,7 @@ components:
 
     ProgressSummary:
       type: object
-      required: [enrolled_courses, dictionary_words, review_due, completed_blocks, completed_lessons]
+      required: [enrolled_courses, dictionary_words, review_due, completed_blocks, completed_lessons, in_progress_lessons, average_score, time_spent_seconds]
       properties:
         enrolled_courses:
           type: integer
@@ -652,6 +662,13 @@ components:
         completed_blocks:
           type: integer
         completed_lessons:
+          type: integer
+        in_progress_lessons:
+          type: integer
+        average_score:
+          type: number
+          format: double
+        time_spent_seconds:
           type: integer
 
     ResolvedMedia:
@@ -711,7 +728,7 @@ components:
 
     CourseOutlineResponse:
       type: object
-      required: [course_id, title, progress_percent, lessons]
+      required: [course_id, title, progress_percent, modules]
       properties:
         course_id:
           type: string
@@ -727,6 +744,25 @@ components:
         current_block_id:
           type: string
           format: uuid
+        modules:
+          type: array
+          items:
+            $ref: "#/components/schemas/CourseOutlineModule"
+
+    CourseOutlineModule:
+      type: object
+      required: [id, title, sort_order, progress_percent, lessons]
+      properties:
+        id:
+          type: string
+          format: uuid
+        title:
+          type: string
+        sort_order:
+          type: integer
+        progress_percent:
+          type: number
+          format: double
         lessons:
           type: array
           items:
@@ -955,6 +991,10 @@ components:
           type: string
           enum: [lesson, review_tab, injected]
           default: lesson
+        time_spent_seconds:
+          type: integer
+          minimum: 0
+          description: Seconds spent on this attempt (accumulated into block progress)
 
     UserBlockProgress:
       type: object

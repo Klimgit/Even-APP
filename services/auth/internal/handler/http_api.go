@@ -2,6 +2,7 @@ package handler
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"strings"
 
@@ -127,7 +128,7 @@ func (h *HTTPHandler) PatchPlatformUser(ctx context.Context, req *http_v1.PatchP
 	if v, ok := req.IsAdmin.Get(); ok {
 		in.IsAdmin = &v
 	}
-	u, err := h.svc.PatchPlatformUser(ctx, claims.IsAdmin, params.UserId, in)
+	u, err := h.svc.PatchPlatformUser(ctx, claims.IsAdmin, claims.UserID, params.UserId, in)
 	if err != nil {
 		if errors.Is(err, domain.ErrForbidden) {
 			return forbiddenPatchPlatformUser()
@@ -139,6 +140,149 @@ func (h *HTTPHandler) PatchPlatformUser(ctx context.Context, req *http_v1.PatchP
 	}
 	user := mapUser(*u)
 	return &user, nil
+}
+
+func (h *HTTPHandler) CreatePlatformUser(ctx context.Context, req *http_v1.CreatePlatformUserRequest) (http_v1.CreatePlatformUserRes, error) {
+	claims, ok := middleware.ClaimsFromContext(ctx)
+	if !ok {
+		return nil, domain.ErrUnauthorized
+	}
+	email := strings.TrimSpace(strings.ToLower(req.Email))
+	if email == "" || len(req.Password) < 8 {
+		return nil, domain.ErrValidation
+	}
+	var dn *string
+	if v, ok := req.DisplayName.Get(); ok && v != "" {
+		dn = &v
+	}
+	isAdmin := false
+	if v, ok := req.IsAdmin.Get(); ok {
+		isAdmin = v
+	}
+	u, err := h.svc.CreatePlatformUser(ctx, claims.IsAdmin, claims.UserID, service.CreatePlatformUserInput{
+		Email: email, Password: req.Password, DisplayName: dn,
+		Role: string(req.Role), IsAdmin: isAdmin,
+	})
+	if err != nil {
+		if errors.Is(err, domain.ErrForbidden) {
+			return forbiddenCreatePlatformUser()
+		}
+		if errors.Is(err, domain.ErrConflict) {
+			return conflictCreatePlatformUser()
+		}
+		return nil, err
+	}
+	user := mapUser(*u)
+	return &user, nil
+}
+
+func (h *HTTPHandler) GetPlatformUser(ctx context.Context, params http_v1.GetPlatformUserParams) (http_v1.GetPlatformUserRes, error) {
+	claims, ok := middleware.ClaimsFromContext(ctx)
+	if !ok {
+		return nil, domain.ErrUnauthorized
+	}
+	u, err := h.svc.GetPlatformUser(ctx, claims.IsAdmin, params.UserId)
+	if err != nil {
+		if errors.Is(err, domain.ErrForbidden) {
+			return forbiddenGetPlatformUser()
+		}
+		if errors.Is(err, domain.ErrNotFound) {
+			return notFoundGetPlatformUser()
+		}
+		return nil, err
+	}
+	user := mapUser(*u)
+	return &user, nil
+}
+
+func (h *HTTPHandler) DeletePlatformUser(ctx context.Context, params http_v1.DeletePlatformUserParams) (http_v1.DeletePlatformUserRes, error) {
+	claims, ok := middleware.ClaimsFromContext(ctx)
+	if !ok {
+		return nil, domain.ErrUnauthorized
+	}
+	if err := h.svc.DeletePlatformUser(ctx, claims.IsAdmin, claims.UserID, params.UserId); err != nil {
+		if errors.Is(err, domain.ErrForbidden) {
+			return forbiddenDeletePlatformUser()
+		}
+		if errors.Is(err, domain.ErrNotFound) {
+			return notFoundDeletePlatformUser()
+		}
+		if errors.Is(err, domain.ErrValidation) {
+			return forbiddenDeletePlatformUser()
+		}
+		return nil, err
+	}
+	return &http_v1.DeletePlatformUserNoContent{}, nil
+}
+
+func (h *HTTPHandler) ResetPlatformUserPassword(ctx context.Context, req *http_v1.ResetPlatformUserPasswordRequest, params http_v1.ResetPlatformUserPasswordParams) (http_v1.ResetPlatformUserPasswordRes, error) {
+	claims, ok := middleware.ClaimsFromContext(ctx)
+	if !ok {
+		return nil, domain.ErrUnauthorized
+	}
+	if len(req.Password) < 8 {
+		return nil, domain.ErrValidation
+	}
+	if err := h.svc.ResetPlatformUserPassword(ctx, claims.IsAdmin, claims.UserID, params.UserId, req.Password); err != nil {
+		if errors.Is(err, domain.ErrForbidden) {
+			return forbiddenResetPlatformUserPassword()
+		}
+		if errors.Is(err, domain.ErrNotFound) {
+			return notFoundResetPlatformUserPassword()
+		}
+		return nil, err
+	}
+	return &http_v1.ResetPlatformUserPasswordNoContent{}, nil
+}
+
+func (h *HTTPHandler) ListPlatformAudit(ctx context.Context, params http_v1.ListPlatformAuditParams) (http_v1.ListPlatformAuditRes, error) {
+	claims, ok := middleware.ClaimsFromContext(ctx)
+	if !ok {
+		return nil, domain.ErrUnauthorized
+	}
+	action := ""
+	if v, ok := params.Action.Get(); ok {
+		action = v
+	}
+	page, limit := 1, 50
+	if v, ok := params.Page.Get(); ok && v > 0 {
+		page = v
+	}
+	if v, ok := params.Limit.Get(); ok && v > 0 {
+		limit = v
+	}
+	out, err := h.svc.ListPlatformAudit(ctx, claims.IsAdmin, action, page, limit)
+	if err != nil {
+		if errors.Is(err, domain.ErrForbidden) {
+			return forbiddenListPlatformAudit()
+		}
+		return nil, err
+	}
+	items := make([]http_v1.AuditEvent, 0, len(out.Items))
+	for _, e := range out.Items {
+		ev := http_v1.AuditEvent{
+			ID: e.ID, Action: e.Action, CreatedAt: e.CreatedAt,
+		}
+		if e.ActorID != nil {
+			ev.ActorID = http_v1.NewOptUUID(*e.ActorID)
+		}
+		if e.TargetType != nil {
+			ev.TargetType = http_v1.NewOptString(*e.TargetType)
+		}
+		if e.TargetID != nil {
+			ev.TargetID = http_v1.NewOptUUID(*e.TargetID)
+		}
+		if e.Details != nil {
+			if b, err := json.Marshal(e.Details); err == nil {
+				var raw http_v1.AuditEventDetails
+				if err := json.Unmarshal(b, &raw); err == nil {
+					ev.Details = http_v1.NewOptAuditEventDetails(raw)
+				}
+			}
+		}
+		items = append(items, ev)
+	}
+	return &http_v1.AuditListResponse{Items: items, Total: out.Total}, nil
 }
 
 func (h *HTTPHandler) GetPlatformStats(ctx context.Context) (http_v1.GetPlatformStatsRes, error) {
@@ -160,6 +304,8 @@ func (h *HTTPHandler) GetPlatformStats(ctx context.Context) (http_v1.GetPlatform
 		},
 		PublishedCourses:  stats.PublishedCourses,
 		ActiveEnrollments: stats.ActiveEnrollments,
+		TotalCourses:      stats.TotalCourses,
+		PlatformLexemes:   stats.PlatformLexemes,
 	}, nil
 }
 
@@ -319,5 +465,50 @@ func forbiddenGetPlatformStats() (*http_v1.GetPlatformStatsForbidden, error) {
 
 func notFoundPatchPlatformUser() (*http_v1.PatchPlatformUserNotFound, error) {
 	r := http_v1.PatchPlatformUserNotFound(errBody("user not found"))
+	return &r, nil
+}
+
+func forbiddenCreatePlatformUser() (*http_v1.CreatePlatformUserForbidden, error) {
+	r := http_v1.CreatePlatformUserForbidden(errBody("platform admin required"))
+	return &r, nil
+}
+
+func conflictCreatePlatformUser() (*http_v1.CreatePlatformUserConflict, error) {
+	r := http_v1.CreatePlatformUserConflict(errBody("email already registered"))
+	return &r, nil
+}
+
+func forbiddenGetPlatformUser() (*http_v1.GetPlatformUserForbidden, error) {
+	r := http_v1.GetPlatformUserForbidden(errBody("platform admin required"))
+	return &r, nil
+}
+
+func notFoundGetPlatformUser() (*http_v1.GetPlatformUserNotFound, error) {
+	r := http_v1.GetPlatformUserNotFound(errBody("user not found"))
+	return &r, nil
+}
+
+func forbiddenDeletePlatformUser() (*http_v1.DeletePlatformUserForbidden, error) {
+	r := http_v1.DeletePlatformUserForbidden(errBody("platform admin required"))
+	return &r, nil
+}
+
+func notFoundDeletePlatformUser() (*http_v1.DeletePlatformUserNotFound, error) {
+	r := http_v1.DeletePlatformUserNotFound(errBody("user not found"))
+	return &r, nil
+}
+
+func forbiddenResetPlatformUserPassword() (*http_v1.ResetPlatformUserPasswordForbidden, error) {
+	r := http_v1.ResetPlatformUserPasswordForbidden(errBody("platform admin required"))
+	return &r, nil
+}
+
+func notFoundResetPlatformUserPassword() (*http_v1.ResetPlatformUserPasswordNotFound, error) {
+	r := http_v1.ResetPlatformUserPasswordNotFound(errBody("user not found"))
+	return &r, nil
+}
+
+func forbiddenListPlatformAudit() (*http_v1.ListPlatformAuditForbidden, error) {
+	r := http_v1.ListPlatformAuditForbidden(errBody("platform admin required"))
 	return &r, nil
 }

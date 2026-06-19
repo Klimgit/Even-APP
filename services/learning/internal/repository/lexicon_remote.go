@@ -2,6 +2,7 @@ package repository
 
 import (
 	"context"
+	"strings"
 
 	lexiconclient "github.com/even-app/even-app/libs/clients/lexicon"
 	"github.com/google/uuid"
@@ -55,6 +56,14 @@ func (r *LexiconRemote) LexemesByIDs(ctx context.Context, ids []uuid.UUID) (map[
 		out[id] = LexemeView{ID: row.ID, Lemma: row.Lemma, PartOfSpeech: row.PartOfSpeech}
 	}
 	return out, nil
+}
+
+func (r *LexiconRemote) FilterLexemeIDsBySearch(ctx context.Context, ids []uuid.UUID, search string) ([]uuid.UUID, error) {
+	search = strings.TrimSpace(search)
+	if search == "" || len(ids) == 0 {
+		return ids, nil
+	}
+	return r.client.FilterLexemeIDsBySearch(ctx, ids, search)
 }
 
 var _ LexiconSource = (*LexiconRemote)(nil)

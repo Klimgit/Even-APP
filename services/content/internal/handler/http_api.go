@@ -72,12 +72,16 @@ func (h *HTTPHandler) RemoveTeacherBlockTypeFavorite(ctx context.Context, params
 	return &http_v1.RemoveTeacherBlockTypeFavoriteNoContent{}, nil
 }
 
-func (h *HTTPHandler) ListTeacherCourses(ctx context.Context) (http_v1.ListTeacherCoursesRes, error) {
+func (h *HTTPHandler) ListTeacherCourses(ctx context.Context, params http_v1.ListTeacherCoursesParams) (http_v1.ListTeacherCoursesRes, error) {
 	t, err := h.teacher(ctx)
 	if err != nil {
 		return nil, err
 	}
-	rows, err := h.svc.ListCourses(ctx, t.UserID)
+	var search *string
+	if v, ok := params.Q.Get(); ok && v != "" {
+		search = &v
+	}
+	rows, err := h.svc.ListCourses(ctx, t.UserID, search)
 	if err != nil {
 		return nil, err
 	}
@@ -185,7 +189,7 @@ func (h *HTTPHandler) CreateTeacherCourseLesson(ctx context.Context, req *http_v
 		s := int32(v)
 		sortOrder = &s
 	}
-	row, err := h.svc.CreateLesson(ctx, params.CourseId, t.UserID, t.IsAdmin, req.Title, sortOrder)
+	row, err := h.svc.CreateLessonInCourse(ctx, params.CourseId, t.UserID, t.IsAdmin, req.Title, sortOrder, nil)
 	if err != nil {
 		return nil, err
 	}

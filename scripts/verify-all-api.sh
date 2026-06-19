@@ -288,8 +288,8 @@ c=$(code -H "Authorization: Bearer $JTOKEN" "$GW/api/v1/courses"); expect 200 "$
 python3 -c "import json; d=json.load(open('$BODY')); assert d and d[0].get('target_language',{}).get('code')" || fail "target_language empty"
 pass "courses target_language populated"
 c=$(code -H "Authorization: Bearer $JTOKEN" "$GW/api/v1/progress/summary"); expect 200 "$c" "GET /progress/summary"
-python3 -c "import json; d=json.load(open('$BODY')); assert 'completed_lessons' in d" || fail "progress summary missing completed_lessons"
-pass "progress summary completed_lessons"
+python3 -c "import json; d=json.load(open('$BODY')); assert 'completed_lessons' in d and 'in_progress_lessons' in d and 'average_score' in d and 'time_spent_seconds' in d" || fail "progress summary missing fields"
+pass "progress summary extended fields"
 c=$(code -H "Authorization: Bearer $JTOKEN" -X POST "$GW/api/v1/review/session" \
   -H 'Content-Type: application/json' -d '{}')
 [[ "$c" == "200" || "$c" == "204" ]] && pass "POST /review/session → $c" || fail "POST /review/session expected 200 or 204 got $c"
@@ -299,8 +299,8 @@ pass "teacher students list"
 c=$(code -H "Authorization: Bearer $JTOKEN" "$GW/api/v1/courses/$ZNAKOMSTVO_COURSE_ID"); expect 200 "$c" "GET /courses/{id}"
 c=$(code -H "Authorization: Bearer $JTOKEN" "$GW/api/v1/courses/$ZNAKOMSTVO_COURSE_ID/lessons"); expect 200 "$c" "GET /courses/{id}/lessons"
 c=$(code -H "Authorization: Bearer $JTOKEN" "$GW/api/v1/courses/$ZNAKOMSTVO_COURSE_ID/outline"); expect 200 "$c" "GET /courses/{id}/outline"
-python3 -c "import json; d=json.load(open('$BODY')); assert d.get('lessons') and len(d['lessons'])>=1" || fail "outline lessons empty"
-pass "course outline tree"
+python3 -c "import json; d=json.load(open('$BODY')); assert d.get('modules') and len(d['modules'])>=1 and d['modules'][0].get('lessons')" || fail "outline modules empty"
+pass "course outline tree (modules)"
 c=$(code -H "Authorization: Bearer $JTOKEN" "$GW/api/v1/lessons/$ZNAKOMSTVO_LESSON_ID"); expect 200 "$c" "GET /lessons/{id}"
 python3 -c "
 import json
@@ -316,12 +316,60 @@ pass "lesson resolved_lexemes populated"
 c=$(code -H "Authorization: Bearer $JTOKEN" "$GW/api/v1/lessons/$ZNAKOMSTVO_LESSON_ID/flow"); expect 200 "$c" "GET /lessons/{id}/flow"
 c=$(code -H "Authorization: Bearer $JTOKEN" -X POST "$GW/api/v1/progress/blocks/$ZNAKOMSTVO_GRADABLE_BLOCK_ID/attempt" \
   -H 'Content-Type: application/json' \
-  -d '{"response":{"selected_index":0}}'); expect 200 "$c" "POST block attempt"
+  -d '{"response":{"selected_index":0},"time_spent_seconds":42}'); expect 200 "$c" "POST block attempt with time"
 python3 -c "import json; d=json.load(open('$BODY')); assert d.get('is_correct') is True" || fail "attempt not correct"
 pass "gradable attempt scored"
 c=$(code -H "Authorization: Bearer $JTOKEN" "$GW/api/v1/progress/lessons/$ZNAKOMSTVO_LESSON_ID"); expect 200 "$c" "GET lesson progress"
 c=$(code -H "Authorization: Bearer $JTOKEN" "$GW/api/v1/review"); expect 200 "$c" "GET /review"
 c=$(code -H "Authorization: Bearer $JTOKEN" "$GW/api/v1/dictionary?course_id=$ZNAKOMSTVO_COURSE_ID"); expect 200 "$c" "GET /dictionary"
+c=$(code -H "Authorization: Bearer $JTOKEN" "$GW/api/v1/dictionary?course_id=$ZNAKOMSTVO_COURSE_ID&q=nonexistentlemma999"); expect 200 "$c" "GET /dictionary?q="
+python3 -c "import json; d=json.load(open('$BODY')); assert d==[]" || fail "dictionary search should filter"
+pass "dictionary search"
+
+echo ""
+echo "=== 15b. Plan features (modules, search, teacher lexicon, admin) ==="
+c=$(code -H "Authorization: Bearer $TOKEN" "$GW/api/v1/teacher/courses/$ZNAKOMSTVO_COURSE_ID/modules"); expect 200 "$c" "GET teacher course modules"
+python3 -c "import json; d=json.load(open('$BODY')); assert len(d)>=1 and d[0].get('title')" || fail "modules list empty"
+pass "course modules list"
+c=$(code -H "Authorization: Bearer $TOKEN" "$GW/api/v1/teacher/courses?q=Знаком"); expect 200 "$c" "GET teacher/courses?q="
+python3 -c "import json; d=json.load(open('$BODY')); assert any(c.get('id')=='$ZNAKOMSTVO_COURSE_ID' for c in d)" || fail "teacher course search"
+pass "teacher course search"
+c=$(code "$GW/api/v1/courses/public?q=Знаком"); expect 200 "$c" "GET courses/public?q="
+pass "public course search"
+c=$(code -H "Authorization: Bearer $TOKEN" "$GW/api/v1/platform/courses"); expect 200 "$c" "GET platform/courses"
+python3 -c "import json; d=json.load(open('$BODY')); assert d.get('items') is not None" || fail "platform courses response"
+pass "platform courses list"
+c=$(code -H "Authorization: Bearer $TOKEN" "$GW/api/v1/teacher/courses/$ZNAKOMSTVO_COURSE_ID/analytics"); expect 200 "$c" "GET teacher course analytics"
+python3 -c "import json; d=json.load(open('$BODY')); assert 'student_count' in d and 'module_count' in d" || fail "analytics fields"
+pass "teacher course analytics"
+TEACHER_LEMMA="tlex$RANDOM"
+c=$(code -H "Authorization: Bearer $TOKEN" -X POST "$GW/api/v1/teacher/languages/evn/lexicon" \
+  -H 'Content-Type: application/json' \
+  -d "{\"lemma\":\"$TEACHER_LEMMA\",\"translations\":[{\"target_language_id\":\"$RU_LEX_ID\",\"text\":\"учитель\"}]}")
+expect 201 "$c" "POST teacher lexeme"
+TLEX=$(python3 -c "import json; print(json.load(open('$BODY'))['id'])")
+TTRANS=$(python3 -c "import json; print(json.load(open('$BODY'))['translations'][0]['id'])")
+c=$(code -H "Authorization: Bearer $TOKEN" -X PATCH "$GW/api/v1/teacher/lexemes/$TLEX" \
+  -H 'Content-Type: application/json' -d '{"notes":"teacher-owned"}'); expect 200 "$c" "PATCH teacher lexeme"
+c=$(code -H "Authorization: Bearer $TOKEN" -X PATCH "$GW/api/v1/teacher/lexeme-translations/$TTRANS" \
+  -H 'Content-Type: application/json' -d '{"text":"преподаватель"}'); expect 200 "$c" "PATCH teacher translation"
+c=$(code -H "Authorization: Bearer $TOKEN" "$GW/api/v1/teacher/languages/evn/lexicon?q=препод"); expect 200 "$c" "GET teacher lexicon search"
+c=$(code -H "Authorization: Bearer $TOKEN" -X DELETE "$GW/api/v1/teacher/lexemes/$TLEX"); expect 204 "$c" "DELETE teacher lexeme"
+c=$(code -H "Authorization: Bearer $TOKEN" "$GW/api/v1/platform/stats"); expect 200 "$c" "GET platform/stats extended"
+python3 -c "import json; d=json.load(open('$BODY')); assert 'total_courses' in d and d.get('platform_lexemes',0)>=1" || fail "platform stats missing counts"
+pass "platform stats drill-down"
+ADMIN_TEST="verify-admin-$RANDOM@example.com"
+c=$(code -H "Authorization: Bearer $TOKEN" -X POST "$GW/api/v1/platform/users" \
+  -H 'Content-Type: application/json' \
+  -d "{\"email\":\"$ADMIN_TEST\",\"password\":\"password123\",\"role\":\"student\"}"); expect 201 "$c" "POST platform/users"
+NEWUID=$(python3 -c "import json; print(json.load(open('$BODY'))['id'])")
+c=$(code -H "Authorization: Bearer $TOKEN" "$GW/api/v1/platform/users/$NEWUID"); expect 200 "$c" "GET platform/users/{id}"
+c=$(code -H "Authorization: Bearer $TOKEN" -X POST "$GW/api/v1/platform/users/$NEWUID/reset-password" \
+  -H 'Content-Type: application/json' -d '{"password":"newpass12345"}'); expect 204 "$c" "POST reset-password"
+c=$(code -H "Authorization: Bearer $TOKEN" "$GW/api/v1/platform/audit?action=user.create"); expect 200 "$c" "GET platform/audit"
+python3 -c "import json; d=json.load(open('$BODY')); assert d.get('items')" || fail "audit log empty response"
+pass "platform audit log"
+c=$(code -H "Authorization: Bearer $TOKEN" -X DELETE "$GW/api/v1/platform/users/$NEWUID"); expect 204 "$c" "DELETE platform/users/{id}"
 
 echo ""
 echo "=== 16. Cleanup verify lang ==="

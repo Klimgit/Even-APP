@@ -17,10 +17,11 @@ import (
 type LexiconService struct {
 	q       *query.Queries
 	content repository.ContentSource
+	media   *repository.MediaReader
 }
 
-func NewLexiconService(q *query.Queries, content repository.ContentSource) *LexiconService {
-	return &LexiconService{q: q, content: content}
+func NewLexiconService(q *query.Queries, content repository.ContentSource, media *repository.MediaReader) *LexiconService {
+	return &LexiconService{q: q, content: content, media: media}
 }
 
 func mediaRefURL(id uuid.UUID) string {
@@ -296,13 +297,13 @@ type LexemeList struct {
 }
 
 type FullLexeme struct {
-	Lexeme       query.Lexeme
+	Lexeme       LexemeCore
 	Forms        []query.LexemeForm
 	Translations []query.LexemeTranslation
 	Media        []query.LexemeMedium
 }
 
-func (s *LexiconService) assembleFullLexeme(ctx context.Context, row query.Lexeme) (FullLexeme, error) {
+func (s *LexiconService) assembleFullLexeme(ctx context.Context, row LexemeCore) (FullLexeme, error) {
 	forms, err := s.q.ListLexemeForms(ctx, query.ListLexemeFormsParams{LexemeID: row.ID})
 	if err != nil {
 		return FullLexeme{}, err
@@ -337,13 +338,13 @@ func (s *LexiconService) ListLexemes(ctx context.Context, code, search string, p
 		q = &search
 	}
 	total, err := s.q.CountLexemesByLanguage(ctx, query.CountLexemesByLanguageParams{
-		LanguageID: langID, Search: q,
+		LanguageID: langID, Scope: LexemeScopePlatform, Search: q,
 	})
 	if err != nil {
 		return LexemeList{}, err
 	}
 	rows, err := s.q.ListLexemesByLanguage(ctx, query.ListLexemesByLanguageParams{
-		LanguageID: langID, Search: q,
+		LanguageID: langID, Scope: LexemeScopePlatform, Search: q,
 		Offset: int32((page - 1) * limit), Limit: int32(limit),
 	})
 	if err != nil {
@@ -351,7 +352,7 @@ func (s *LexiconService) ListLexemes(ctx context.Context, code, search string, p
 	}
 	items := make([]FullLexeme, 0, len(rows))
 	for _, row := range rows {
-		full, err := s.assembleFullLexeme(ctx, row)
+		full, err := s.assembleFullLexeme(ctx, lexemeFromList(row))
 		if err != nil {
 			return LexemeList{}, err
 		}
@@ -378,7 +379,7 @@ func (s *LexiconService) CreateLexeme(ctx context.Context, code string, in Creat
 	}
 	row, err := s.q.CreateLexeme(ctx, query.CreateLexemeParams{
 		LanguageID: langID, Lemma: in.Lemma, PartOfSpeech: in.PartOfSpeech,
-		Notes: in.Notes, CreatedBy: in.CreatedBy,
+		Notes: in.Notes, Scope: LexemeScopePlatform, OwnerID: nil, CreatedBy: in.CreatedBy,
 	})
 	if err != nil {
 		if isUniqueViolation(err) {
@@ -393,7 +394,7 @@ func (s *LexiconService) CreateLexeme(ctx context.Context, code string, in Creat
 			return FullLexeme{}, err
 		}
 	}
-	return s.assembleFullLexeme(ctx, row)
+	return s.assembleFullLexeme(ctx, lexemeFromCreate(row))
 }
 
 func (s *LexiconService) GetLexeme(ctx context.Context, lexemeID uuid.UUID) (FullLexeme, error) {
@@ -404,7 +405,21 @@ func (s *LexiconService) GetLexeme(ctx context.Context, lexemeID uuid.UUID) (Ful
 		}
 		return FullLexeme{}, err
 	}
-	return s.assembleFullLexeme(ctx, row)
+	return s.assembleFullLexeme(ctx, lexemeFromGet(row))
+}
+
+func (s *LexiconService) GetLexemeForReader(ctx context.Context, lexemeID, readerID uuid.UUID, isAdmin bool) (FullLexeme, error) {
+	full, err := s.GetLexeme(ctx, lexemeID)
+	if err != nil {
+		return FullLexeme{}, err
+	}
+	if full.Lexeme.Scope == LexemeScopePlatform || isAdmin {
+		return full, nil
+	}
+	if full.Lexeme.Scope == LexemeScopeTeacher && full.Lexeme.OwnerID != nil && *full.Lexeme.OwnerID == readerID {
+		return full, nil
+	}
+	return FullLexeme{}, domain.ErrForbidden
 }
 
 func (s *LexiconService) PatchLexeme(ctx context.Context, lexemeID uuid.UUID, lemma, pos, notes *string) (FullLexeme, error) {
@@ -420,7 +435,40 @@ func (s *LexiconService) PatchLexeme(ctx context.Context, lexemeID uuid.UUID, le
 		}
 		return FullLexeme{}, err
 	}
-	return s.assembleFullLexeme(ctx, row)
+	return s.assembleFullLexeme(ctx, lexemeFromUpdate(row))
+}
+
+func (s *LexiconService) PatchLexemeTranslation(ctx context.Context, translationID uuid.UUID, text *string, targetLangID *uuid.UUID, targetLexemeID *uuid.UUID) (query.LexemeTranslation, error) {
+	return s.q.UpdateLexemeTranslation(ctx, query.UpdateLexemeTranslationParams{
+		ID: translationID, Text: text, TargetLanguageID: targetLangID, TargetLexemeID: targetLexemeID,
+	})
+}
+
+func (s *LexiconService) PatchLexemeMedia(ctx context.Context, lexemeMediaID uuid.UUID, kind, label *string, isPrimary *bool, mediaAssetID, formID *uuid.UUID) (query.LexemeMedium, error) {
+	row, err := s.q.GetLexemeMedia(ctx, query.GetLexemeMediaParams{ID: lexemeMediaID})
+	if err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			return query.LexemeMedium{}, domain.ErrNotFound
+		}
+		return query.LexemeMedium{}, err
+	}
+	k := row.Kind
+	if kind != nil {
+		k = *kind
+	}
+	ip := row.IsPrimary
+	if isPrimary != nil {
+		ip = *isPrimary
+	}
+	if ip {
+		_ = s.q.ClearPrimaryLexemeMedia(ctx, query.ClearPrimaryLexemeMediaParams{
+			LexemeID: row.LexemeID, Kind: k,
+		})
+	}
+	return s.q.UpdateLexemeMedia(ctx, query.UpdateLexemeMediaParams{
+		ID: lexemeMediaID, Kind: kind, Label: label, IsPrimary: isPrimary,
+		MediaAssetID: mediaAssetID, FormID: formID,
+	})
 }
 
 func (s *LexiconService) DeleteLexeme(ctx context.Context, lexemeID uuid.UUID) error {

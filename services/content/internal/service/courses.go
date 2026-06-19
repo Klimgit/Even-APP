@@ -54,8 +54,10 @@ func courseFromPublish(row query.PublishCourseRow) Course {
 	return courseFromRow(row.ID, row.Title, row.TargetLanguageID, row.UiLanguageID, row.OwnerID, row.IsPublished, row.Visibility, row.CreatedAt, row.UpdatedAt)
 }
 
-func (s *ContentService) ListCourses(ctx context.Context, ownerID uuid.UUID) ([]CourseView, error) {
-	rows, err := s.q.ListCoursesByOwner(ctx, ownerID)
+func (s *ContentService) ListCourses(ctx context.Context, ownerID uuid.UUID, search *string) ([]CourseView, error) {
+	rows, err := s.q.ListCoursesByOwner(ctx, query.ListCoursesByOwnerParams{
+		OwnerID: ownerID, Search: search,
+	})
 	if err != nil {
 		return nil, err
 	}
@@ -104,6 +106,9 @@ func (s *ContentService) CreateCourse(ctx context.Context, ownerID uuid.UUID, ti
 		Visibility:       vis,
 	})
 	if err != nil {
+		return CourseView{}, err
+	}
+	if _, err := s.ensureDefaultModule(ctx, row.ID); err != nil {
 		return CourseView{}, err
 	}
 	code, err := domain.GenerateInviteCode()

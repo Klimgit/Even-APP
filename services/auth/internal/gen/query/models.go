@@ -10,6 +10,16 @@ import (
 	"github.com/google/uuid"
 )
 
+type AuditEvent struct {
+	ID         uuid.UUID
+	ActorID    *uuid.UUID
+	Action     string
+	TargetType *string
+	TargetID   *uuid.UUID
+	Details    []byte
+	CreatedAt  time.Time
+}
+
 type DemoNote struct {
 	ID        uuid.UUID
 	Text      string

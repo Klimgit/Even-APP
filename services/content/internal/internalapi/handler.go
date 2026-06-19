@@ -32,6 +32,7 @@ func (h *Handler) Mount(mux *http.ServeMux) {
 	mux.HandleFunc("GET /blocks/{blockId}", h.getBlock)
 	mux.HandleFunc("GET /blocks/{blockId}/lesson-id", h.getBlockLessonID)
 	mux.HandleFunc("GET /stats/published-courses", h.publishedCoursesCount)
+	mux.HandleFunc("GET /stats/total-courses", h.totalCoursesCount)
 }
 
 func (h *Handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
@@ -235,6 +236,15 @@ func (h *Handler) getBlockLessonID(w http.ResponseWriter, r *http.Request) {
 
 func (h *Handler) publishedCoursesCount(w http.ResponseWriter, r *http.Request) {
 	n, err := h.q.CountPublishedCourses(r.Context())
+	if err != nil {
+		writeErr(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]int{"count": int(n)})
+}
+
+func (h *Handler) totalCoursesCount(w http.ResponseWriter, r *http.Request) {
+	n, err := h.q.CountTotalCourses(r.Context())
 	if err != nil {
 		writeErr(w, http.StatusInternalServerError, err.Error())
 		return

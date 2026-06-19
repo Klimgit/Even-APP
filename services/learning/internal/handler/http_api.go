@@ -123,8 +123,12 @@ func (h *HTTPHandler) ListCourseLessons(ctx context.Context, params http_v1.List
 	return &http_v1.CourseLessonListResponse{Items: items}, nil
 }
 
-func (h *HTTPHandler) ListPublicCourses(ctx context.Context) ([]http_v1.PublicCourseListItem, error) {
-	rows, err := h.svc.ListPublicCourses(ctx)
+func (h *HTTPHandler) ListPublicCourses(ctx context.Context, params http_v1.ListPublicCoursesParams) ([]http_v1.PublicCourseListItem, error) {
+	q := ""
+	if v, ok := params.Q.Get(); ok {
+		q = v
+	}
+	rows, err := h.svc.ListPublicCourses(ctx, q)
 	if err != nil {
 		return nil, err
 	}
@@ -152,11 +156,14 @@ func (h *HTTPHandler) GetProgressSummary(ctx context.Context) (http_v1.GetProgre
 		return nil, err
 	}
 	return &http_v1.ProgressSummary{
-		EnrolledCourses:  summary.EnrolledCourses,
-		DictionaryWords:  summary.DictionaryWords,
-		ReviewDue:        summary.ReviewDue,
-		CompletedBlocks:  summary.CompletedBlocks,
-		CompletedLessons: summary.CompletedLessons,
+		EnrolledCourses:   summary.EnrolledCourses,
+		DictionaryWords:   summary.DictionaryWords,
+		ReviewDue:         summary.ReviewDue,
+		CompletedBlocks:   summary.CompletedBlocks,
+		CompletedLessons:  summary.CompletedLessons,
+		InProgressLessons: summary.InProgressLessons,
+		AverageScore:      summary.AverageScore,
+		TimeSpentSeconds:  summary.TimeSpentSeconds,
 	}, nil
 }
 
@@ -255,8 +262,12 @@ func (h *HTTPHandler) SubmitBlockAttempt(ctx context.Context, req *http_v1.Block
 	for k, v := range req.Response {
 		resp[k] = jsonRawToAny(v)
 	}
+	timeSpent := 0
+	if v, ok := req.TimeSpentSeconds.Get(); ok {
+		timeSpent = v
+	}
 	out, err := h.svc.SubmitBlockAttempt(ctx, claims.UserID, params.BlockId, service.AttemptInput{
-		SubItemIndex: subIdx, Response: resp, Context: ctxVal,
+		SubItemIndex: subIdx, Response: resp, Context: ctxVal, TimeSpentSeconds: timeSpent,
 	})
 	if err != nil {
 		if errors.Is(err, domain.ErrForbidden) {
@@ -328,7 +339,11 @@ func (h *HTTPHandler) ListDictionary(ctx context.Context, params http_v1.ListDic
 	if v, ok := params.CourseID.Get(); ok {
 		courseID = &v
 	}
-	rows, err := h.svc.ListDictionary(ctx, claims.UserID, courseID)
+	search := ""
+	if v, ok := params.Q.Get(); ok {
+		search = v
+	}
+	rows, err := h.svc.ListDictionary(ctx, claims.UserID, courseID, search)
 	if err != nil {
 		return nil, err
 	}

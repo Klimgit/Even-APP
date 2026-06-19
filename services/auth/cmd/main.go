@@ -48,10 +48,10 @@ func main() {
 	querier := query.New(pool)
 
 	var statsSource repository.StatsSource
-	if cfg.HasContentHTTP() || cfg.HasLearningHTTP() {
-		statsSource = repository.NewPlatformStatsRemote(cfg.ContentServiceURL, cfg.LearningServiceURL, cfg.InternalServiceToken)
+	if cfg.HasContentHTTP() || cfg.HasLearningHTTP() || cfg.HasLexiconHTTP() {
+		statsSource = repository.NewPlatformStatsRemote(cfg.ContentServiceURL, cfg.LearningServiceURL, cfg.LexiconServiceURL, cfg.InternalServiceToken)
 	} else {
-		var contentPool, learningPool *pgxpool.Pool
+		var contentPool, learningPool, lexiconPool *pgxpool.Pool
 		if cfg.ContentDatabaseURL != "" {
 			cp, err := postgres.NewPool(ctx, cfg.ContentDatabaseURL)
 			if err != nil {
@@ -68,7 +68,15 @@ func main() {
 			defer lp.Close()
 			learningPool = lp
 		}
-		statsSource = repository.NewPlatformStatsReader(contentPool, learningPool)
+		if cfg.LexiconDatabaseURL != "" {
+			xp, err := postgres.NewPool(ctx, cfg.LexiconDatabaseURL)
+			if err != nil {
+				log.Fatalf("lexicon database: %v", err)
+			}
+			defer xp.Close()
+			lexiconPool = xp
+		}
+		statsSource = repository.NewPlatformStatsReader(contentPool, learningPool, lexiconPool)
 	}
 
 	authSvc := service.NewAuthService(querier, jwtMgr, cfg.RefreshTTL, statsSource)

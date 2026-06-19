@@ -20,7 +20,7 @@ Base URL: `/api/v1`
 
 **Реализовано (ранее Phase 2):** `grammar-topics`, email-enrollment (`POST /teacher/students`), block-type favorites, `POST /review/session`, `GET /progress/summary`, bulk lexicon import, `GET /platform/stats`.
 
-**Вне MVP (ещё не реализовано):** manual enrollments (admin без invite), audit log, `time_spent_seconds` в progress summary.
+**Phase 2 (реализовано):** `POST /platform/enrollments`, audit log (`GET /platform/audit`), `time_spent_seconds` в progress summary, platform user admin CRUD.
 
 ---
 
@@ -709,27 +709,11 @@ Query: `?q=`, `?kind=`, `?page=`, `?limit=`
 
 ---
 
-## Platform — пользователи и роли
-
-### PATCH /platform/users/{userId}
-
-**MVP.** **RequirePlatformAdmin**
-
-**Body:**
-
-```json
-{ "role": "teacher", "is_admin": true }
-```
-
-Поля опциональны.
-
-**Response 200:** `UserDTO`
-
----
+## Platform — пользователи, audit, stats
 
 ### GET /platform/users
 
-**MVP.** Список пользователей.
+**RequirePlatformAdmin** — список пользователей.
 
 Query: `?q=`, `?role=teacher|student`, `?page=`, `?limit=`
 
@@ -737,11 +721,57 @@ Query: `?q=`, `?role=teacher|student`, `?page=`, `?limit=`
 
 ---
 
+### POST /platform/users
+
+**RequirePlatformAdmin** — создать пользователя.
+
+**Body:** `{ "email", "password", "role", "display_name?", "is_admin?" }`
+
+**Response 201:** `UserDTO`
+
+---
+
+### GET /platform/users/{userId}
+
+**Response 200:** `UserDTO`
+
+---
+
+### PATCH /platform/users/{userId}
+
+**Body:** `{ "role": "teacher", "is_admin": true }` (поля опциональны)
+
+**Response 200:** `UserDTO`
+
+---
+
+### DELETE /platform/users/{userId}
+
+**Response 204**
+
+---
+
+### POST /platform/users/{userId}/reset-password
+
+**Body:** `{ "password": "newpass12345" }`
+
+**Response 204**
+
+---
+
+### GET /platform/audit
+
+**RequirePlatformAdmin** — audit log admin-действий.
+
+Query: `?action=user.create|user.update|user.delete|user.reset_password`, `?page=`, `?limit=`
+
+**Response 200:** `{ items: AuditEvent[], total }`
+
+---
+
 ### GET /platform/stats
 
-**MVP.** Агрегаты для admin UI: пользователи (auth DB), опубликованные курсы и активные enrollments (cross-DB).
-
-**RequirePlatformAdmin**
+**RequirePlatformAdmin** — агрегаты: users (auth), published/total courses, active enrollments, platform lexemes.
 
 **Response 200:**
 
@@ -749,7 +779,9 @@ Query: `?q=`, `?role=teacher|student`, `?page=`, `?limit=`
 {
   "users": { "total": 0, "students": 0, "teachers": 0, "admins": 0 },
   "published_courses": 0,
-  "active_enrollments": 0
+  "active_enrollments": 0,
+  "total_courses": 0,
+  "platform_lexemes": 0
 }
 ```
 

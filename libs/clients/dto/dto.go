@@ -99,6 +99,11 @@ type IDsRequest struct {
 	IDs []uuid.UUID `json:"ids"`
 }
 
+type FilterLexemeIDsRequest struct {
+	IDs []uuid.UUID `json:"ids"`
+	Q   string      `json:"q"`
+}
+
 type UpsertSnapshotRequest struct {
 	LessonID uuid.UUID       `json:"lesson_id"`
 	CourseID uuid.UUID       `json:"course_id"`

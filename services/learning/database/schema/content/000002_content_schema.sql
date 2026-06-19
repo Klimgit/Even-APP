@@ -18,9 +18,19 @@ CREATE TABLE course_invite_codes (
     created_at TIMESTAMPTZ NOT NULL
 );
 
+CREATE TABLE course_modules (
+    id         UUID PRIMARY KEY,
+    course_id  UUID NOT NULL,
+    title      TEXT NOT NULL,
+    sort_order INT NOT NULL,
+    created_at TIMESTAMPTZ NOT NULL,
+    updated_at TIMESTAMPTZ NOT NULL
+);
+
 CREATE TABLE lessons (
     id           UUID PRIMARY KEY,
     course_id    UUID NOT NULL,
+    module_id    UUID NOT NULL,
     title        TEXT NOT NULL,
     sort_order   INT NOT NULL,
     version      INT NOT NULL,

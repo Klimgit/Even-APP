@@ -54,13 +54,14 @@ JOIN (
 WHERE ubp.user_id = $1;
 
 -- name: UpsertUserBlockProgress :one
-INSERT INTO user_block_progress (user_id, lesson_block_id, status, score, attempts, last_attempt_at)
-VALUES ($1, $2, $3, $4, $5, now())
+INSERT INTO user_block_progress (user_id, lesson_block_id, status, score, attempts, last_attempt_at, time_spent_seconds)
+VALUES ($1, $2, $3, $4, $5, now(), $6)
 ON CONFLICT (user_id, lesson_block_id) DO UPDATE SET
     status = EXCLUDED.status,
     score = EXCLUDED.score,
     attempts = EXCLUDED.attempts,
-    last_attempt_at = now()
+    last_attempt_at = now(),
+    time_spent_seconds = user_block_progress.time_spent_seconds + EXCLUDED.time_spent_seconds
 RETURNING *;
 
 -- name: InsertBlockAttempt :exec
@@ -183,7 +184,45 @@ SELECT
          SELECT COUNT(*)::int
          FROM jsonb_array_elements(pls.snapshot->'blocks') AS elem
          WHERE COALESCE((elem->>'is_gradable')::bool, false) = true
-     )) AS completed_lessons;
+     )) AS completed_lessons,
+    (SELECT COUNT(*)::int
+     FROM published_lesson_snapshots pls
+     JOIN course_enrollments ce ON ce.course_id = pls.course_id AND ce.user_id = $1 AND ce.status = 'active'
+     WHERE (
+         SELECT COUNT(*)::int
+         FROM jsonb_array_elements(pls.snapshot->'blocks') AS elem
+         WHERE COALESCE((elem->>'is_gradable')::bool, false) = true
+     ) > 0
+     AND (
+         SELECT COUNT(*) FILTER (WHERE ubp.status = 'completed')::int
+         FROM user_block_progress ubp
+         WHERE ubp.user_id = $1
+           AND ubp.lesson_block_id IN (
+               SELECT (elem->>'id')::uuid
+               FROM jsonb_array_elements(pls.snapshot->'blocks') AS elem
+               WHERE COALESCE((elem->>'is_gradable')::bool, false) = true
+           )
+     ) > 0
+     AND (
+         SELECT COUNT(*) FILTER (WHERE ubp.status = 'completed')::int
+         FROM user_block_progress ubp
+         WHERE ubp.user_id = $1
+           AND ubp.lesson_block_id IN (
+               SELECT (elem->>'id')::uuid
+               FROM jsonb_array_elements(pls.snapshot->'blocks') AS elem
+               WHERE COALESCE((elem->>'is_gradable')::bool, false) = true
+           )
+     ) < (
+         SELECT COUNT(*)::int
+         FROM jsonb_array_elements(pls.snapshot->'blocks') AS elem
+         WHERE COALESCE((elem->>'is_gradable')::bool, false) = true
+     )) AS in_progress_lessons,
+    (SELECT COALESCE(AVG(ubp.score), 0)::float8
+     FROM user_block_progress ubp
+     WHERE ubp.user_id = $1 AND ubp.status = 'completed') AS average_score,
+    (SELECT COALESCE(SUM(ubp.time_spent_seconds), 0)::int
+     FROM user_block_progress ubp
+     WHERE ubp.user_id = $1) AS time_spent_seconds;
 
 -- name: ListEnrollmentsByCourse :many
 SELECT user_id, course_id, status, enrolled_at, enrolled_by

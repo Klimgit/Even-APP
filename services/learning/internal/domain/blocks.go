@@ -11,8 +11,8 @@ var GradableBlockTypes = map[string]bool{
 	"prompt_sentence_type":       true,
 	"listen_choose_word":         true,
 	"listen_type_word":           true,
-	"reading_yes_no":             true,
-	"true_false_unknown":         true,
+	"listen_sentence_word_order": true,
+	"listen_sentence_type":       true,
 }
 
 func IsGradable(blockType string) bool {

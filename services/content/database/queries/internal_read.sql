@@ -34,6 +34,9 @@ ORDER BY c.updated_at DESC;
 -- name: CountPublishedCourses :one
 SELECT COUNT(*)::int AS count FROM courses WHERE is_published = true;
 
+-- name: CountTotalCourses :one
+SELECT COUNT(*)::int AS count FROM courses;
+
 -- name: GetLessonTitle :one
 SELECT title FROM lessons WHERE id = $1;
 

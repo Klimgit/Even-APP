@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"errors"
 	"net/http"
+	"strings"
 
 	"github.com/even-app/even-app/libs/clients/dto"
 	"github.com/even-app/even-app/services/lexicon/internal/gen/query"
@@ -23,6 +24,8 @@ func (h *Handler) Mount(mux *http.ServeMux) {
 	mux.HandleFunc("GET /languages/{languageId}", h.getLanguage)
 	mux.HandleFunc("POST /languages/by-ids", h.languagesByIDs)
 	mux.HandleFunc("POST /lexemes/by-ids", h.lexemesByIDs)
+	mux.HandleFunc("POST /lexemes/filter-by-search", h.filterLexemeIDsBySearch)
+	mux.HandleFunc("GET /stats/platform-lexemes", h.platformLexemesCount)
 }
 
 func (h *Handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
@@ -99,4 +102,34 @@ func (h *Handler) lexemesByIDs(w http.ResponseWriter, r *http.Request) {
 		out = append(out, dto.LexemeView{ID: row.ID, Lemma: row.Lemma, PartOfSpeech: row.PartOfSpeech})
 	}
 	writeJSON(w, http.StatusOK, out)
+}
+
+func (h *Handler) filterLexemeIDsBySearch(w http.ResponseWriter, r *http.Request) {
+	var req dto.FilterLexemeIDsRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		writeErr(w, http.StatusBadRequest, "invalid json")
+		return
+	}
+	q := strings.TrimSpace(req.Q)
+	if q == "" || len(req.IDs) == 0 {
+		writeJSON(w, http.StatusOK, req.IDs)
+		return
+	}
+	rows, err := h.q.FilterLexemeIDsBySearch(r.Context(), query.FilterLexemeIDsBySearchParams{
+		Column1: req.IDs, Column2: &q,
+	})
+	if err != nil {
+		writeErr(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+	writeJSON(w, http.StatusOK, rows)
+}
+
+func (h *Handler) platformLexemesCount(w http.ResponseWriter, r *http.Request) {
+	n, err := h.q.CountLexemes(r.Context())
+	if err != nil {
+		writeErr(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]int{"count": int(n)})
 }

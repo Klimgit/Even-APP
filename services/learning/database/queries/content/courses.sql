@@ -49,16 +49,21 @@ SELECT
     c.updated_at
 FROM courses c
 WHERE c.is_published = true AND c.visibility = 'public'
+  AND (
+    sqlc.narg('search')::text IS NULL
+    OR sqlc.narg('search')::text = ''
+    OR c.title ILIKE '%' || sqlc.narg('search') || '%'
+  )
 ORDER BY c.updated_at DESC;
 
 -- name: ListPublishedLessonsByCourse :many
-SELECT id, course_id, title, sort_order, version, status, published_at, updated_at
+SELECT id, course_id, module_id, title, sort_order, version, status, published_at, updated_at
 FROM lessons
 WHERE course_id = $1 AND status = 'published'
 ORDER BY sort_order ASC;
 
 -- name: GetPublishedLessonByID :one
-SELECT id, course_id, title, sort_order, version, status, published_at, updated_at
+SELECT id, course_id, module_id, title, sort_order, version, status, published_at, updated_at
 FROM lessons
 WHERE id = $1 AND status = 'published';
 
@@ -76,7 +81,7 @@ ORDER BY sort_order ASC;
 
 -- name: GetLessonBlock :one
 SELECT lb.id, lb.lesson_id, lb.section_id, lb.sort_order, lb.display_label, lb.title, lb.block_type, lb.config, lb.is_homework,
-       l.course_id, l.id AS lesson_id, l.title AS lesson_title, l.status AS lesson_status
+       l.course_id, l.module_id, l.id AS lesson_id, l.title AS lesson_title, l.status AS lesson_status
 FROM lesson_blocks lb
 JOIN lessons l ON l.id = lb.lesson_id
 WHERE lb.id = $1;

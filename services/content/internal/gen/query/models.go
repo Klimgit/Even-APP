@@ -16,15 +16,13 @@ type CourseInviteCode struct {
 	CreatedAt time.Time
 }
 
-type Lesson struct {
-	ID          uuid.UUID
-	CourseID    uuid.UUID
-	Title       string
-	SortOrder   int32
-	Version     int32
-	Status      string
-	PublishedAt *time.Time
-	UpdatedAt   time.Time
+type CourseModule struct {
+	ID        uuid.UUID
+	CourseID  uuid.UUID
+	Title     string
+	SortOrder int32
+	CreatedAt time.Time
+	UpdatedAt time.Time
 }
 
 type LessonBlock struct {

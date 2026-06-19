@@ -81,6 +81,12 @@ func (c *Client) PublishedCoursesCount(ctx context.Context) (int, error) {
 	return out.Count, err
 }
 
+func (c *Client) TotalCoursesCount(ctx context.Context) (int, error) {
+	var out dto.CountResponse
+	err := c.http.DoJSON(ctx, "GET", "/api/v1/internal/stats/total-courses", nil, &out)
+	return out.Count, err
+}
+
 func (c *Client) LessonSnapshotJSON(ctx context.Context, lessonID uuid.UUID) (json.RawMessage, error) {
 	var out struct {
 		Snapshot json.RawMessage `json:"snapshot"`

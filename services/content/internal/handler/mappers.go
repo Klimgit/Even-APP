@@ -33,15 +33,15 @@ func mapCourses(rows []service.CourseView) []http_v1.Course {
 	return out
 }
 
-func mapLessonSummary(row query.Lesson) http_v1.LessonSummary {
+func mapLessonSummary(row service.Lesson) http_v1.LessonSummary {
 	return http_v1.LessonSummary{
-		ID: row.ID, CourseID: row.CourseID, Title: row.Title,
+		ID: row.ID, CourseID: row.CourseID, ModuleID: row.ModuleID, Title: row.Title,
 		SortOrder: int(row.SortOrder), Version: int(row.Version),
 		Status: http_v1.LessonSummaryStatus(row.Status),
 	}
 }
 
-func mapLessonSummaries(rows []query.Lesson) []http_v1.LessonSummary {
+func mapLessonSummaries(rows []service.Lesson) []http_v1.LessonSummary {
 	out := make([]http_v1.LessonSummary, len(rows))
 	for i, r := range rows {
 		out[i] = mapLessonSummary(r)

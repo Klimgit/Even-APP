@@ -5,6 +5,7 @@ import (
 	"errors"
 
 	"github.com/even-app/even-app/libs/http/middleware"
+	libjwt "github.com/even-app/even-app/libs/jwt"
 	"github.com/even-app/even-app/services/lexicon/internal/domain"
 	http_v1 "github.com/even-app/even-app/services/lexicon/internal/gen/http/v1"
 	"github.com/even-app/even-app/services/lexicon/internal/service"
@@ -21,15 +22,15 @@ func NewHTTPHandler(svc *service.LexiconService) *HTTPHandler {
 	return &HTTPHandler{svc: svc}
 }
 
-func (h *HTTPHandler) requireTeacher(ctx context.Context) error {
+func (h *HTTPHandler) requireTeacher(ctx context.Context) (libjwt.Claims, error) {
 	claims, ok := middleware.ClaimsFromContext(ctx)
 	if !ok {
-		return domain.ErrUnauthorized
+		return libjwt.Claims{}, domain.ErrUnauthorized
 	}
 	if claims.Role != "teacher" && !claims.IsAdmin {
-		return domain.ErrForbidden
+		return libjwt.Claims{}, domain.ErrForbidden
 	}
-	return nil
+	return claims, nil
 }
 
 func (h *HTTPHandler) requireAdmin(ctx context.Context) error {
@@ -508,7 +509,8 @@ func (h *HTTPHandler) DeletePlatformLexemeMedia(ctx context.Context, params http
 }
 
 func (h *HTTPHandler) ListTeacherLexicon(ctx context.Context, params http_v1.ListTeacherLexiconParams) (http_v1.ListTeacherLexiconRes, error) {
-	if err := h.requireTeacher(ctx); err != nil {
+	claims, err := h.requireTeacher(ctx)
+	if err != nil {
 		return nil, err
 	}
 	page, limit := 1, 20
@@ -522,7 +524,7 @@ func (h *HTTPHandler) ListTeacherLexicon(ctx context.Context, params http_v1.Lis
 	if v, ok := params.Q.Get(); ok {
 		q = v
 	}
-	result, err := h.svc.ListLexemes(ctx, params.Code, q, page, limit)
+	result, err := h.svc.ListPickerLexemes(ctx, params.Code, claims.UserID, q, page, limit)
 	if err != nil {
 		return nil, err
 	}
@@ -535,10 +537,11 @@ func (h *HTTPHandler) ListTeacherLexicon(ctx context.Context, params http_v1.Lis
 }
 
 func (h *HTTPHandler) GetTeacherLexeme(ctx context.Context, params http_v1.GetTeacherLexemeParams) (http_v1.GetTeacherLexemeRes, error) {
-	if err := h.requireTeacher(ctx); err != nil {
+	claims, err := h.requireTeacher(ctx)
+	if err != nil {
 		return nil, err
 	}
-	full, err := h.svc.GetLexeme(ctx, params.LexemeId)
+	full, err := h.svc.GetLexemeForReader(ctx, params.LexemeId, claims.UserID, claims.IsAdmin)
 	if err != nil {
 		return nil, err
 	}
@@ -613,7 +616,7 @@ func (h *HTTPHandler) DeletePlatformGrammarTopic(ctx context.Context, params htt
 }
 
 func (h *HTTPHandler) GetTeacherLexemeUsage(ctx context.Context, params http_v1.GetTeacherLexemeUsageParams) (http_v1.GetTeacherLexemeUsageRes, error) {
-	if err := h.requireTeacher(ctx); err != nil {
+	if _, err := h.requireTeacher(ctx); err != nil {
 		return nil, err
 	}
 	usage, err := h.svc.GetLexemeUsage(ctx, params.LexemeId, params.CourseID)

@@ -25,6 +25,20 @@ func (q *Queries) CountPublishedCourses(ctx context.Context) (int32, error) {
 	return count, err
 }
 
+const countTotalCourses = `-- name: CountTotalCourses :one
+SELECT COUNT(*)::int AS count FROM courses
+`
+
+// CountTotalCourses
+//
+//	SELECT COUNT(*)::int AS count FROM courses
+func (q *Queries) CountTotalCourses(ctx context.Context) (int32, error) {
+	row := q.db.QueryRow(ctx, countTotalCourses)
+	var count int32
+	err := row.Scan(&count)
+	return count, err
+}
+
 const getCourseByInviteCode = `-- name: GetCourseByInviteCode :one
 
 SELECT

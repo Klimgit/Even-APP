@@ -7,6 +7,7 @@ package query
 
 import (
 	"context"
+	"time"
 
 	"github.com/google/uuid"
 )
@@ -28,19 +29,45 @@ func (q *Queries) ClearPrimaryLexemeMedia(ctx context.Context, arg ClearPrimaryL
 	return err
 }
 
+const countLexemes = `-- name: CountLexemes :one
+SELECT COUNT(*)::int AS count FROM lexemes WHERE scope = 'platform'
+`
+
+// CountLexemes
+//
+//	SELECT COUNT(*)::int AS count FROM lexemes WHERE scope = 'platform'
+func (q *Queries) CountLexemes(ctx context.Context) (int32, error) {
+	row := q.db.QueryRow(ctx, countLexemes)
+	var count int32
+	err := row.Scan(&count)
+	return count, err
+}
+
 const countLexemesByLanguage = `-- name: CountLexemesByLanguage :one
 SELECT count(*)::int AS count
 FROM lexemes
 WHERE language_id = $1
+  AND scope = $2
   AND (
-    $2::text IS NULL
-    OR $2::text = ''
-    OR lemma ILIKE '%' || $2 || '%'
+    $3::uuid IS NULL
+    OR owner_id = $3
+  )
+  AND (
+    $4::text IS NULL
+    OR $4::text = ''
+    OR lemma ILIKE '%' || $4 || '%'
+    OR EXISTS (
+      SELECT 1 FROM lexeme_translations t
+      WHERE t.source_lexeme_id = lexemes.id
+        AND t.text ILIKE '%' || $4 || '%'
+    )
   )
 `
 
 type CountLexemesByLanguageParams struct {
 	LanguageID uuid.UUID
+	Scope      string
+	OwnerID    *uuid.UUID
 	Search     *string
 }
 
@@ -49,22 +76,89 @@ type CountLexemesByLanguageParams struct {
 //	SELECT count(*)::int AS count
 //	FROM lexemes
 //	WHERE language_id = $1
+//	  AND scope = $2
 //	  AND (
-//	    $2::text IS NULL
-//	    OR $2::text = ''
-//	    OR lemma ILIKE '%' || $2 || '%'
+//	    $3::uuid IS NULL
+//	    OR owner_id = $3
+//	  )
+//	  AND (
+//	    $4::text IS NULL
+//	    OR $4::text = ''
+//	    OR lemma ILIKE '%' || $4 || '%'
+//	    OR EXISTS (
+//	      SELECT 1 FROM lexeme_translations t
+//	      WHERE t.source_lexeme_id = lexemes.id
+//	        AND t.text ILIKE '%' || $4 || '%'
+//	    )
 //	  )
 func (q *Queries) CountLexemesByLanguage(ctx context.Context, arg CountLexemesByLanguageParams) (int32, error) {
-	row := q.db.QueryRow(ctx, countLexemesByLanguage, arg.LanguageID, arg.Search)
+	row := q.db.QueryRow(ctx, countLexemesByLanguage,
+		arg.LanguageID,
+		arg.Scope,
+		arg.OwnerID,
+		arg.Search,
+	)
+	var count int32
+	err := row.Scan(&count)
+	return count, err
+}
+
+const countPickerLexemes = `-- name: CountPickerLexemes :one
+SELECT count(*)::int AS count
+FROM lexemes
+WHERE language_id = $1
+  AND (
+    scope = 'platform'
+    OR (scope = 'teacher' AND owner_id = $2)
+  )
+  AND (
+    $3::text IS NULL
+    OR $3::text = ''
+    OR lemma ILIKE '%' || $3 || '%'
+    OR EXISTS (
+      SELECT 1 FROM lexeme_translations t
+      WHERE t.source_lexeme_id = lexemes.id
+        AND t.text ILIKE '%' || $3 || '%'
+    )
+  )
+`
+
+type CountPickerLexemesParams struct {
+	LanguageID uuid.UUID
+	OwnerID    *uuid.UUID
+	Search     *string
+}
+
+// CountPickerLexemes
+//
+//	SELECT count(*)::int AS count
+//	FROM lexemes
+//	WHERE language_id = $1
+//	  AND (
+//	    scope = 'platform'
+//	    OR (scope = 'teacher' AND owner_id = $2)
+//	  )
+//	  AND (
+//	    $3::text IS NULL
+//	    OR $3::text = ''
+//	    OR lemma ILIKE '%' || $3 || '%'
+//	    OR EXISTS (
+//	      SELECT 1 FROM lexeme_translations t
+//	      WHERE t.source_lexeme_id = lexemes.id
+//	        AND t.text ILIKE '%' || $3 || '%'
+//	    )
+//	  )
+func (q *Queries) CountPickerLexemes(ctx context.Context, arg CountPickerLexemesParams) (int32, error) {
+	row := q.db.QueryRow(ctx, countPickerLexemes, arg.LanguageID, arg.OwnerID, arg.Search)
 	var count int32
 	err := row.Scan(&count)
 	return count, err
 }
 
 const createLexeme = `-- name: CreateLexeme :one
-INSERT INTO lexemes (language_id, lemma, part_of_speech, notes, created_by)
-VALUES ($1, $2, $3, $4, $5)
-RETURNING id, language_id, lemma, part_of_speech, notes, created_by, created_at, updated_at
+INSERT INTO lexemes (language_id, lemma, part_of_speech, notes, scope, owner_id, created_by)
+VALUES ($1, $2, $3, $4, $5, $6, $7)
+RETURNING id, language_id, lemma, part_of_speech, notes, scope, owner_id, created_by, created_at, updated_at
 `
 
 type CreateLexemeParams struct {
@@ -72,29 +166,48 @@ type CreateLexemeParams struct {
 	Lemma        string
 	PartOfSpeech *string
 	Notes        *string
+	Scope        string
+	OwnerID      *uuid.UUID
 	CreatedBy    *uuid.UUID
+}
+
+type CreateLexemeRow struct {
+	ID           uuid.UUID
+	LanguageID   uuid.UUID
+	Lemma        string
+	PartOfSpeech *string
+	Notes        *string
+	Scope        string
+	OwnerID      *uuid.UUID
+	CreatedBy    *uuid.UUID
+	CreatedAt    time.Time
+	UpdatedAt    time.Time
 }
 
 // CreateLexeme
 //
-//	INSERT INTO lexemes (language_id, lemma, part_of_speech, notes, created_by)
-//	VALUES ($1, $2, $3, $4, $5)
-//	RETURNING id, language_id, lemma, part_of_speech, notes, created_by, created_at, updated_at
-func (q *Queries) CreateLexeme(ctx context.Context, arg CreateLexemeParams) (Lexeme, error) {
+//	INSERT INTO lexemes (language_id, lemma, part_of_speech, notes, scope, owner_id, created_by)
+//	VALUES ($1, $2, $3, $4, $5, $6, $7)
+//	RETURNING id, language_id, lemma, part_of_speech, notes, scope, owner_id, created_by, created_at, updated_at
+func (q *Queries) CreateLexeme(ctx context.Context, arg CreateLexemeParams) (CreateLexemeRow, error) {
 	row := q.db.QueryRow(ctx, createLexeme,
 		arg.LanguageID,
 		arg.Lemma,
 		arg.PartOfSpeech,
 		arg.Notes,
+		arg.Scope,
+		arg.OwnerID,
 		arg.CreatedBy,
 	)
-	var i Lexeme
+	var i CreateLexemeRow
 	err := row.Scan(
 		&i.ID,
 		&i.LanguageID,
 		&i.Lemma,
 		&i.PartOfSpeech,
 		&i.Notes,
+		&i.Scope,
+		&i.OwnerID,
 		&i.CreatedBy,
 		&i.CreatedAt,
 		&i.UpdatedAt,
@@ -276,8 +389,54 @@ func (q *Queries) DeleteLexemeTranslation(ctx context.Context, arg DeleteLexemeT
 	return err
 }
 
+const filterLexemeIDsBySearch = `-- name: FilterLexemeIDsBySearch :many
+SELECT DISTINCT l.id
+FROM lexemes l
+LEFT JOIN lexeme_translations t ON t.source_lexeme_id = l.id
+WHERE l.id = ANY($1::uuid[])
+  AND (
+    l.lemma ILIKE '%' || $2 || '%'
+    OR t.text ILIKE '%' || $2 || '%'
+  )
+`
+
+type FilterLexemeIDsBySearchParams struct {
+	Column1 []uuid.UUID
+	Column2 *string
+}
+
+// FilterLexemeIDsBySearch
+//
+//	SELECT DISTINCT l.id
+//	FROM lexemes l
+//	LEFT JOIN lexeme_translations t ON t.source_lexeme_id = l.id
+//	WHERE l.id = ANY($1::uuid[])
+//	  AND (
+//	    l.lemma ILIKE '%' || $2 || '%'
+//	    OR t.text ILIKE '%' || $2 || '%'
+//	  )
+func (q *Queries) FilterLexemeIDsBySearch(ctx context.Context, arg FilterLexemeIDsBySearchParams) ([]uuid.UUID, error) {
+	rows, err := q.db.Query(ctx, filterLexemeIDsBySearch, arg.Column1, arg.Column2)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []uuid.UUID
+	for rows.Next() {
+		var id uuid.UUID
+		if err := rows.Scan(&id); err != nil {
+			return nil, err
+		}
+		items = append(items, id)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const getLexeme = `-- name: GetLexeme :one
-SELECT id, language_id, lemma, part_of_speech, notes, created_by, created_at, updated_at
+SELECT id, language_id, lemma, part_of_speech, notes, scope, owner_id, created_by, created_at, updated_at
 FROM lexemes
 WHERE id = $1
 `
@@ -286,20 +445,35 @@ type GetLexemeParams struct {
 	ID uuid.UUID
 }
 
+type GetLexemeRow struct {
+	ID           uuid.UUID
+	LanguageID   uuid.UUID
+	Lemma        string
+	PartOfSpeech *string
+	Notes        *string
+	Scope        string
+	OwnerID      *uuid.UUID
+	CreatedBy    *uuid.UUID
+	CreatedAt    time.Time
+	UpdatedAt    time.Time
+}
+
 // GetLexeme
 //
-//	SELECT id, language_id, lemma, part_of_speech, notes, created_by, created_at, updated_at
+//	SELECT id, language_id, lemma, part_of_speech, notes, scope, owner_id, created_by, created_at, updated_at
 //	FROM lexemes
 //	WHERE id = $1
-func (q *Queries) GetLexeme(ctx context.Context, arg GetLexemeParams) (Lexeme, error) {
+func (q *Queries) GetLexeme(ctx context.Context, arg GetLexemeParams) (GetLexemeRow, error) {
 	row := q.db.QueryRow(ctx, getLexeme, arg.ID)
-	var i Lexeme
+	var i GetLexemeRow
 	err := row.Scan(
 		&i.ID,
 		&i.LanguageID,
 		&i.Lemma,
 		&i.PartOfSpeech,
 		&i.Notes,
+		&i.Scope,
+		&i.OwnerID,
 		&i.CreatedBy,
 		&i.CreatedAt,
 		&i.UpdatedAt,
@@ -523,40 +697,77 @@ func (q *Queries) ListLexemeTranslations(ctx context.Context, arg ListLexemeTran
 }
 
 const listLexemesByLanguage = `-- name: ListLexemesByLanguage :many
-SELECT id, language_id, lemma, part_of_speech, notes, created_by, created_at, updated_at
+SELECT id, language_id, lemma, part_of_speech, notes, scope, owner_id, created_by, created_at, updated_at
 FROM lexemes
 WHERE language_id = $1
+  AND scope = $2
   AND (
-    $2::text IS NULL
-    OR $2::text = ''
-    OR lemma ILIKE '%' || $2 || '%'
+    $3::uuid IS NULL
+    OR owner_id = $3
+  )
+  AND (
+    $4::text IS NULL
+    OR $4::text = ''
+    OR lemma ILIKE '%' || $4 || '%'
+    OR EXISTS (
+      SELECT 1 FROM lexeme_translations t
+      WHERE t.source_lexeme_id = lexemes.id
+        AND t.text ILIKE '%' || $4 || '%'
+    )
   )
 ORDER BY lemma
-LIMIT $4 OFFSET $3
+LIMIT $6 OFFSET $5
 `
 
 type ListLexemesByLanguageParams struct {
 	LanguageID uuid.UUID
+	Scope      string
+	OwnerID    *uuid.UUID
 	Search     *string
 	Offset     int32
 	Limit      int32
 }
 
+type ListLexemesByLanguageRow struct {
+	ID           uuid.UUID
+	LanguageID   uuid.UUID
+	Lemma        string
+	PartOfSpeech *string
+	Notes        *string
+	Scope        string
+	OwnerID      *uuid.UUID
+	CreatedBy    *uuid.UUID
+	CreatedAt    time.Time
+	UpdatedAt    time.Time
+}
+
 // ListLexemesByLanguage
 //
-//	SELECT id, language_id, lemma, part_of_speech, notes, created_by, created_at, updated_at
+//	SELECT id, language_id, lemma, part_of_speech, notes, scope, owner_id, created_by, created_at, updated_at
 //	FROM lexemes
 //	WHERE language_id = $1
+//	  AND scope = $2
 //	  AND (
-//	    $2::text IS NULL
-//	    OR $2::text = ''
-//	    OR lemma ILIKE '%' || $2 || '%'
+//	    $3::uuid IS NULL
+//	    OR owner_id = $3
+//	  )
+//	  AND (
+//	    $4::text IS NULL
+//	    OR $4::text = ''
+//	    OR lemma ILIKE '%' || $4 || '%'
+//	    OR EXISTS (
+//	      SELECT 1 FROM lexeme_translations t
+//	      WHERE t.source_lexeme_id = lexemes.id
+//	        AND t.text ILIKE '%' || $4 || '%'
+//	    )
 //	  )
 //	ORDER BY lemma
-//	LIMIT $4 OFFSET $3
-func (q *Queries) ListLexemesByLanguage(ctx context.Context, arg ListLexemesByLanguageParams) ([]Lexeme, error) {
+//	LIMIT $6 OFFSET $5
+func (q *Queries) ListLexemesByLanguage(ctx context.Context, arg ListLexemesByLanguageParams) ([]ListLexemesByLanguageRow, error) {
 	rows, err := q.db.Query(ctx, listLexemesByLanguage,
 		arg.LanguageID,
+		arg.Scope,
+		arg.OwnerID,
 		arg.Search,
 		arg.Offset,
 		arg.Limit,
@@ -565,15 +776,118 @@ func (q *Queries) ListLexemesByLanguage(ctx context.Context, arg ListLexemesByLa
 		return nil, err
 	}
 	defer rows.Close()
-	var items []Lexeme
+	var items []ListLexemesByLanguageRow
 	for rows.Next() {
-		var i Lexeme
+		var i ListLexemesByLanguageRow
 		if err := rows.Scan(
 			&i.ID,
 			&i.LanguageID,
 			&i.Lemma,
 			&i.PartOfSpeech,
 			&i.Notes,
+			&i.Scope,
+			&i.OwnerID,
+			&i.CreatedBy,
+			&i.CreatedAt,
+			&i.UpdatedAt,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const listPickerLexemes = `-- name: ListPickerLexemes :many
+SELECT id, language_id, lemma, part_of_speech, notes, scope, owner_id, created_by, created_at, updated_at
+FROM lexemes
+WHERE language_id = $1
+  AND (
+    scope = 'platform'
+    OR (scope = 'teacher' AND owner_id = $2)
+  )
+  AND (
+    $3::text IS NULL
+    OR $3::text = ''
+    OR lemma ILIKE '%' || $3 || '%'
+    OR EXISTS (
+      SELECT 1 FROM lexeme_translations t
+      WHERE t.source_lexeme_id = lexemes.id
+        AND t.text ILIKE '%' || $3 || '%'
+    )
+  )
+ORDER BY lemma
+LIMIT $5 OFFSET $4
+`
+
+type ListPickerLexemesParams struct {
+	LanguageID uuid.UUID
+	OwnerID    *uuid.UUID
+	Search     *string
+	Offset     int32
+	Limit      int32
+}
+
+type ListPickerLexemesRow struct {
+	ID           uuid.UUID
+	LanguageID   uuid.UUID
+	Lemma        string
+	PartOfSpeech *string
+	Notes        *string
+	Scope        string
+	OwnerID      *uuid.UUID
+	CreatedBy    *uuid.UUID
+	CreatedAt    time.Time
+	UpdatedAt    time.Time
+}
+
+// ListPickerLexemes
+//
+//	SELECT id, language_id, lemma, part_of_speech, notes, scope, owner_id, created_by, created_at, updated_at
+//	FROM lexemes
+//	WHERE language_id = $1
+//	  AND (
+//	    scope = 'platform'
+//	    OR (scope = 'teacher' AND owner_id = $2)
+//	  )
+//	  AND (
+//	    $3::text IS NULL
+//	    OR $3::text = ''
+//	    OR lemma ILIKE '%' || $3 || '%'
+//	    OR EXISTS (
+//	      SELECT 1 FROM lexeme_translations t
+//	      WHERE t.source_lexeme_id = lexemes.id
+//	        AND t.text ILIKE '%' || $3 || '%'
+//	    )
+//	  )
+//	ORDER BY lemma
+//	LIMIT $5 OFFSET $4
+func (q *Queries) ListPickerLexemes(ctx context.Context, arg ListPickerLexemesParams) ([]ListPickerLexemesRow, error) {
+	rows, err := q.db.Query(ctx, listPickerLexemes,
+		arg.LanguageID,
+		arg.OwnerID,
+		arg.Search,
+		arg.Offset,
+		arg.Limit,
+	)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []ListPickerLexemesRow
+	for rows.Next() {
+		var i ListPickerLexemesRow
+		if err := rows.Scan(
+			&i.ID,
+			&i.LanguageID,
+			&i.Lemma,
+			&i.PartOfSpeech,
+			&i.Notes,
+			&i.Scope,
+			&i.OwnerID,
 			&i.CreatedBy,
 			&i.CreatedAt,
 			&i.UpdatedAt,
@@ -596,7 +910,7 @@ SET
     notes = $3,
     updated_at = now()
 WHERE id = $4
-RETURNING id, language_id, lemma, part_of_speech, notes, created_by, created_at, updated_at
+RETURNING id, language_id, lemma, part_of_speech, notes, scope, owner_id, created_by, created_at, updated_at
 `
 
 type UpdateLexemeParams struct {
@@ -604,6 +918,19 @@ type UpdateLexemeParams struct {
 	PartOfSpeech *string
 	Notes        *string
 	ID           uuid.UUID
+}
+
+type UpdateLexemeRow struct {
+	ID           uuid.UUID
+	LanguageID   uuid.UUID
+	Lemma        string
+	PartOfSpeech *string
+	Notes        *string
+	Scope        string
+	OwnerID      *uuid.UUID
+	CreatedBy    *uuid.UUID
+	CreatedAt    time.Time
+	UpdatedAt    time.Time
 }
 
 // UpdateLexeme
@@ -615,21 +942,23 @@ type UpdateLexemeParams struct {
 //	    notes = $3,
 //	    updated_at = now()
 //	WHERE id = $4
-//	RETURNING id, language_id, lemma, part_of_speech, notes, created_by, created_at, updated_at
-func (q *Queries) UpdateLexeme(ctx context.Context, arg UpdateLexemeParams) (Lexeme, error) {
+//	RETURNING id, language_id, lemma, part_of_speech, notes, scope, owner_id, created_by, created_at, updated_at
+func (q *Queries) UpdateLexeme(ctx context.Context, arg UpdateLexemeParams) (UpdateLexemeRow, error) {
 	row := q.db.QueryRow(ctx, updateLexeme,
 		arg.Lemma,
 		arg.PartOfSpeech,
 		arg.Notes,
 		arg.ID,
 	)
-	var i Lexeme
+	var i UpdateLexemeRow
 	err := row.Scan(
 		&i.ID,
 		&i.LanguageID,
 		&i.Lemma,
 		&i.PartOfSpeech,
 		&i.Notes,
+		&i.Scope,
+		&i.OwnerID,
 		&i.CreatedBy,
 		&i.CreatedAt,
 		&i.UpdatedAt,
@@ -668,6 +997,105 @@ func (q *Queries) UpdateLexemeForm(ctx context.Context, arg UpdateLexemeFormPara
 		&i.LexemeID,
 		&i.Form,
 		&i.Tags,
+	)
+	return i, err
+}
+
+const updateLexemeMedia = `-- name: UpdateLexemeMedia :one
+UPDATE lexeme_media
+SET
+    kind = COALESCE($1, kind),
+    label = $2,
+    is_primary = COALESCE($3, is_primary),
+    media_asset_id = COALESCE($4, media_asset_id),
+    form_id = $5
+WHERE id = $6
+RETURNING id, lexeme_id, form_id, media_asset_id, kind, label, is_primary, sort_order
+`
+
+type UpdateLexemeMediaParams struct {
+	Kind         *string
+	Label        *string
+	IsPrimary    *bool
+	MediaAssetID *uuid.UUID
+	FormID       *uuid.UUID
+	ID           uuid.UUID
+}
+
+// UpdateLexemeMedia
+//
+//	UPDATE lexeme_media
+//	SET
+//	    kind = COALESCE($1, kind),
+//	    label = $2,
+//	    is_primary = COALESCE($3, is_primary),
+//	    media_asset_id = COALESCE($4, media_asset_id),
+//	    form_id = $5
+//	WHERE id = $6
+//	RETURNING id, lexeme_id, form_id, media_asset_id, kind, label, is_primary, sort_order
+func (q *Queries) UpdateLexemeMedia(ctx context.Context, arg UpdateLexemeMediaParams) (LexemeMedium, error) {
+	row := q.db.QueryRow(ctx, updateLexemeMedia,
+		arg.Kind,
+		arg.Label,
+		arg.IsPrimary,
+		arg.MediaAssetID,
+		arg.FormID,
+		arg.ID,
+	)
+	var i LexemeMedium
+	err := row.Scan(
+		&i.ID,
+		&i.LexemeID,
+		&i.FormID,
+		&i.MediaAssetID,
+		&i.Kind,
+		&i.Label,
+		&i.IsPrimary,
+		&i.SortOrder,
+	)
+	return i, err
+}
+
+const updateLexemeTranslation = `-- name: UpdateLexemeTranslation :one
+UPDATE lexeme_translations
+SET
+    text = COALESCE($1, text),
+    target_language_id = COALESCE($2, target_language_id),
+    target_lexeme_id = $3
+WHERE id = $4
+RETURNING id, source_lexeme_id, target_language_id, text, target_lexeme_id
+`
+
+type UpdateLexemeTranslationParams struct {
+	Text             *string
+	TargetLanguageID *uuid.UUID
+	TargetLexemeID   *uuid.UUID
+	ID               uuid.UUID
+}
+
+// UpdateLexemeTranslation
+//
+//	UPDATE lexeme_translations
+//	SET
+//	    text = COALESCE($1, text),
+//	    target_language_id = COALESCE($2, target_language_id),
+//	    target_lexeme_id = $3
+//	WHERE id = $4
+//	RETURNING id, source_lexeme_id, target_language_id, text, target_lexeme_id
+func (q *Queries) UpdateLexemeTranslation(ctx context.Context, arg UpdateLexemeTranslationParams) (LexemeTranslation, error) {
+	row := q.db.QueryRow(ctx, updateLexemeTranslation,
+		arg.Text,
+		arg.TargetLanguageID,
+		arg.TargetLexemeID,
+		arg.ID,
+	)
+	var i LexemeTranslation
+	err := row.Scan(
+		&i.ID,
+		&i.SourceLexemeID,
+		&i.TargetLanguageID,
+		&i.Text,
+		&i.TargetLexemeID,
 	)
 	return i, err
 }

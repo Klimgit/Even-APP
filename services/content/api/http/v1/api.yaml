@@ -81,6 +81,11 @@ paths:
       summary: List courses owned by the current teacher
       security:
         - bearerAuth: []
+      parameters:
+        - name: q
+          in: query
+          schema:
+            type: string
       responses:
         "200":
           description: OK
@@ -221,6 +226,279 @@ paths:
           $ref: "#/components/responses/Forbidden"
         "404":
           $ref: "#/components/responses/NotFound"
+        default:
+          $ref: "#/components/responses/DefaultError"
+
+  /api/v1/teacher/courses/{courseId}/modules:
+    get:
+      operationId: listTeacherCourseModules
+      tags: [Teacher, Modules]
+      summary: List modules in a course
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/CourseId"
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/CourseModule"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        default:
+          $ref: "#/components/responses/DefaultError"
+    post:
+      operationId: createTeacherCourseModule
+      tags: [Teacher, Modules]
+      summary: Create module in course
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/CourseId"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateModuleRequest"
+      responses:
+        "201":
+          description: Created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/CourseModule"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        default:
+          $ref: "#/components/responses/DefaultError"
+
+  /api/v1/teacher/modules/{moduleId}:
+    patch:
+      operationId: patchTeacherModule
+      tags: [Teacher, Modules]
+      summary: Update module
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: moduleId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/PatchModuleRequest"
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/CourseModule"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        default:
+          $ref: "#/components/responses/DefaultError"
+    delete:
+      operationId: deleteTeacherModule
+      tags: [Teacher, Modules]
+      summary: Delete empty module
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: moduleId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        "204":
+          description: No content
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "409":
+          $ref: "#/components/responses/Conflict"
+        default:
+          $ref: "#/components/responses/DefaultError"
+
+  /api/v1/teacher/modules/{moduleId}/lessons:
+    post:
+      operationId: createTeacherModuleLesson
+      tags: [Teacher, Modules, Lessons]
+      summary: Create lesson in module
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: moduleId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateLessonRequest"
+      responses:
+        "201":
+          description: Created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/LessonSummary"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        default:
+          $ref: "#/components/responses/DefaultError"
+
+  /api/v1/platform/courses:
+    get:
+      operationId: listPlatformCourses
+      tags: [Platform, Courses]
+      summary: List all courses (platform admin)
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: q
+          in: query
+          schema:
+            type: string
+        - name: page
+          in: query
+          schema:
+            type: integer
+            default: 1
+        - name: limit
+          in: query
+          schema:
+            type: integer
+            default: 20
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PlatformCourseListResponse"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        default:
+          $ref: "#/components/responses/DefaultError"
+
+  /api/v1/teacher/courses/{courseId}/modules/reorder:
+    post:
+      operationId: reorderTeacherCourseModules
+      tags: [Teacher, Modules]
+      summary: Reorder modules in course
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/CourseId"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ReorderIdsRequest"
+      responses:
+        "204":
+          description: Reordered
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        default:
+          $ref: "#/components/responses/DefaultError"
+
+  /api/v1/teacher/courses/{courseId}/analytics:
+    get:
+      operationId: getTeacherCourseAnalytics
+      tags: [Teacher, Analytics]
+      summary: Course analytics dashboard (owner)
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/CourseId"
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/CourseAnalytics"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        default:
+          $ref: "#/components/responses/DefaultError"
+
+  /api/v1/platform/enrollments:
+    post:
+      operationId: enrollPlatformStudent
+      tags: [Platform, Enrollments]
+      summary: Manually enroll a student (platform admin)
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/PlatformEnrollRequest"
+      responses:
+        "201":
+          description: Created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Student"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
         default:
           $ref: "#/components/responses/DefaultError"
 
@@ -1048,14 +1326,102 @@ components:
           type: string
           enum: [public, invite_only]
 
-    LessonSummary:
+    CourseModule:
       type: object
-      required: [id, course_id, title, sort_order, version, status]
+      required: [id, course_id, title, sort_order]
       properties:
         id:
           type: string
           format: uuid
         course_id:
+          type: string
+          format: uuid
+        title:
+          type: string
+        sort_order:
+          type: integer
+
+    CreateModuleRequest:
+      type: object
+      required: [title]
+      properties:
+        title:
+          type: string
+        sort_order:
+          type: integer
+
+    PatchModuleRequest:
+      type: object
+      properties:
+        title:
+          type: string
+        sort_order:
+          type: integer
+
+    PlatformCourseListItem:
+      type: object
+      required: [id, title, target_language_id, ui_language_id, owner_id, is_published, visibility]
+      properties:
+        id:
+          type: string
+          format: uuid
+        title:
+          type: string
+        target_language_id:
+          type: string
+          format: uuid
+        ui_language_id:
+          type: string
+          format: uuid
+        owner_id:
+          type: string
+          format: uuid
+        is_published:
+          type: boolean
+        visibility:
+          type: string
+          enum: [public, invite_only]
+
+    PlatformCourseListResponse:
+      type: object
+      required: [items, total, page, limit]
+      properties:
+        items:
+          type: array
+          items:
+            $ref: "#/components/schemas/PlatformCourseListItem"
+        total:
+          type: integer
+        page:
+          type: integer
+        limit:
+          type: integer
+
+    CourseAnalytics:
+      type: object
+      required: [student_count, lesson_count, module_count, avg_completion_percent]
+      properties:
+        student_count:
+          type: integer
+        lesson_count:
+          type: integer
+        module_count:
+          type: integer
+        avg_completion_percent:
+          type: number
+          format: double
+
+    LessonSummary:
+      type: object
+      required: [id, course_id, module_id, title, sort_order, version, status]
+      properties:
+        id:
+          type: string
+          format: uuid
+        course_id:
+          type: string
+          format: uuid
+        module_id:
           type: string
           format: uuid
         title:
@@ -1290,6 +1656,16 @@ components:
           type: string
 
     EnrollStudentRequest:
+      type: object
+      required: [email, course_id]
+      properties:
+        email:
+          type: string
+        course_id:
+          type: string
+          format: uuid
+
+    PlatformEnrollRequest:
       type: object
       required: [email, course_id]
       properties:

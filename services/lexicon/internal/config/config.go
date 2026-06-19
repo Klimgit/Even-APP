@@ -14,6 +14,7 @@ type Config struct {
 	DatabaseURL          string
 	ContentDatabaseURL   string
 	ContentServiceURL    string
+	MediaDatabaseURL     string
 	InternalServiceToken string
 	JWTSecret            string
 }
@@ -36,6 +37,7 @@ func Load() (Config, error) {
 		DatabaseURL:          dbURL,
 		ContentDatabaseURL:   os.Getenv("CONTENT_DATABASE_URL"),
 		ContentServiceURL:    os.Getenv("CONTENT_SERVICE_URL"),
+		MediaDatabaseURL:     os.Getenv("MEDIA_DATABASE_URL"),
 		InternalServiceToken: libconfig.InternalServiceToken(),
 		JWTSecret:            jwt,
 	}, nil
@@ -47,6 +49,10 @@ func (c Config) HasContentHTTP() bool {
 
 func (c Config) HasContentDB() bool {
 	return c.ContentDatabaseURL != ""
+}
+
+func (c Config) HasMediaDB() bool {
+	return c.MediaDatabaseURL != ""
 }
 
 func (c Config) AccessTTL() time.Duration {

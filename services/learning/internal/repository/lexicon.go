@@ -2,6 +2,7 @@ package repository
 
 import (
 	"context"
+	"strings"
 
 	"github.com/even-app/even-app/services/learning/internal/gen/lexiconquery"
 	"github.com/google/uuid"
@@ -80,4 +81,14 @@ func (r *LexiconReader) LexemesByIDs(ctx context.Context, ids []uuid.UUID) (map[
 		out[row.ID] = LexemeView{ID: row.ID, Lemma: row.Lemma, PartOfSpeech: row.PartOfSpeech}
 	}
 	return out, nil
+}
+
+func (r *LexiconReader) FilterLexemeIDsBySearch(ctx context.Context, ids []uuid.UUID, search string) ([]uuid.UUID, error) {
+	search = strings.TrimSpace(search)
+	if search == "" || len(ids) == 0 {
+		return ids, nil
+	}
+	return r.queries.FilterLexemeIDsBySearch(ctx, lexiconquery.FilterLexemeIDsBySearchParams{
+		Column1: ids, Column2: &search,
+	})
 }

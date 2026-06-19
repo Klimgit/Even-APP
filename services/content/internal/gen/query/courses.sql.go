@@ -12,6 +12,32 @@ import (
 	"github.com/google/uuid"
 )
 
+const countAllCourses = `-- name: CountAllCourses :one
+SELECT COUNT(*)::int AS count
+FROM courses
+WHERE (
+    $1::text IS NULL
+    OR $1::text = ''
+    OR title ILIKE '%' || $1 || '%'
+  )
+`
+
+// CountAllCourses
+//
+//	SELECT COUNT(*)::int AS count
+//	FROM courses
+//	WHERE (
+//	    $1::text IS NULL
+//	    OR $1::text = ''
+//	    OR title ILIKE '%' || $1 || '%'
+//	  )
+func (q *Queries) CountAllCourses(ctx context.Context, search *string) (int32, error) {
+	row := q.db.QueryRow(ctx, countAllCourses, search)
+	var count int32
+	err := row.Scan(&count)
+	return count, err
+}
+
 const createCourse = `-- name: CreateCourse :one
 INSERT INTO courses (title, target_language_id, ui_language_id, owner_id, visibility)
 VALUES ($1, $2, $3, $4, $5)
@@ -136,12 +162,93 @@ func (q *Queries) GetCourseOwner(ctx context.Context, id uuid.UUID) (uuid.UUID, 
 	return owner_id, err
 }
 
+const listAllCourses = `-- name: ListAllCourses :many
+SELECT id, title, target_language_id, ui_language_id, owner_id, is_published, visibility, created_at, updated_at
+FROM courses
+WHERE (
+    $1::text IS NULL
+    OR $1::text = ''
+    OR title ILIKE '%' || $1 || '%'
+  )
+ORDER BY updated_at DESC, title
+LIMIT $3 OFFSET $2
+`
+
+type ListAllCoursesParams struct {
+	Search *string
+	Offset int32
+	Limit  int32
+}
+
+type ListAllCoursesRow struct {
+	ID               uuid.UUID
+	Title            string
+	TargetLanguageID uuid.UUID
+	UiLanguageID     uuid.UUID
+	OwnerID          uuid.UUID
+	IsPublished      bool
+	Visibility       string
+	CreatedAt        time.Time
+	UpdatedAt        time.Time
+}
+
+// ListAllCourses
+//
+//	SELECT id, title, target_language_id, ui_language_id, owner_id, is_published, visibility, created_at, updated_at
+//	FROM courses
+//	WHERE (
+//	    $1::text IS NULL
+//	    OR $1::text = ''
+//	    OR title ILIKE '%' || $1 || '%'
+//	  )
+//	ORDER BY updated_at DESC, title
+//	LIMIT $3 OFFSET $2
+func (q *Queries) ListAllCourses(ctx context.Context, arg ListAllCoursesParams) ([]ListAllCoursesRow, error) {
+	rows, err := q.db.Query(ctx, listAllCourses, arg.Search, arg.Offset, arg.Limit)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []ListAllCoursesRow
+	for rows.Next() {
+		var i ListAllCoursesRow
+		if err := rows.Scan(
+			&i.ID,
+			&i.Title,
+			&i.TargetLanguageID,
+			&i.UiLanguageID,
+			&i.OwnerID,
+			&i.IsPublished,
+			&i.Visibility,
+			&i.CreatedAt,
+			&i.UpdatedAt,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const listCoursesByOwner = `-- name: ListCoursesByOwner :many
 SELECT id, title, target_language_id, ui_language_id, owner_id, is_published, visibility, created_at, updated_at
 FROM courses
 WHERE owner_id = $1
+  AND (
+    $2::text IS NULL
+    OR $2::text = ''
+    OR title ILIKE '%' || $2 || '%'
+  )
 ORDER BY updated_at DESC, title
 `
+
+type ListCoursesByOwnerParams struct {
+	OwnerID uuid.UUID
+	Search  *string
+}
 
 type ListCoursesByOwnerRow struct {
 	ID               uuid.UUID
@@ -160,9 +267,14 @@ type ListCoursesByOwnerRow struct {
 //	SELECT id, title, target_language_id, ui_language_id, owner_id, is_published, visibility, created_at, updated_at
 //	FROM courses
 //	WHERE owner_id = $1
+//	  AND (
+//	    $2::text IS NULL
+//	    OR $2::text = ''
+//	    OR title ILIKE '%' || $2 || '%'
+//	  )
 //	ORDER BY updated_at DESC, title
-func (q *Queries) ListCoursesByOwner(ctx context.Context, ownerID uuid.UUID) ([]ListCoursesByOwnerRow, error) {
-	rows, err := q.db.Query(ctx, listCoursesByOwner, ownerID)
+func (q *Queries) ListCoursesByOwner(ctx context.Context, arg ListCoursesByOwnerParams) ([]ListCoursesByOwnerRow, error) {
+	rows, err := q.db.Query(ctx, listCoursesByOwner, arg.OwnerID, arg.Search)
 	if err != nil {
 		return nil, err
 	}

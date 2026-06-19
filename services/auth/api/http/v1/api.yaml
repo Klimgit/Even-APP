@@ -53,6 +53,45 @@ paths:
                 $ref: "#/components/schemas/ErrorResponse"
         default:
           $ref: "#/components/responses/DefaultError"
+    post:
+      operationId: createPlatformUser
+      tags: [Platform, Users]
+      summary: Create user (platform admin)
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreatePlatformUserRequest"
+      responses:
+        "201":
+          description: Created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/User"
+        "401":
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "403":
+          description: Forbidden
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "409":
+          description: Conflict
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        default:
+          $ref: "#/components/responses/DefaultError"
 
   /api/v1/platform/stats:
     get:
@@ -84,6 +123,46 @@ paths:
           $ref: "#/components/responses/DefaultError"
 
   /api/v1/platform/users/{userId}:
+    get:
+      operationId: getPlatformUser
+      tags: [Platform, Users]
+      summary: Get user by ID (platform admin)
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: userId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/User"
+        "401":
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "403":
+          description: Forbidden
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "404":
+          description: Not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        default:
+          $ref: "#/components/responses/DefaultError"
     patch:
       operationId: patchPlatformUser
       tags: [Platform, Users]
@@ -124,6 +203,130 @@ paths:
                 $ref: "#/components/schemas/ErrorResponse"
         "404":
           description: Not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        default:
+          $ref: "#/components/responses/DefaultError"
+    delete:
+      operationId: deletePlatformUser
+      tags: [Platform, Users]
+      summary: Delete user (platform admin)
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: userId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        "204":
+          description: No content
+        "401":
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "403":
+          description: Forbidden
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "404":
+          description: Not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        default:
+          $ref: "#/components/responses/DefaultError"
+
+  /api/v1/platform/users/{userId}/reset-password:
+    post:
+      operationId: resetPlatformUserPassword
+      tags: [Platform, Users]
+      summary: Reset user password (platform admin)
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: userId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ResetPlatformUserPasswordRequest"
+      responses:
+        "204":
+          description: No content
+        "401":
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "403":
+          description: Forbidden
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "404":
+          description: Not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        default:
+          $ref: "#/components/responses/DefaultError"
+
+  /api/v1/platform/audit:
+    get:
+      operationId: listPlatformAudit
+      tags: [Platform, Audit]
+      summary: Platform audit log (admin)
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: action
+          in: query
+          schema:
+            type: string
+        - name: page
+          in: query
+          schema:
+            type: integer
+            default: 1
+        - name: limit
+          in: query
+          schema:
+            type: integer
+            default: 50
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AuditListResponse"
+        "401":
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "403":
+          description: Forbidden
           content:
             application/json:
               schema:
@@ -473,6 +676,67 @@ components:
         is_admin:
           type: boolean
 
+    CreatePlatformUserRequest:
+      type: object
+      required: [email, password, role]
+      properties:
+        email:
+          type: string
+        password:
+          type: string
+          minLength: 8
+        display_name:
+          type: string
+        role:
+          type: string
+          enum: [student, teacher]
+        is_admin:
+          type: boolean
+          default: false
+
+    ResetPlatformUserPasswordRequest:
+      type: object
+      required: [password]
+      properties:
+        password:
+          type: string
+          minLength: 8
+
+    AuditEvent:
+      type: object
+      required: [id, action, created_at]
+      properties:
+        id:
+          type: string
+          format: uuid
+        actor_id:
+          type: string
+          format: uuid
+        action:
+          type: string
+        target_type:
+          type: string
+        target_id:
+          type: string
+          format: uuid
+        details:
+          type: object
+          additionalProperties: true
+        created_at:
+          type: string
+          format: date-time
+
+    AuditListResponse:
+      type: object
+      required: [items, total]
+      properties:
+        items:
+          type: array
+          items:
+            $ref: "#/components/schemas/AuditEvent"
+        total:
+          type: integer
+
     ErrorResponse:
       type: object
       properties:
@@ -559,7 +823,7 @@ components:
 
     PlatformStatsResponse:
       type: object
-      required: [users, published_courses, active_enrollments]
+      required: [users, published_courses, active_enrollments, total_courses, platform_lexemes]
       properties:
         users:
           type: object
@@ -576,4 +840,8 @@ components:
         published_courses:
           type: integer
         active_enrollments:
+          type: integer
+        total_courses:
+          type: integer
+        platform_lexemes:
           type: integer

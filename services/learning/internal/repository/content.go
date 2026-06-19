@@ -43,8 +43,8 @@ func (r *ContentReader) GetCourseByID(ctx context.Context, id uuid.UUID) (domain
 	return mapCourseIDRow(row), nil
 }
 
-func (r *ContentReader) ListPublishedCourses(ctx context.Context) ([]domain.CourseView, error) {
-	rows, err := r.queries.ListPublishedCourses(ctx)
+func (r *ContentReader) ListPublishedCourses(ctx context.Context, search *string) ([]domain.CourseView, error) {
+	rows, err := r.queries.ListPublishedCourses(ctx, contentquery.ListPublishedCoursesParams{Search: search})
 	if err != nil {
 		return nil, err
 	}
@@ -194,6 +194,32 @@ func (r *ContentReader) GetBlockLessonID(ctx context.Context, blockID uuid.UUID)
 		return uuid.Nil, err
 	}
 	return row.LessonID, nil
+}
+
+func (r *ContentReader) ListCourseModules(ctx context.Context, courseID uuid.UUID) ([]domain.ModuleView, error) {
+	rows, err := r.queries.ListModulesByCourseID(ctx, contentquery.ListModulesByCourseIDParams{CourseID: courseID})
+	if err != nil {
+		return nil, err
+	}
+	out := make([]domain.ModuleView, 0, len(rows))
+	for _, row := range rows {
+		out = append(out, domain.ModuleView{
+			ID: row.ID, CourseID: row.CourseID, Title: row.Title, SortOrder: int(row.SortOrder),
+		})
+	}
+	return out, nil
+}
+
+func (r *ContentReader) LessonModuleIDs(ctx context.Context, courseID uuid.UUID) (map[uuid.UUID]uuid.UUID, error) {
+	rows, err := r.queries.ListPublishedLessonsByCourse(ctx, contentquery.ListPublishedLessonsByCourseParams{CourseID: courseID})
+	if err != nil {
+		return nil, err
+	}
+	out := make(map[uuid.UUID]uuid.UUID, len(rows))
+	for _, row := range rows {
+		out[row.ID] = row.ModuleID
+	}
+	return out, nil
 }
 
 func mapCourseIDRow(row contentquery.GetCourseByIDRow) domain.CourseView {

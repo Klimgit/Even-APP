@@ -2,7 +2,32 @@
 SELECT id, title, target_language_id, ui_language_id, owner_id, is_published, visibility, created_at, updated_at
 FROM courses
 WHERE owner_id = $1
+  AND (
+    sqlc.narg('search')::text IS NULL
+    OR sqlc.narg('search')::text = ''
+    OR title ILIKE '%' || sqlc.narg('search') || '%'
+  )
 ORDER BY updated_at DESC, title;
+
+-- name: ListAllCourses :many
+SELECT id, title, target_language_id, ui_language_id, owner_id, is_published, visibility, created_at, updated_at
+FROM courses
+WHERE (
+    sqlc.narg('search')::text IS NULL
+    OR sqlc.narg('search')::text = ''
+    OR title ILIKE '%' || sqlc.narg('search') || '%'
+  )
+ORDER BY updated_at DESC, title
+LIMIT sqlc.arg('limit') OFFSET sqlc.arg('offset');
+
+-- name: CountAllCourses :one
+SELECT COUNT(*)::int AS count
+FROM courses
+WHERE (
+    sqlc.narg('search')::text IS NULL
+    OR sqlc.narg('search')::text = ''
+    OR title ILIKE '%' || sqlc.narg('search') || '%'
+  );
 
 -- name: GetCourseByID :one
 SELECT id, title, target_language_id, ui_language_id, owner_id, is_published, visibility, created_at, updated_at

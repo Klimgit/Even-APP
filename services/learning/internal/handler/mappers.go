@@ -32,27 +32,34 @@ func mapCourseListItem(c service.CourseListItem) http_v1.CourseListItem {
 }
 
 func mapCourseOutline(o service.CourseOutline) http_v1.CourseOutlineResponse {
-	lessons := make([]http_v1.CourseOutlineLesson, 0, len(o.Lessons))
-	for _, l := range o.Lessons {
-		sections := make([]http_v1.CourseOutlineSection, 0, len(l.Sections))
-		for _, s := range l.Sections {
-			blocks := make([]http_v1.CourseOutlineBlock, 0, len(s.Blocks))
-			for _, b := range s.Blocks {
-				blocks = append(blocks, mapOutlineBlock(b))
+	modules := make([]http_v1.CourseOutlineModule, 0, len(o.Modules))
+	for _, m := range o.Modules {
+		lessons := make([]http_v1.CourseOutlineLesson, 0, len(m.Lessons))
+		for _, l := range m.Lessons {
+			sections := make([]http_v1.CourseOutlineSection, 0, len(l.Sections))
+			for _, s := range l.Sections {
+				blocks := make([]http_v1.CourseOutlineBlock, 0, len(s.Blocks))
+				for _, b := range s.Blocks {
+					blocks = append(blocks, mapOutlineBlock(b))
+				}
+				sections = append(sections, http_v1.CourseOutlineSection{
+					ID: s.ID, Title: s.Title, SortOrder: s.SortOrder,
+					ProgressPercent: s.ProgressPercent, Blocks: blocks,
+				})
 			}
-			sections = append(sections, http_v1.CourseOutlineSection{
-				ID: s.ID, Title: s.Title, SortOrder: s.SortOrder,
-				ProgressPercent: s.ProgressPercent, Blocks: blocks,
+			lessons = append(lessons, http_v1.CourseOutlineLesson{
+				ID: l.ID, Title: l.Title, SortOrder: l.SortOrder,
+				ProgressPercent: l.ProgressPercent, Sections: sections,
 			})
 		}
-		lessons = append(lessons, http_v1.CourseOutlineLesson{
-			ID: l.ID, Title: l.Title, SortOrder: l.SortOrder,
-			ProgressPercent: l.ProgressPercent, Sections: sections,
+		modules = append(modules, http_v1.CourseOutlineModule{
+			ID: m.ID, Title: m.Title, SortOrder: m.SortOrder,
+			ProgressPercent: m.ProgressPercent, Lessons: lessons,
 		})
 	}
 	out := http_v1.CourseOutlineResponse{
 		CourseID: o.CourseID, Title: o.Title, ProgressPercent: o.ProgressPercent,
-		Lessons: lessons,
+		Modules: modules,
 	}
 	if o.CurrentLessonID != nil {
 		out.CurrentLessonID = http_v1.NewOptUUID(*o.CurrentLessonID)

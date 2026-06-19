@@ -29,12 +29,13 @@ type PublishedLessonSnapshot struct {
 }
 
 type UserBlockProgress struct {
-	UserID        uuid.UUID
-	LessonBlockID uuid.UUID
-	Status        string
-	Score         float32
-	Attempts      int32
-	LastAttemptAt *time.Time
+	UserID           uuid.UUID
+	LessonBlockID    uuid.UUID
+	Status           string
+	Score            float32
+	Attempts         int32
+	LastAttemptAt    *time.Time
+	TimeSpentSeconds int32
 }
 
 type UserReviewItem struct {

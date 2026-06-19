@@ -1,6 +1,6 @@
 # Block types — MVP config contract
 
-Even content service MVP exposes **17 block types** (6 content + 11 gradable) via `GET /api/v1/teacher/block-types`. Each lesson block stores `block_type` and a JSON `config` object validated by the editor client; the server persists config as JSONB without strict schema validation in MVP.
+Even content service MVP exposes **17 block types** (6 content + 11 gradable) via `GET /api/v1/teacher/block-types`. Each lesson block stores `block_type` and a JSON `config` object. The content service validates config on create/patch (`ValidateBlockConfig`: required keys, array shapes, index bounds).
 
 ## Categories
 

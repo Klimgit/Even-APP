@@ -43,6 +43,12 @@ SET
 WHERE id = $1
 RETURNING id, email, password_hash, display_name, role, is_admin, created_at;
 
+-- name: DeleteUser :exec
+DELETE FROM users WHERE id = $1;
+
+-- name: UpdateUserPassword :exec
+UPDATE users SET password_hash = $2 WHERE id = $1;
+
 -- name: UserStats :one
 SELECT
   count(*)::int AS total_users,

@@ -57,7 +57,16 @@ func main() {
 	ready := func(ctx context.Context) error { return pool.Ping(ctx) }
 
 	querier := query.New(pool)
-	lexSvc := service.NewLexiconService(querier, contentSource)
+	var mediaReader *repository.MediaReader
+	if cfg.HasMediaDB() {
+		mp, err := postgres.NewPool(ctx, cfg.MediaDatabaseURL)
+		if err != nil {
+			log.Fatalf("media database: %v", err)
+		}
+		defer mp.Close()
+		mediaReader = repository.NewMediaReader(mp)
+	}
+	lexSvc := service.NewLexiconService(querier, contentSource, mediaReader)
 	httpHandler := lexhandler.NewHTTPHandler(lexSvc)
 	secHandler := lexhandler.NewSecurityHandler(jwtMgr)
 	internalHandler := internalapi.New(querier)

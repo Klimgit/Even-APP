@@ -175,17 +175,22 @@ Gateway: `/languages/` → lexicon. Без JWT.
 
 ---
 
-### Platform users — `auth` (:8081)
+### Platform users & audit — `auth` (:8081)
 
-Gateway: `/api/v1/platform/users` → auth (не lexicon).
+Gateway: `/api/v1/platform/users`, `/platform/stats`, `/platform/audit` → auth.
 
 | Метод | Путь | Auth | Статус |
 |-------|------|------|--------|
 | GET | `/platform/users` | admin | 200 `{ items, total }` |
-| GET | `/platform/stats` | admin | 200 cross-DB aggregates |
-| PATCH | `/platform/users/{userId}` | admin | 200 `UserDTO` |
+| POST | `/platform/users` | admin | 201 create user |
+| GET | `/platform/users/{userId}` | admin | 200 |
+| PATCH | `/platform/users/{userId}` | admin | 200 role / is_admin |
+| DELETE | `/platform/users/{userId}` | admin | 204 |
+| POST | `/platform/users/{userId}/reset-password` | admin | 204 |
+| GET | `/platform/stats` | admin | 200 cross-service aggregates |
+| GET | `/platform/audit` | admin | 200 audit log (`?action=`, `?page=`, `?limit=`) |
 
-Query GET: `?q=`, `?role=`, `?page=`, `?limit=`.
+Query GET users: `?q=`, `?role=`, `?page=`, `?limit=`.
 
 ---
 
@@ -198,20 +203,24 @@ Query GET: `?q=`, `?role=`, `?page=`, `?limit=`.
 | Languages | `GET/POST/PATCH /platform/languages`, alphabet CRUD, reorder | admin |
 | Grammar | `GET/POST /platform/languages/{code}/grammar-topics`, `PATCH/DELETE /platform/grammar-topics/{id}` | admin |
 | Sounds | `GET/POST/PATCH/DELETE /platform/.../sounds`, letter links | admin |
-| Lexicon | `GET/POST /platform/languages/{code}/lexicon`, `POST .../lexicon/import`, lexeme/forms/translations/media CRUD | admin |
+| Lexicon | `GET/POST /platform/languages/{code}/lexicon`, `POST .../lexicon/import`, lexeme/forms/translations/media CRUD, `PATCH /platform/lexeme-translations/{id}`, `PATCH /platform/lexeme-media/{id}` | admin |
 
 **Проверка:** `just verify-api` (секции 4–8).
 
 ---
 
-### Teacher lexicon picker — `lexicon` (:8082)
+### Teacher lexicon — `lexicon` (:8082)
 
-Read-only для редактора. Gateway: `/api/v1/teacher/languages/{code}/lexicon`, `/api/v1/teacher/lexemes/` → lexicon.
+Picker (platform + teacher scope) и CRUD личного словаря (`scope=teacher`, `owner_id`). Gateway: `/api/v1/teacher/languages/{code}/lexicon`, `/api/v1/teacher/lexemes/` → lexicon.
 
 | Метод | Путь | Auth | Статус |
 |-------|------|------|--------|
-| GET | `/teacher/languages/{code}/lexicon` | teacher | 200 |
-| GET | `/teacher/lexemes/{lexemeId}` | teacher | 200 |
+| GET | `/teacher/languages/{code}/lexicon` | teacher | 200 picker (`?q=` lemma + translation) |
+| POST | `/teacher/languages/{code}/lexicon` | teacher | 201 create teacher lexeme |
+| GET/PATCH/DELETE | `/teacher/lexemes/{lexemeId}` | teacher | 200 / owner-only |
+| POST/PATCH/DELETE | `/teacher/lexemes/{id}/forms`, `/teacher/lexeme-forms/{id}` | teacher | owner-only |
+| POST/PATCH/DELETE | `/teacher/lexemes/{id}/translations`, `/teacher/lexeme-translations/{id}` | teacher | owner-only |
+| POST/DELETE | `/teacher/lexemes/{id}/media`, `/teacher/lexeme-media/{id}` | teacher | owner-only (teacher media) |
 | GET | `/teacher/lexemes/{lexemeId}/usage` | teacher | 200 |
 
 ---
@@ -234,16 +243,20 @@ Read-only для редактора. Gateway: `/api/v1/teacher/languages/{code}/
 
 ### Content editor — `content` (:8083)
 
-Gateway: `/api/v1/teacher/*` (кроме media/lexicon picker) → content. ~29 ручек.
+Gateway: `/api/v1/teacher/*` (кроме media/lexicon picker) → content. ~40 ручек.
 
 | Группа | Пути | Auth |
 |--------|------|------|
 | Block types | `GET /teacher/block-types` (+ `is_favorite`), `POST/DELETE .../favorite` | teacher |
-| Courses | CRUD + publish, lessons CRUD + publish | owner |
+| Courses | CRUD + publish (`GET /teacher/courses?q=`), **modules** CRUD + reorder, lessons in module | owner |
 | Sections/blocks | CRUD, reorder | owner |
 | Coverage | `/teacher/courses/{id}/lexicon`, by-lesson, forms-coverage | owner |
+| Analytics | `GET /teacher/courses/{id}/analytics` | owner |
 | Invite | get/regenerate invite code | owner |
 | Students | list students, progress, `POST /teacher/students` (email enroll) | owner |
+| Platform admin | `GET /platform/courses?q=`, `POST /platform/enrollments` | admin |
+
+**Course → Module → Lesson → Section → Block** (модули обязательны; default «Основной» при создании курса).
 
 Контракт JSON `config` для 17 MVP block types: [`services/content/docs/BLOCK_TYPES.md`](services/content/docs/BLOCK_TYPES.md).
 
@@ -255,16 +268,17 @@ Gateway: `/api/v1/courses/`, `/lessons/`, `/progress/`, `/review/`, `/dictionary
 
 | Метод | Путь | Auth | Статус |
 |-------|------|------|--------|
-| GET | `/courses/public` | public (optional JWT) | 200 published catalog |
-| POST | `/courses/join` | student | 201 |
-| GET | `/courses`, `/courses/{id}`, `/courses/{id}/lessons`, `/courses/{id}/outline` | enrollment | 200 (`target_language` filled) |
+| GET | `/courses/public` | public (optional JWT) | 200 published catalog (`?q=` by title) |
+| POST | `/courses/{courseId}/enroll` | student | 201 self-enroll (public courses) |
+| POST | `/courses/join` | student | 201 invite code |
+| GET | `/courses`, `/courses/{id}`, `/courses/{id}/lessons`, `/courses/{id}/outline` | enrollment | 200 outline: **Module → Lesson → Section → Block** |
 | GET | `/lessons/{id}`, `/lessons/{id}/flow` | enrollment | 200 (`resolved_lexemes`, `resolved_media` on lesson) |
 | POST | `/progress/blocks/{id}/attempt` | enrollment | 200 (11 gradable types) |
 | GET | `/progress/lessons/{id}` | enrollment | 200 |
-| GET | `/progress/summary` | JWT | 200 (`completed_lessons`, `completed_blocks`, …) |
+| GET | `/progress/summary` | JWT | 200 (+ `in_progress_lessons`, `average_score`, `time_spent_seconds`) |
 | GET | `/review` | JWT | 200 |
 | POST | `/review/session` | JWT | 200 start review session |
-| GET | `/dictionary` | JWT | 200 |
+| GET | `/dictionary` | JWT | 200 (`?q=` lemma + translation filter) |
 
 Learning читает опубликованные уроки из `even_content` через `CONTENT_DATABASE_URL` (snapshots при join), языки/лексемы из `even_lexicon` через `LEXICON_DATABASE_URL`, media URLs через `MEDIA_DATABASE_URL`.
 
@@ -279,13 +293,15 @@ Learning читает опубликованные уроки из `even_content
 | Grammar topics CRUD | ✅ platform admin |
 | `POST /review/session` | ✅ |
 | Email enroll `POST /teacher/students` | ✅ |
-| Block config validation | ✅ required keys per block type on create/patch |
-| Block-type favorites | ✅ `POST/DELETE /teacher/block-types/{blockType}/favorite` |
+| Block config validation | ✅ required keys + types per MVP block |
+| Block-type favorites | ✅ |
 | Bulk lexicon import | ✅ `POST /platform/languages/{code}/lexicon/import` |
-| `GET /platform/stats` | ✅ cross-DB (auth + content + learning) |
+| `GET /platform/stats` | ✅ cross-service (auth + content + learning + lexicon) |
+| Platform user admin | ✅ list/get/create/patch/delete/reset-password |
+| Audit log | ✅ `GET /platform/audit` |
 | Extended block types in catalog | ✅ preview types in `GET /teacher/block-types` (grammar_table, reading, …) |
-| Manual enrollments (admin) | не в OpenAPI |
-| Audit log | не в OpenAPI |
-| Strict JSON Schema validation для block `config` | частично (required keys per type) |
-| `time_spent_seconds` в progress summary | нужна миграция + tracking |
+| Manual enrollments (admin) | ✅ `POST /platform/enrollments` |
+| Dictionary search | ✅ `GET /dictionary?q=` (lemma + translation) |
+| ~25 extended block types | ⬜ отложено |
+| Nested sections / admin UI | ⬜ отложено |
 

@@ -825,7 +825,7 @@ ProgressSummary {
   completed_blocks: number
   dictionary_words: number
   review_due: number
-  // time_spent_seconds — Phase 2 (migration pending)
+  time_spent_seconds: number   // sum from user_block_progress
 }
 
 PublicCourseListItem {

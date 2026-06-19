@@ -13,6 +13,8 @@ type PlatformStats struct {
 	Admins            int
 	PublishedCourses  int
 	ActiveEnrollments int
+	TotalCourses      int
+	PlatformLexemes   int
 }
 
 func (s *AuthService) GetPlatformStats(ctx context.Context, isAdmin bool) (*PlatformStats, error) {
@@ -35,6 +37,12 @@ func (s *AuthService) GetPlatformStats(ctx context.Context, isAdmin bool) (*Plat
 		}
 		if n, err := s.stats.ActiveEnrollments(ctx); err == nil {
 			out.ActiveEnrollments = n
+		}
+		if n, err := s.stats.TotalCourses(ctx); err == nil {
+			out.TotalCourses = n
+		}
+		if n, err := s.stats.PlatformLexemes(ctx); err == nil {
+			out.PlatformLexemes = n
 		}
 	}
 	return out, nil

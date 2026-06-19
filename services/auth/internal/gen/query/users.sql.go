@@ -89,6 +89,22 @@ func (q *Queries) CreateUser(ctx context.Context, arg CreateUserParams) (User, e
 	return i, err
 }
 
+const deleteUser = `-- name: DeleteUser :exec
+DELETE FROM users WHERE id = $1
+`
+
+type DeleteUserParams struct {
+	ID uuid.UUID
+}
+
+// DeleteUser
+//
+//	DELETE FROM users WHERE id = $1
+func (q *Queries) DeleteUser(ctx context.Context, arg DeleteUserParams) error {
+	_, err := q.db.Exec(ctx, deleteUser, arg.ID)
+	return err
+}
+
 const getUserByEmail = `-- name: GetUserByEmail :one
 SELECT id, email, password_hash, display_name, role, is_admin, created_at
 FROM users
@@ -255,6 +271,23 @@ func (q *Queries) ListUsersByIDs(ctx context.Context, arg ListUsersByIDsParams) 
 		return nil, err
 	}
 	return items, nil
+}
+
+const updateUserPassword = `-- name: UpdateUserPassword :exec
+UPDATE users SET password_hash = $2 WHERE id = $1
+`
+
+type UpdateUserPasswordParams struct {
+	ID           uuid.UUID
+	PasswordHash string
+}
+
+// UpdateUserPassword
+//
+//	UPDATE users SET password_hash = $2 WHERE id = $1
+func (q *Queries) UpdateUserPassword(ctx context.Context, arg UpdateUserPasswordParams) error {
+	_, err := q.db.Exec(ctx, updateUserPassword, arg.ID, arg.PasswordHash)
+	return err
 }
 
 const updateUserPlatform = `-- name: UpdateUserPlatform :one

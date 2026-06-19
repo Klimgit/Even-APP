@@ -7,33 +7,53 @@ package query
 
 import (
 	"context"
+	"time"
 
 	"github.com/google/uuid"
 )
 
 const createLesson = `-- name: CreateLesson :one
-INSERT INTO lessons (course_id, title, sort_order)
-VALUES ($1, $2, $3)
-RETURNING id, course_id, title, sort_order, version, status, published_at, updated_at
+INSERT INTO lessons (course_id, module_id, title, sort_order)
+VALUES ($1, $2, $3, $4)
+RETURNING id, course_id, module_id, title, sort_order, version, status, published_at, updated_at
 `
 
 type CreateLessonParams struct {
 	CourseID  uuid.UUID
+	ModuleID  uuid.UUID
 	Title     string
 	SortOrder int32
 }
 
+type CreateLessonRow struct {
+	ID          uuid.UUID
+	CourseID    uuid.UUID
+	ModuleID    uuid.UUID
+	Title       string
+	SortOrder   int32
+	Version     int32
+	Status      string
+	PublishedAt *time.Time
+	UpdatedAt   time.Time
+}
+
 // CreateLesson
 //
-//	INSERT INTO lessons (course_id, title, sort_order)
-//	VALUES ($1, $2, $3)
-//	RETURNING id, course_id, title, sort_order, version, status, published_at, updated_at
-func (q *Queries) CreateLesson(ctx context.Context, arg CreateLessonParams) (Lesson, error) {
-	row := q.db.QueryRow(ctx, createLesson, arg.CourseID, arg.Title, arg.SortOrder)
-	var i Lesson
+//	INSERT INTO lessons (course_id, module_id, title, sort_order)
+//	VALUES ($1, $2, $3, $4)
+//	RETURNING id, course_id, module_id, title, sort_order, version, status, published_at, updated_at
+func (q *Queries) CreateLesson(ctx context.Context, arg CreateLessonParams) (CreateLessonRow, error) {
+	row := q.db.QueryRow(ctx, createLesson,
+		arg.CourseID,
+		arg.ModuleID,
+		arg.Title,
+		arg.SortOrder,
+	)
+	var i CreateLessonRow
 	err := row.Scan(
 		&i.ID,
 		&i.CourseID,
+		&i.ModuleID,
 		&i.Title,
 		&i.SortOrder,
 		&i.Version,
@@ -57,22 +77,35 @@ func (q *Queries) DeleteLesson(ctx context.Context, id uuid.UUID) error {
 }
 
 const getLessonByID = `-- name: GetLessonByID :one
-SELECT id, course_id, title, sort_order, version, status, published_at, updated_at
+SELECT id, course_id, module_id, title, sort_order, version, status, published_at, updated_at
 FROM lessons
 WHERE id = $1
 `
 
+type GetLessonByIDRow struct {
+	ID          uuid.UUID
+	CourseID    uuid.UUID
+	ModuleID    uuid.UUID
+	Title       string
+	SortOrder   int32
+	Version     int32
+	Status      string
+	PublishedAt *time.Time
+	UpdatedAt   time.Time
+}
+
 // GetLessonByID
 //
-//	SELECT id, course_id, title, sort_order, version, status, published_at, updated_at
+//	SELECT id, course_id, module_id, title, sort_order, version, status, published_at, updated_at
 //	FROM lessons
 //	WHERE id = $1
-func (q *Queries) GetLessonByID(ctx context.Context, id uuid.UUID) (Lesson, error) {
+func (q *Queries) GetLessonByID(ctx context.Context, id uuid.UUID) (GetLessonByIDRow, error) {
 	row := q.db.QueryRow(ctx, getLessonByID, id)
-	var i Lesson
+	var i GetLessonByIDRow
 	err := row.Scan(
 		&i.ID,
 		&i.CourseID,
+		&i.ModuleID,
 		&i.Title,
 		&i.SortOrder,
 		&i.Version,
@@ -104,30 +137,43 @@ func (q *Queries) GetLessonCourseOwner(ctx context.Context, id uuid.UUID) (uuid.
 }
 
 const listLessonsByCourseID = `-- name: ListLessonsByCourseID :many
-SELECT id, course_id, title, sort_order, version, status, published_at, updated_at
-FROM lessons
-WHERE course_id = $1
-ORDER BY sort_order, title
+SELECT l.id, l.course_id, l.module_id, l.title, l.sort_order, l.version, l.status, l.published_at, l.updated_at
+FROM lessons l
+WHERE l.course_id = $1
+ORDER BY l.sort_order, l.title
 `
+
+type ListLessonsByCourseIDRow struct {
+	ID          uuid.UUID
+	CourseID    uuid.UUID
+	ModuleID    uuid.UUID
+	Title       string
+	SortOrder   int32
+	Version     int32
+	Status      string
+	PublishedAt *time.Time
+	UpdatedAt   time.Time
+}
 
 // ListLessonsByCourseID
 //
-//	SELECT id, course_id, title, sort_order, version, status, published_at, updated_at
-//	FROM lessons
-//	WHERE course_id = $1
-//	ORDER BY sort_order, title
-func (q *Queries) ListLessonsByCourseID(ctx context.Context, courseID uuid.UUID) ([]Lesson, error) {
+//	SELECT l.id, l.course_id, l.module_id, l.title, l.sort_order, l.version, l.status, l.published_at, l.updated_at
+//	FROM lessons l
+//	WHERE l.course_id = $1
+//	ORDER BY l.sort_order, l.title
+func (q *Queries) ListLessonsByCourseID(ctx context.Context, courseID uuid.UUID) ([]ListLessonsByCourseIDRow, error) {
 	rows, err := q.db.Query(ctx, listLessonsByCourseID, courseID)
 	if err != nil {
 		return nil, err
 	}
 	defer rows.Close()
-	var items []Lesson
+	var items []ListLessonsByCourseIDRow
 	for rows.Next() {
-		var i Lesson
+		var i ListLessonsByCourseIDRow
 		if err := rows.Scan(
 			&i.ID,
 			&i.CourseID,
+			&i.ModuleID,
 			&i.Title,
 			&i.SortOrder,
 			&i.Version,
@@ -145,19 +191,74 @@ func (q *Queries) ListLessonsByCourseID(ctx context.Context, courseID uuid.UUID)
 	return items, nil
 }
 
-const maxLessonSortOrder = `-- name: MaxLessonSortOrder :one
-SELECT COALESCE(MAX(sort_order), -1)::int AS max_sort
+const listLessonsByModuleID = `-- name: ListLessonsByModuleID :many
+SELECT id, course_id, module_id, title, sort_order, version, status, published_at, updated_at
 FROM lessons
-WHERE course_id = $1
+WHERE module_id = $1
+ORDER BY sort_order, title
 `
 
-// MaxLessonSortOrder
+type ListLessonsByModuleIDRow struct {
+	ID          uuid.UUID
+	CourseID    uuid.UUID
+	ModuleID    uuid.UUID
+	Title       string
+	SortOrder   int32
+	Version     int32
+	Status      string
+	PublishedAt *time.Time
+	UpdatedAt   time.Time
+}
+
+// ListLessonsByModuleID
+//
+//	SELECT id, course_id, module_id, title, sort_order, version, status, published_at, updated_at
+//	FROM lessons
+//	WHERE module_id = $1
+//	ORDER BY sort_order, title
+func (q *Queries) ListLessonsByModuleID(ctx context.Context, moduleID uuid.UUID) ([]ListLessonsByModuleIDRow, error) {
+	rows, err := q.db.Query(ctx, listLessonsByModuleID, moduleID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []ListLessonsByModuleIDRow
+	for rows.Next() {
+		var i ListLessonsByModuleIDRow
+		if err := rows.Scan(
+			&i.ID,
+			&i.CourseID,
+			&i.ModuleID,
+			&i.Title,
+			&i.SortOrder,
+			&i.Version,
+			&i.Status,
+			&i.PublishedAt,
+			&i.UpdatedAt,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const maxLessonSortOrderByModule = `-- name: MaxLessonSortOrderByModule :one
+SELECT COALESCE(MAX(sort_order), -1)::int AS max_sort
+FROM lessons
+WHERE module_id = $1
+`
+
+// MaxLessonSortOrderByModule
 //
 //	SELECT COALESCE(MAX(sort_order), -1)::int AS max_sort
 //	FROM lessons
-//	WHERE course_id = $1
-func (q *Queries) MaxLessonSortOrder(ctx context.Context, courseID uuid.UUID) (int32, error) {
-	row := q.db.QueryRow(ctx, maxLessonSortOrder, courseID)
+//	WHERE module_id = $1
+func (q *Queries) MaxLessonSortOrderByModule(ctx context.Context, moduleID uuid.UUID) (int32, error) {
+	row := q.db.QueryRow(ctx, maxLessonSortOrderByModule, moduleID)
 	var max_sort int32
 	err := row.Scan(&max_sort)
 	return max_sort, err
@@ -167,21 +268,34 @@ const publishLesson = `-- name: PublishLesson :one
 UPDATE lessons
 SET status = 'published', published_at = now(), updated_at = now()
 WHERE id = $1
-RETURNING id, course_id, title, sort_order, version, status, published_at, updated_at
+RETURNING id, course_id, module_id, title, sort_order, version, status, published_at, updated_at
 `
+
+type PublishLessonRow struct {
+	ID          uuid.UUID
+	CourseID    uuid.UUID
+	ModuleID    uuid.UUID
+	Title       string
+	SortOrder   int32
+	Version     int32
+	Status      string
+	PublishedAt *time.Time
+	UpdatedAt   time.Time
+}
 
 // PublishLesson
 //
 //	UPDATE lessons
 //	SET status = 'published', published_at = now(), updated_at = now()
 //	WHERE id = $1
-//	RETURNING id, course_id, title, sort_order, version, status, published_at, updated_at
-func (q *Queries) PublishLesson(ctx context.Context, id uuid.UUID) (Lesson, error) {
+//	RETURNING id, course_id, module_id, title, sort_order, version, status, published_at, updated_at
+func (q *Queries) PublishLesson(ctx context.Context, id uuid.UUID) (PublishLessonRow, error) {
 	row := q.db.QueryRow(ctx, publishLesson, id)
-	var i Lesson
+	var i PublishLessonRow
 	err := row.Scan(
 		&i.ID,
 		&i.CourseID,
+		&i.ModuleID,
 		&i.Title,
 		&i.SortOrder,
 		&i.Version,
@@ -200,7 +314,7 @@ SET
     version = version + 1,
     updated_at = now()
 WHERE id = $3 AND version = $4
-RETURNING id, course_id, title, sort_order, version, status, published_at, updated_at
+RETURNING id, course_id, module_id, title, sort_order, version, status, published_at, updated_at
 `
 
 type UpdateLessonParams struct {
@@ -208,6 +322,18 @@ type UpdateLessonParams struct {
 	SortOrder       *int32
 	ID              uuid.UUID
 	ExpectedVersion int32
+}
+
+type UpdateLessonRow struct {
+	ID          uuid.UUID
+	CourseID    uuid.UUID
+	ModuleID    uuid.UUID
+	Title       string
+	SortOrder   int32
+	Version     int32
+	Status      string
+	PublishedAt *time.Time
+	UpdatedAt   time.Time
 }
 
 // UpdateLesson
@@ -219,18 +345,19 @@ type UpdateLessonParams struct {
 //	    version = version + 1,
 //	    updated_at = now()
 //	WHERE id = $3 AND version = $4
-//	RETURNING id, course_id, title, sort_order, version, status, published_at, updated_at
-func (q *Queries) UpdateLesson(ctx context.Context, arg UpdateLessonParams) (Lesson, error) {
+//	RETURNING id, course_id, module_id, title, sort_order, version, status, published_at, updated_at
+func (q *Queries) UpdateLesson(ctx context.Context, arg UpdateLessonParams) (UpdateLessonRow, error) {
 	row := q.db.QueryRow(ctx, updateLesson,
 		arg.Title,
 		arg.SortOrder,
 		arg.ID,
 		arg.ExpectedVersion,
 	)
-	var i Lesson
+	var i UpdateLessonRow
 	err := row.Scan(
 		&i.ID,
 		&i.CourseID,
+		&i.ModuleID,
 		&i.Title,
 		&i.SortOrder,
 		&i.Version,

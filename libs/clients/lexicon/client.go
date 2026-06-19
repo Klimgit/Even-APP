@@ -51,3 +51,15 @@ func (c *Client) LexemesByIDs(ctx context.Context, ids []uuid.UUID) (map[uuid.UU
 	}
 	return out, nil
 }
+
+func (c *Client) PlatformLexemesCount(ctx context.Context) (int, error) {
+	var out dto.CountResponse
+	err := c.http.DoJSON(ctx, "GET", "/api/v1/internal/stats/platform-lexemes", nil, &out)
+	return out.Count, err
+}
+
+func (c *Client) FilterLexemeIDsBySearch(ctx context.Context, ids []uuid.UUID, q string) ([]uuid.UUID, error) {
+	var out []uuid.UUID
+	err := c.http.DoJSON(ctx, "POST", "/api/v1/internal/lexemes/filter-by-search", dto.FilterLexemeIDsRequest{IDs: ids, Q: q}, &out)
+	return out, err
+}

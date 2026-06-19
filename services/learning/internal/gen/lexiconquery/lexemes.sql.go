@@ -11,6 +11,52 @@ import (
 	"github.com/google/uuid"
 )
 
+const filterLexemeIDsBySearch = `-- name: FilterLexemeIDsBySearch :many
+SELECT DISTINCT l.id
+FROM lexemes l
+LEFT JOIN lexeme_translations t ON t.source_lexeme_id = l.id
+WHERE l.id = ANY($1::uuid[])
+  AND (
+    l.lemma ILIKE '%' || $2 || '%'
+    OR t.text ILIKE '%' || $2 || '%'
+  )
+`
+
+type FilterLexemeIDsBySearchParams struct {
+	Column1 []uuid.UUID
+	Column2 *string
+}
+
+// FilterLexemeIDsBySearch
+//
+//	SELECT DISTINCT l.id
+//	FROM lexemes l
+//	LEFT JOIN lexeme_translations t ON t.source_lexeme_id = l.id
+//	WHERE l.id = ANY($1::uuid[])
+//	  AND (
+//	    l.lemma ILIKE '%' || $2 || '%'
+//	    OR t.text ILIKE '%' || $2 || '%'
+//	  )
+func (q *Queries) FilterLexemeIDsBySearch(ctx context.Context, arg FilterLexemeIDsBySearchParams) ([]uuid.UUID, error) {
+	rows, err := q.db.Query(ctx, filterLexemeIDsBySearch, arg.Column1, arg.Column2)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []uuid.UUID
+	for rows.Next() {
+		var id uuid.UUID
+		if err := rows.Scan(&id); err != nil {
+			return nil, err
+		}
+		items = append(items, id)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const listLexemesByIDs = `-- name: ListLexemesByIDs :many
 SELECT id, language_id, lemma, part_of_speech, notes, created_by, created_at, updated_at
 FROM lexemes

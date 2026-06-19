@@ -15,8 +15,10 @@ type Config struct {
 	DatabaseURL          string
 	ContentDatabaseURL   string
 	LearningDatabaseURL  string
+	LexiconDatabaseURL   string
 	ContentServiceURL    string
 	LearningServiceURL   string
+	LexiconServiceURL    string
 	InternalServiceToken string
 	JWTSecret            string
 	AccessTTL            time.Duration
@@ -49,8 +51,10 @@ func Load() (Config, error) {
 		DatabaseURL:          dbURL,
 		ContentDatabaseURL:   os.Getenv("CONTENT_DATABASE_URL"),
 		LearningDatabaseURL:  os.Getenv("LEARNING_DATABASE_URL"),
+		LexiconDatabaseURL:   os.Getenv("LEXICON_DATABASE_URL"),
 		ContentServiceURL:    os.Getenv("CONTENT_SERVICE_URL"),
 		LearningServiceURL:   os.Getenv("LEARNING_SERVICE_URL"),
+		LexiconServiceURL:    os.Getenv("LEXICON_SERVICE_URL"),
 		InternalServiceToken: libconfig.InternalServiceToken(),
 		JWTSecret:            jwt,
 		AccessTTL:            access,
@@ -64,6 +68,10 @@ func (c Config) HasContentHTTP() bool {
 
 func (c Config) HasLearningHTTP() bool {
 	return c.LearningServiceURL != ""
+}
+
+func (c Config) HasLexiconHTTP() bool {
+	return c.LexiconServiceURL != ""
 }
 
 func parseDuration(key string, def time.Duration) (time.Duration, error) {

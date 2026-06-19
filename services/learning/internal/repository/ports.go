@@ -18,7 +18,9 @@ type ContentSource interface {
 	Available() bool
 	GetCourseByInviteCode(ctx context.Context, code string) (domain.CourseView, error)
 	GetCourseByID(ctx context.Context, id uuid.UUID) (domain.CourseView, error)
-	ListPublishedCourses(ctx context.Context) ([]domain.CourseView, error)
+	ListPublishedCourses(ctx context.Context, search *string) ([]domain.CourseView, error)
+	ListCourseModules(ctx context.Context, courseID uuid.UUID) ([]domain.ModuleView, error)
+	LessonModuleIDs(ctx context.Context, courseID uuid.UUID) (map[uuid.UUID]uuid.UUID, error)
 	SyncPublishedLessonsForCourse(ctx context.Context, q *query.Queries, courseID uuid.UUID) error
 	BuildLessonSnapshot(ctx context.Context, lessonID uuid.UUID) (domain.LessonSnapshot, error)
 	GetBlock(ctx context.Context, blockID uuid.UUID) (domain.BlockSnap, uuid.UUID, string, error)
@@ -32,6 +34,7 @@ type LexiconSource interface {
 	GetLanguage(ctx context.Context, id uuid.UUID) (LanguageView, error)
 	LanguagesByIDs(ctx context.Context, ids []uuid.UUID) (map[uuid.UUID]LanguageView, error)
 	LexemesByIDs(ctx context.Context, ids []uuid.UUID) (map[uuid.UUID]LexemeView, error)
+	FilterLexemeIDsBySearch(ctx context.Context, ids []uuid.UUID, search string) ([]uuid.UUID, error)
 }
 
 // MediaSource resolves media asset metadata.
@@ -80,7 +83,7 @@ func (r *ContentRemote) GetCourseByID(ctx context.Context, id uuid.UUID) (domain
 	return mapRemoteCourse(c), nil
 }
 
-func (r *ContentRemote) ListPublishedCourses(ctx context.Context) ([]domain.CourseView, error) {
+func (r *ContentRemote) ListPublishedCourses(ctx context.Context, search *string) ([]domain.CourseView, error) {
 	rows, err := r.client.ListPublishedCourses(ctx)
 	if err != nil {
 		return nil, err
@@ -90,6 +93,14 @@ func (r *ContentRemote) ListPublishedCourses(ctx context.Context) ([]domain.Cour
 		out = append(out, mapRemoteCourse(c))
 	}
 	return out, nil
+}
+
+func (r *ContentRemote) ListCourseModules(ctx context.Context, courseID uuid.UUID) ([]domain.ModuleView, error) {
+	return nil, nil
+}
+
+func (r *ContentRemote) LessonModuleIDs(ctx context.Context, courseID uuid.UUID) (map[uuid.UUID]uuid.UUID, error) {
+	return nil, nil
 }
 
 func (r *ContentRemote) SyncPublishedLessonsForCourse(ctx context.Context, q *query.Queries, courseID uuid.UUID) error {

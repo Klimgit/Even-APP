@@ -17,9 +17,19 @@ type BlockLexemeRef struct {
 	Role          string
 }
 
+type CourseModule struct {
+	ID        uuid.UUID
+	CourseID  uuid.UUID
+	Title     string
+	SortOrder int32
+	CreatedAt time.Time
+	UpdatedAt time.Time
+}
+
 type Lesson struct {
 	ID          uuid.UUID
 	CourseID    uuid.UUID
+	ModuleID    uuid.UUID
 	Title       string
 	SortOrder   int32
 	Version     int32

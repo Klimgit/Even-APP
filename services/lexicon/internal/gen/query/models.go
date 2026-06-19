@@ -40,17 +40,6 @@ type Language struct {
 	CreatedAt  time.Time
 }
 
-type Lexeme struct {
-	ID           uuid.UUID
-	LanguageID   uuid.UUID
-	Lemma        string
-	PartOfSpeech *string
-	Notes        *string
-	CreatedBy    *uuid.UUID
-	CreatedAt    time.Time
-	UpdatedAt    time.Time
-}
-
 type LexemeForm struct {
 	ID       uuid.UUID
 	LexemeID uuid.UUID
