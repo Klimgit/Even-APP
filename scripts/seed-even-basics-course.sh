@@ -311,8 +311,8 @@ labels = {L(w): w for w in vocab_all}
 ensure_block(lesson_id, intro_id, "vocabulary_set", 2, "Слова урока (15)", {
     "lexeme_ids": vocab_ids,
     "lexeme_labels": labels,
-    "show_images": False,
-    "show_audio": False,
+    "show_images": True,
+    "show_audio": True,
 }, blocks)
 
 ensure_block(lesson_id, intro_id, "text", 3, "Примеры употребления", {
@@ -531,5 +531,9 @@ pass "platform lexicon: $(python3 -c "import json,sys; print(json.loads(sys.argv
 pass "personal lexicon (admin): $(python3 -c "import json,sys; print(json.loads(sys.argv[1])['personal_lexeme_count'])" "$SEED_JSON") words"
 pass "blocks: $(python3 -c "import json,sys; print(json.loads(sys.argv[1])['block_count'])" "$SEED_JSON") ($(python3 -c "import json,sys; print(json.loads(sys.argv[1])['gradable_block_count'])" "$SEED_JSON") exercises)"
 pass "students: $(python3 -c "import json,sys; print(', '.join(json.loads(sys.argv[1])['students']))" "$SEED_JSON")"
+
+"$ROOT/scripts/seed-lexicon-media.sh" >/dev/null 2>&1 || true
+pass "lexicon media (images + audio)"
+
 echo ""
 echo "=== Even basics seed complete ==="

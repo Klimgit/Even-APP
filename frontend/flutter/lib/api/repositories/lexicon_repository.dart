@@ -153,4 +153,37 @@ class LexiconRepository extends BaseRepository {
       }),
     );
   }
+
+  Future<LexemeMediaDto> addPlatformLexemeMedia({
+    required String lexemeId,
+    required String mediaAssetId,
+    required String kind,
+    bool isPrimary = true,
+  }) async {
+    return LexemeMediaDto.fromJson(
+      await postJson('/platform/lexemes/$lexemeId/media', {
+        'media_asset_id': mediaAssetId,
+        'kind': kind,
+        'is_primary': isPrimary,
+      }),
+    );
+  }
+
+  Future<LexemeMediaDto> addTeacherLexemeMedia({
+    required String lexemeId,
+    required String mediaAssetId,
+    required String kind,
+    bool isPrimary = true,
+  }) async {
+    return LexemeMediaDto.fromJson(
+      await postJson('/teacher/lexemes/$lexemeId/media', {
+        'media_asset_id': mediaAssetId,
+        'kind': kind,
+        'is_primary': isPrimary,
+      }),
+    );
+  }
+
+  Future<void> deleteTeacherLexemeMedia(String lexemeMediaId) =>
+      delete('/teacher/lexeme-media/$lexemeMediaId');
 }

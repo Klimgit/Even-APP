@@ -27,12 +27,9 @@ func (s *MediaService) TeacherPresign(ctx context.Context, in domain.PresignInpu
 	if in.SizeBytes <= 0 {
 		return nil, fmt.Errorf("size_bytes required")
 	}
-	langID, err := uuid.Parse(in.LanguageID)
+	langID, err := s.resolveLanguageID(ctx, in.LanguageID)
 	if err != nil {
-		langID, err = s.q.GetLanguageIDByCode(ctx, query.GetLanguageIDByCodeParams{Code: "evn"})
-		if err != nil {
-			return nil, fmt.Errorf("language_id required")
-		}
+		return nil, err
 	}
 	if err := s.CheckQuota(ctx, in.UserID, in.SizeBytes, false); err != nil {
 		return nil, err
@@ -73,9 +70,9 @@ func (s *MediaService) TeacherConfirm(ctx context.Context, in domain.MediaConfir
 	if err != nil {
 		return nil, err
 	}
-	langID, err := uuid.Parse(in.LanguageID)
+	langID, err := s.resolveLanguageID(ctx, in.LanguageID)
 	if err != nil {
-		langID, _ = s.q.GetLanguageIDByCode(ctx, query.GetLanguageIDByCodeParams{Code: "evn"})
+		return nil, err
 	}
 	var linked *uuid.UUID
 	if in.LinkedLexemeID != nil && *in.LinkedLexemeID != "" {

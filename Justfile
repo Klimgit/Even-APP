@@ -203,6 +203,9 @@ seed-znakomstvo:
 seed-even-basics:
     @./scripts/seed-even-basics-course.sh
 
+seed-lexicon-media:
+    @./scripts/seed-lexicon-media.sh
+
 verify-mvp-corners:
     @./scripts/verify-mvp-corners.sh
 

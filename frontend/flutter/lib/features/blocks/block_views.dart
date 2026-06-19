@@ -265,6 +265,8 @@ class _BlockExerciseViewState extends State<BlockExerciseView> {
       return _wordOrder();
     }
     if (type == 'gap_sentence_choose_word') {
+      final choices = widget.block.config['choices'] as List<dynamic>? ?? [];
+      if (choices.isNotEmpty) return _choicesList();
       return _gapSentence();
     }
     return TextField(

@@ -63,19 +63,40 @@ python3 - "$DATA" "$ROOT" "$PG_USER" <<'PY'
 import json, subprocess, sys
 
 data_path, root, pg_user = sys.argv[1:4]
-langs = json.load(open(data_path))
-values = ", ".join(
-    f"('{l['code']}', '{l['name']}', '{l['native_name']}')" for l in langs
-)
-sql = f"""
-INSERT INTO languages (code, name, native_name)
-VALUES {values}
-ON CONFLICT (code) DO NOTHING;
-"""
-subprocess.run(
-    ["docker", "compose", "-f", f"{root}/docker-compose.yml", "exec", "-T", "postgres",
-     "psql", "-U", pg_user, "-d", "even_media", "-v", "ON_ERROR_STOP=1", "-c", sql],
-    check=True,
-)
+
+def psql(db, sql):
+    r = subprocess.run(
+        ["docker", "compose", "-f", f"{root}/docker-compose.yml", "exec", "-T", "postgres",
+         "psql", "-U", pg_user, "-d", db, "-tAc", sql],
+        capture_output=True, text=True, check=True,
+    )
+    return r.stdout.strip()
+
+lex_rows_raw = psql("even_lexicon", "SELECT id, code, name, native_name FROM languages WHERE code IN ('evn','ru')")
+lex_rows = []
+for line in lex_rows_raw.splitlines():
+    if not line.strip():
+        continue
+    parts = line.split("|")
+    if len(parts) != 4:
+        continue
+    lex_rows.append({"id": parts[0], "code": parts[1], "name": parts[2], "native_name": parts[3]})
+
+for row in lex_rows:
+    code = row["code"].replace("'", "''")
+    name = row["name"].replace("'", "''")
+    native = row["native_name"].replace("'", "''")
+    lid = row["id"]
+    old_id = psql("even_media", f"SELECT id FROM languages WHERE code='{code}'")
+    if old_id and old_id != lid:
+        psql("even_media", f"DELETE FROM media_assets WHERE language_id='{old_id}'")
+        psql("even_media", f"DELETE FROM languages WHERE id='{old_id}'")
+    psql(
+        "even_media",
+        f"INSERT INTO languages (id, code, name, native_name) VALUES ('{lid}', '{code}', '{name}', '{native}') "
+        f"ON CONFLICT (code) DO UPDATE SET id = EXCLUDED.id, name = EXCLUDED.name, native_name = EXCLUDED.native_name",
+    )
+
+print(f"media languages synced: {len(lex_rows)}")
 PY
-pass "media: evn, ru synced"
+pass "media: language IDs aligned with lexicon"

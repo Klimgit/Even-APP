@@ -1,11 +1,16 @@
+import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 import 'package:online_cource_app/api/models/lexicon_dto.dart';
 import 'package:online_cource_app/api/repositories/lexicon_repository.dart';
+import 'package:online_cource_app/api/token_storage.dart';
 import 'package:online_cource_app/controllers/api_auth_controller.dart';
 import 'package:online_cource_app/features/shared/widgets.dart';
 import 'package:online_cource_app/features/shared/alphabet_controller.dart';
+import 'package:online_cource_app/features/shared/media_url.dart';
 import 'package:online_cource_app/features/shared/study_text_field.dart';
+import 'package:online_cource_app/features/teacher/pickers/media_picker.dart';
+import 'package:video_player/video_player.dart';
 
 /// Platform (admin) + teacher personal lexicon management.
 class KnowledgeBaseScreen extends StatefulWidget {
@@ -148,6 +153,115 @@ class _KnowledgeBaseScreenState extends State<KnowledgeBaseScreen>
     await _load();
   }
 
+  Future<Map<String, String>> _authHeaders() async {
+    final token = await Get.find<TokenStorage>().readAccessToken();
+    if (token == null || token.isEmpty) return const {};
+    return {'Authorization': 'Bearer $token'};
+  }
+
+  Future<void> _showLexemeDetail(LexemeDto lexeme) async {
+    final langs = Get.find<LanguagesController>().languages;
+    final studyCode = _languageCode ?? 'evn';
+    final langId = langs.firstWhere((l) => l.code == studyCode, orElse: () => langs.first).id;
+    final headers = await _authHeaders();
+    if (!mounted) return;
+
+    await showModalBottomSheet<void>(
+      context: context,
+      isScrollControlled: true,
+      builder: (ctx) => DraggableScrollableSheet(
+        expand: false,
+        initialChildSize: 0.55,
+        maxChildSize: 0.9,
+        builder: (_, controller) => ListView(
+          controller: controller,
+          padding: const EdgeInsets.all(16),
+          children: [
+            Text(lexeme.lemma, style: Theme.of(ctx).textTheme.headlineSmall),
+            Text(lexeme.translations.map((t) => t.text).join(', ')),
+            const SizedBox(height: 16),
+            if (lexeme.primaryImageUrl != null)
+              ClipRRect(
+                borderRadius: BorderRadius.circular(12),
+                child: FutureBuilder<Map<String, String>>(
+                  future: _authHeaders(),
+                  builder: (context, snap) {
+                    final h = snap.data ?? headers;
+                    return CachedNetworkImage(
+                      imageUrl: resolveApiMediaUrl(lexeme.primaryImageUrl),
+                      httpHeaders: h,
+                      height: 180,
+                      width: double.infinity,
+                      fit: BoxFit.cover,
+                      errorWidget: (_, __, ___) => Container(
+                        height: 180,
+                        color: Colors.grey.shade200,
+                        child: const Icon(Icons.image_not_supported_outlined),
+                      ),
+                    );
+                  },
+                ),
+              ),
+            if (lexeme.primaryAudioUrl != null) ...[
+              const SizedBox(height: 12),
+              _LexemeAudioPreview(url: resolveApiMediaUrl(lexeme.primaryAudioUrl!)),
+            ],
+            const SizedBox(height: 20),
+            const Text('Прикрепить медиа', style: TextStyle(fontWeight: FontWeight.w600)),
+            const SizedBox(height: 8),
+            Wrap(
+              spacing: 8,
+              children: [
+                OutlinedButton.icon(
+                  onPressed: () => _attachMedia(lexeme, langId, studyCode, 'image'),
+                  icon: const Icon(Icons.image_outlined),
+                  label: const Text('Картинка'),
+                ),
+                OutlinedButton.icon(
+                  onPressed: () => _attachMedia(lexeme, langId, studyCode, 'audio'),
+                  icon: const Icon(Icons.audiotrack_outlined),
+                  label: const Text('Аудио'),
+                ),
+              ],
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Future<void> _attachMedia(
+    LexemeDto lexeme,
+    String languageId,
+    String languageCode,
+    String kind,
+  ) async {
+    final mediaKind = kind == 'audio' ? 'audio' : 'image';
+    final picked = await showMediaPicker(
+      context: context,
+      languageCode: languageCode,
+      languageId: languageId,
+      kind: mediaKind,
+    );
+    if (picked == null) return;
+    final lexemeKind = kind == 'audio' ? 'audio_word' : 'image';
+    if (_platformTab && _canEditPlatform) {
+      await _lexicon.addPlatformLexemeMedia(
+        lexemeId: lexeme.id,
+        mediaAssetId: picked.id,
+        kind: lexemeKind,
+      );
+    } else {
+      await _lexicon.addTeacherLexemeMedia(
+        lexemeId: lexeme.id,
+        mediaAssetId: picked.id,
+        kind: lexemeKind,
+      );
+    }
+    if (mounted) Navigator.pop(context);
+    await _load();
+  }
+
   Future<void> _deleteLexeme(LexemeDto lexeme) async {
     if (_platformTab && !_canEditPlatform) return;
     final ok = await showDialog<bool>(
@@ -226,14 +340,28 @@ class _KnowledgeBaseScreenState extends State<KnowledgeBaseScreen>
                           final lex = _items[i];
                           final trans = lex.translations.map((t) => t.text).join(', ');
                           return ListTile(
-                            title: Text(lex.lemma, style: const TextStyle(fontWeight: FontWeight.w600)),
+                            onTap: () => _showLexemeDetail(lex),
+                            leading: _LexemeThumb(
+                              imageUrl: lex.primaryImageUrl,
+                              headersFuture: _authHeaders(),
+                            ),
+                            title: Text(
+                              lex.lemma,
+                              style: const TextStyle(fontWeight: FontWeight.w600),
+                            ),
                             subtitle: Text(trans.isEmpty ? '—' : trans),
-                            trailing: canEdit
-                                ? IconButton(
+                            trailing: Row(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                if (lex.primaryAudioUrl != null)
+                                  const Icon(Icons.volume_up_outlined, size: 20),
+                                if (canEdit)
+                                  IconButton(
                                     icon: const Icon(Icons.delete_outline),
                                     onPressed: () => _deleteLexeme(lex),
-                                  )
-                                : null,
+                                  ),
+                              ],
+                            ),
                           );
                         },
                       ),
@@ -241,6 +369,91 @@ class _KnowledgeBaseScreenState extends State<KnowledgeBaseScreen>
         ],
         ),
       ),
+    );
+  }
+}
+
+class _LexemeThumb extends StatelessWidget {
+  final String? imageUrl;
+  final Future<Map<String, String>> headersFuture;
+
+  const _LexemeThumb({required this.imageUrl, required this.headersFuture});
+
+  @override
+  Widget build(BuildContext context) {
+    if (imageUrl == null || imageUrl!.isEmpty) {
+      return CircleAvatar(
+        backgroundColor: Colors.grey.shade200,
+        child: const Icon(Icons.menu_book_outlined, size: 18),
+      );
+    }
+    return FutureBuilder<Map<String, String>>(
+      future: headersFuture,
+      builder: (context, snap) {
+        return ClipRRect(
+          borderRadius: BorderRadius.circular(8),
+          child: CachedNetworkImage(
+            imageUrl: resolveApiMediaUrl(imageUrl),
+            httpHeaders: snap.data ?? const {},
+            width: 48,
+            height: 48,
+            fit: BoxFit.cover,
+            errorWidget: (_, __, ___) => CircleAvatar(
+              backgroundColor: Colors.grey.shade200,
+              child: const Icon(Icons.image_not_supported_outlined, size: 18),
+            ),
+          ),
+        );
+      },
+    );
+  }
+}
+
+class _LexemeAudioPreview extends StatefulWidget {
+  final String url;
+  const _LexemeAudioPreview({required this.url});
+
+  @override
+  State<_LexemeAudioPreview> createState() => _LexemeAudioPreviewState();
+}
+
+class _LexemeAudioPreviewState extends State<_LexemeAudioPreview> {
+  VideoPlayerController? _controller;
+
+  @override
+  void initState() {
+    super.initState();
+    _controller = VideoPlayerController.networkUrl(Uri.parse(widget.url))
+      ..initialize().then((_) {
+        if (mounted) setState(() {});
+      });
+  }
+
+  @override
+  void dispose() {
+    _controller?.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final c = _controller;
+    if (c == null || !c.value.isInitialized) {
+      return const LinearProgressIndicator(minHeight: 2);
+    }
+    return Row(
+      children: [
+        IconButton(
+          icon: Icon(c.value.isPlaying ? Icons.pause_circle : Icons.play_circle),
+          iconSize: 40,
+          onPressed: () {
+            setState(() {
+              c.value.isPlaying ? c.pause() : c.play();
+            });
+          },
+        ),
+        const Expanded(child: Text('Прослушать произношение')),
+      ],
     );
   }
 }

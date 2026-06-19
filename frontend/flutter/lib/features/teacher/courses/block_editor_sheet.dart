@@ -100,7 +100,18 @@ class _BlockEditorSheetState extends State<BlockEditorSheet> {
                 ),
                 TextButton(onPressed: () => Navigator.pop(context), child: const Text('Отмена')),
                 ElevatedButton(
-                  onPressed: () => Navigator.pop(context, _config),
+                  onPressed: () {
+                    try {
+                      _finalizeConfig(widget.block.blockType);
+                      _config.remove('_media_name');
+                      _config.remove('_listen_audio_name');
+                      Navigator.pop(context, _config);
+                    } catch (e) {
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        SnackBar(content: Text(e.toString())),
+                      );
+                    }
+                  },
                   child: const Text('Сохранить'),
                 ),
               ],
@@ -145,14 +156,20 @@ class _BlockEditorSheetState extends State<BlockEditorSheet> {
       case 'prompt_choose_word':
       case 'listen_choose_word':
       case 'word_choose_translation':
-        return [_chooseEditor(useLexeme: type == 'prompt_choose_word' || type == 'listen_choose_word')];
+        return [
+          if (type.startsWith('listen')) _listenAudioField(),
+          _chooseEditor(useLexeme: type == 'prompt_choose_word' || type == 'listen_choose_word'),
+        ];
       case 'word_choose_image':
         return [_chooseImageEditor()];
       case 'prompt_type_word':
       case 'listen_type_word':
       case 'prompt_sentence_type':
       case 'listen_sentence_type':
-        return [_typeAnswerEditor()];
+        return [
+          if (type.startsWith('listen')) _listenAudioField(),
+          _typeAnswerEditor(),
+        ];
       case 'gap_sentence_choose_word':
         return [_gapEditor()];
       case 'prompt_sentence_word_order':
@@ -315,18 +332,95 @@ class _BlockEditorSheetState extends State<BlockEditorSheet> {
   }
 
   Widget _stackedEditor() {
-    return TextFormField(
-      initialValue: (_config['items'] as List?)?.firstWhere(
-            (e) => (e as Map)['kind'] == 'text',
-            orElse: () => {'text': ''},
-          )['text']?.toString() ??
-          '',
-      decoration: const InputDecoration(labelText: 'Подпись к изображению'),
-      onChanged: (v) => setState(() {
-        _config['items'] = [
-          {'kind': 'text', 'text': v},
-        ];
-      }),
+    final items = (_config['items'] as List<dynamic>? ?? [])
+        .map((e) => Map<String, dynamic>.from(e as Map))
+        .toList();
+    var mediaId = '';
+    var caption = '';
+    for (final item in items) {
+      if (item['kind'] == 'image') mediaId = item['media_asset_id']?.toString() ?? '';
+      if (item['kind'] == 'text') caption = item['text']?.toString() ?? '';
+    }
+    return Column(
+      children: [
+        MediaPickerField(
+          mediaId: mediaId.isEmpty ? null : mediaId,
+          displayName: _config['_media_name'] as String?,
+          label: 'Изображение',
+          onPick: () async {
+            final m = await showMediaPicker(
+              context: context,
+              languageCode: widget.languageCode,
+              languageId: widget.languageId,
+              kind: 'image',
+            );
+            if (m != null) {
+              setState(() {
+                _config['items'] = [
+                  {'kind': 'image', 'media_asset_id': m.id},
+                  {'kind': 'text', 'text': caption},
+                ];
+                _config['_media_name'] = m.displayName;
+              });
+            }
+          },
+        ),
+        TextFormField(
+          initialValue: caption,
+          decoration: const InputDecoration(labelText: 'Подпись к изображению'),
+          onChanged: (v) => setState(() {
+            final next = <Map<String, dynamic>>[];
+            if (mediaId.isNotEmpty) {
+              next.add({'kind': 'image', 'media_asset_id': mediaId});
+            }
+            next.add({'kind': 'text', 'text': v});
+            _config['items'] = next;
+          }),
+        ),
+      ],
+    );
+  }
+
+  Widget _listenAudioField() {
+    final prompt = _config['prompt'] as Map<String, dynamic>? ?? {'items': []};
+    final items = (prompt['items'] as List<dynamic>? ?? [])
+        .map((e) => Map<String, dynamic>.from(e as Map))
+        .toList();
+    final audioItem = items.cast<Map<String, dynamic>?>().firstWhere(
+          (e) => e?['kind'] == 'audio',
+          orElse: () => null,
+        );
+    final mediaId = audioItem?['media_asset_id'] as String?;
+
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 12),
+      child: MediaPickerField(
+        mediaId: mediaId,
+        displayName: _config['_listen_audio_name'] as String?,
+        label: 'Аудио для задания',
+        onPick: () async {
+          final m = await showMediaPicker(
+            context: context,
+            languageCode: widget.languageCode,
+            languageId: widget.languageId,
+            kind: 'audio',
+          );
+          if (m == null) return;
+          setState(() {
+            final textItem = items.firstWhere(
+              (e) => e['kind'] == 'text',
+              orElse: () => {'kind': 'text', 'text': ''},
+            );
+            _config['prompt'] = {
+              'items': [
+                {'kind': 'audio', 'media_asset_id': m.id},
+                textItem,
+              ],
+            };
+            _config['_listen_audio_name'] = m.displayName;
+          });
+        },
+      ),
     );
   }
 
@@ -494,7 +588,14 @@ class _BlockEditorSheetState extends State<BlockEditorSheet> {
   Widget _gapEditor() {
     final gaps = (_config['gaps'] as List<dynamic>? ?? []);
     final gapLexId = gaps.isNotEmpty ? (gaps.first as Map)['correct_lexeme_id'] as String? : null;
+    final choices = (_config['choices'] as List<dynamic>? ?? [])
+        .map((e) => Map<String, dynamic>.from(e as Map))
+        .toList();
+    while (choices.length < 3) choices.add({'lexeme_id': ''});
+    var correctIndex = _config['correct_index'] as int? ?? 0;
+
     return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         TextFormField(
           initialValue: _config['body']?.toString() ?? '',
@@ -504,6 +605,7 @@ class _BlockEditorSheetState extends State<BlockEditorSheet> {
           ),
           onChanged: (v) => _config['body'] = v,
         ),
+        const SizedBox(height: 12),
         LexemePickerField(
           lexemeId: gapLexId,
           lemma: gapLexId != null ? _lemmaCache[gapLexId] : null,
@@ -517,10 +619,54 @@ class _BlockEditorSheetState extends State<BlockEditorSheet> {
               setState(() {
                 _config['gaps'] = [{'id': 0, 'correct_lexeme_id': lex.id}];
                 _lemmaCache[lex.id] = lex.lemma;
+                if (choices.every((c) => (c['lexeme_id'] as String? ?? '').isEmpty)) {
+                  choices[0] = {'lexeme_id': lex.id, 'lemma': lex.lemma};
+                }
+                _config['choices'] = choices;
               });
             }
           },
         ),
+        const SizedBox(height: 12),
+        const Text('Варианты для пропуска', style: TextStyle(fontWeight: FontWeight.w600)),
+        for (var i = 0; i < choices.length; i++)
+          Padding(
+            padding: const EdgeInsets.only(top: 8),
+            child: Row(
+              children: [
+                Radio<int>(
+                  value: i,
+                  groupValue: correctIndex,
+                  onChanged: (v) => setState(() {
+                    correctIndex = v ?? 0;
+                    _config['correct_index'] = correctIndex;
+                  }),
+                ),
+                Expanded(
+                  child: LexemePickerField(
+                    lexemeId: choices[i]['lexeme_id'] as String?,
+                    lemma: _lemmaCache[choices[i]['lexeme_id'] as String?] ??
+                        choices[i]['lemma'] as String?,
+                    label: 'Вариант ${i + 1}',
+                    onPick: () async {
+                      final lex = await showLexemePicker(
+                        context: context,
+                        languageCode: widget.languageCode,
+                      );
+                      if (lex != null) {
+                        setState(() {
+                          choices[i]['lexeme_id'] = lex.id;
+                          choices[i]['lemma'] = lex.lemma;
+                          _lemmaCache[lex.id] = lex.lemma;
+                          _config['choices'] = choices;
+                        });
+                      }
+                    },
+                  ),
+                ),
+              ],
+            ),
+          ),
       ],
     );
   }
@@ -529,7 +675,11 @@ class _BlockEditorSheetState extends State<BlockEditorSheet> {
     final subItems = _config['sub_items'] as List<dynamic>? ?? [];
     final sub = subItems.isNotEmpty
         ? Map<String, dynamic>.from(subItems.first as Map)
-        : {'tokens': <String>[], 'correct_order': <int>[]};
+        : <String, dynamic>{'tokens': <String>[], 'correct_order': <int>[], 'prompt': {'items': []}};
+    final prompt = sub['prompt'] as Map<String, dynamic>? ?? {'items': []};
+    final items = prompt['items'] as List<dynamic>? ?? [];
+    final promptText =
+        items.isNotEmpty ? (items.first as Map)['text']?.toString() ?? '' : '';
     final tokensCtrl = TextEditingController(
       text: (sub['tokens'] as List<dynamic>? ?? []).join(', '),
     );
@@ -537,7 +687,17 @@ class _BlockEditorSheetState extends State<BlockEditorSheet> {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        _promptField(),
+        TextFormField(
+          initialValue: promptText,
+          decoration: const InputDecoration(labelText: 'Вопрос / задание'),
+          maxLines: 2,
+          onChanged: (v) {
+            sub['prompt'] = {
+              'items': [{'kind': 'text', 'text': v}],
+            };
+            _config['sub_items'] = [sub];
+          },
+        ),
         TextField(
           controller: tokensCtrl,
           decoration: const InputDecoration(
@@ -548,10 +708,102 @@ class _BlockEditorSheetState extends State<BlockEditorSheet> {
             final tokens = v.split(',').map((s) => s.trim()).where((s) => s.isNotEmpty).toList();
             sub['tokens'] = tokens;
             sub['correct_order'] = List.generate(tokens.length, (i) => i);
+            if (sub['prompt'] == null) {
+              sub['prompt'] = {'items': [{'kind': 'text', 'text': ''}]};
+            }
             _config['sub_items'] = [sub];
           },
         ),
       ],
     );
+  }
+
+  void _finalizeConfig(String type) {
+    if (type == 'gap_sentence_choose_word') {
+      final choices = (_config['choices'] as List<dynamic>? ?? [])
+          .where((c) => (c as Map)['lexeme_id']?.toString().isNotEmpty ?? false)
+          .map((c) => Map<String, dynamic>.from(c as Map))
+          .toList();
+      if (choices.isNotEmpty) {
+        _config['choices'] = choices;
+        final correctIdx = _config['correct_index'] as int? ?? 0;
+        _config['correct_index'] = correctIdx.clamp(0, choices.length - 1);
+      }
+      final gaps = (_config['gaps'] as List<dynamic>? ?? []);
+      if (gaps.isNotEmpty) {
+        final lexId = (gaps.first as Map)['correct_lexeme_id'];
+        if (lexId != null) {
+          _config['correct_lexeme_id'] = lexId;
+        }
+      }
+    }
+
+    if (type.contains('word_order')) {
+      final subItems = _config['sub_items'] as List<dynamic>? ?? [];
+      if (subItems.isEmpty) {
+        _config['sub_items'] = [
+          {
+            'prompt': _config['prompt'] ?? {'items': [{'kind': 'text', 'text': ''}]},
+            'tokens': <String>[],
+            'correct_order': <int>[],
+          },
+        ];
+      } else {
+        final sub = Map<String, dynamic>.from(subItems.first as Map);
+        if (sub['prompt'] == null && _config['prompt'] != null) {
+          sub['prompt'] = _config['prompt'];
+        }
+        _config.remove('prompt');
+        _config['sub_items'] = [sub];
+      }
+    }
+
+    if (type == 'images_stacked') {
+      final items = (_config['items'] as List<dynamic>? ?? [])
+          .whereType<Map>()
+          .map((e) => Map<String, dynamic>.from(e))
+          .where((e) =>
+              (e['kind'] == 'text' && (e['text']?.toString().isNotEmpty ?? false)) ||
+              (e['kind'] == 'image' && (e['media_asset_id']?.toString().isNotEmpty ?? false)))
+          .toList();
+      _config['items'] = items;
+    }
+
+    if (type.contains('choose')) {
+      final choices = (_config['choices'] as List<dynamic>? ?? [])
+          .map((e) => Map<String, dynamic>.from(e as Map))
+          .where((c) {
+            if (c.containsKey('lexeme_id')) {
+              return (c['lexeme_id']?.toString().isNotEmpty ?? false);
+            }
+            if (c.containsKey('media_asset_id')) {
+              return (c['media_asset_id']?.toString().isNotEmpty ?? false);
+            }
+            return (c['text']?.toString().isNotEmpty ?? false);
+          })
+          .toList();
+      if (choices.length >= 2) {
+        _config['choices'] = choices;
+        final idx = (_config['correct_index'] as int? ?? 0).clamp(0, choices.length - 1);
+        _config['correct_index'] = idx;
+      }
+    }
+
+    if (type.contains('type_word') || type.contains('sentence_type')) {
+      final text = _correctTextCtrl.text.trim();
+      if (text.isNotEmpty) {
+        _config['correct_text'] = text;
+      }
+    }
+
+    if (type.startsWith('listen')) {
+      final prompt = _config['prompt'] as Map<String, dynamic>?;
+      final items = prompt?['items'] as List<dynamic>? ?? [];
+      final hasAudio = items.any((e) => (e as Map)['kind'] == 'audio' &&
+          (e['media_asset_id']?.toString().isNotEmpty ?? false));
+      if (!hasAudio) {
+        throw StateError('Выберите аудио для задания на аудирование');
+      }
+    }
   }
 }

@@ -32,3 +32,21 @@ func (q *Queries) GetLanguageIDByCode(ctx context.Context, arg GetLanguageIDByCo
 	err := row.Scan(&id)
 	return id, err
 }
+
+const languageExists = `-- name: LanguageExists :one
+SELECT EXISTS(SELECT 1 FROM languages WHERE id = $1)::bool AS exists
+`
+
+type LanguageExistsParams struct {
+	ID uuid.UUID
+}
+
+// LanguageExists
+//
+//	SELECT EXISTS(SELECT 1 FROM languages WHERE id = $1)::bool AS exists
+func (q *Queries) LanguageExists(ctx context.Context, arg LanguageExistsParams) (bool, error) {
+	row := q.db.QueryRow(ctx, languageExists, arg.ID)
+	var exists bool
+	err := row.Scan(&exists)
+	return exists, err
+}
