@@ -10,12 +10,16 @@ import (
 const DefaultHTTPPort = 8084
 
 type Config struct {
-	Base               libconfig.Base
-	DatabaseURL        string
-	ContentDatabaseURL string
-	LexiconDatabaseURL string
-	MediaDatabaseURL   string
-	JWTSecret          string
+	Base                 libconfig.Base
+	DatabaseURL          string
+	ContentDatabaseURL   string
+	LexiconDatabaseURL   string
+	MediaDatabaseURL     string
+	ContentServiceURL    string
+	LexiconServiceURL    string
+	MediaServiceURL      string
+	InternalServiceToken string
+	JWTSecret            string
 }
 
 func Load() (Config, error) {
@@ -35,13 +39,29 @@ func Load() (Config, error) {
 	lexiconURL := os.Getenv("LEXICON_DATABASE_URL")
 	mediaURL := os.Getenv("MEDIA_DATABASE_URL")
 	return Config{
-		Base:               base,
-		DatabaseURL:        dbURL,
-		ContentDatabaseURL: contentURL,
-		LexiconDatabaseURL: lexiconURL,
-		MediaDatabaseURL:   mediaURL,
-		JWTSecret:          jwt,
+		Base:                 base,
+		DatabaseURL:          dbURL,
+		ContentDatabaseURL:   contentURL,
+		LexiconDatabaseURL:   lexiconURL,
+		MediaDatabaseURL:     mediaURL,
+		ContentServiceURL:    os.Getenv("CONTENT_SERVICE_URL"),
+		LexiconServiceURL:    os.Getenv("LEXICON_SERVICE_URL"),
+		MediaServiceURL:      os.Getenv("MEDIA_SERVICE_URL"),
+		InternalServiceToken: libconfig.InternalServiceToken(),
+		JWTSecret:            jwt,
 	}, nil
+}
+
+func (c Config) HasContentHTTP() bool {
+	return c.ContentServiceURL != ""
+}
+
+func (c Config) HasLexiconHTTP() bool {
+	return c.LexiconServiceURL != ""
+}
+
+func (c Config) HasMediaHTTP() bool {
+	return c.MediaServiceURL != ""
 }
 
 func (c Config) HasMediaDB() bool {

@@ -16,10 +16,10 @@ import (
 
 type LexiconService struct {
 	q       *query.Queries
-	content *repository.ContentReader
+	content repository.ContentSource
 }
 
-func NewLexiconService(q *query.Queries, content *repository.ContentReader) *LexiconService {
+func NewLexiconService(q *query.Queries, content repository.ContentSource) *LexiconService {
 	return &LexiconService{q: q, content: content}
 }
 

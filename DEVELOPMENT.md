@@ -206,18 +206,41 @@ just run-auth-local                              # foreground, Ctrl+C для о�
 | `CONTENT_DATABASE_URL` | DSN для `even_content` |
 | `LEARNING_DATABASE_URL` | DSN для `even_learning` |
 
-### Cross-DB (read-only вторые подключения)
+### Inter-service HTTP (preferred)
 
-Некоторые сервисы читают чужие БД напрямую (MVP без event bus). В Docker compose задаётся автоматически; при `go run` на хосте — те же DSN с `localhost:5432`.
+Сервисы вызывают друг друга по HTTP через hand-written клиенты в `libs/clients/`. Внутренние маршруты: `/api/v1/internal/...`, заголовок `X-Internal-Token` (= `INTERNAL_SERVICE_TOKEN`, по умолчанию `dev-internal-token`).
+
+| Переменная | Описание |
+|------------|----------|
+| `INTERNAL_SERVICE_TOKEN` | общий секрет service-to-service |
+| `AUTH_SERVICE_URL` | base URL auth (например `http://auth:8081`) |
+| `CONTENT_SERVICE_URL` | base URL content |
+| `LEARNING_SERVICE_URL` | base URL learning |
+| `LEXICON_SERVICE_URL` | base URL lexicon |
+| `MEDIA_SERVICE_URL` | base URL media |
+
+| Сервис | SERVICE_URL | Зачем |
+|--------|-------------|-------|
+| **learning** | `CONTENT`, `LEXICON`, `MEDIA` | join, snapshots, `resolved_lexemes` |
+| **content** | `LEARNING`, `AUTH` | students, progress, enroll |
+| **lexicon** | `CONTENT` | lexeme usage в block configs |
+| **auth** | `CONTENT`, `LEARNING` | `GET /platform/stats` |
+
+В `docker-compose.yml` заданы `*_SERVICE_URL`; cross-DB DSN там не нужны.
+
+### Cross-DB fallback (legacy, local `go run`)
+
+Если `*_SERVICE_URL` не задан, сервисы могут читать чужие БД напрямую через `*_DATABASE_URL`:
 
 | Сервис | Переменная | Зачем |
 |--------|------------|-------|
 | **learning** | `CONTENT_DATABASE_URL` | join курса, snapshots уроков/блоков |
-| **learning** | `LEXICON_DATABASE_URL` | `target_language` в списке курсов, `resolved_lexemes` в уроке |
-| **content** | `LEARNING_DATABASE_URL` | список учеников, прогресс, enroll по invite/email |
-| **content** | `AUTH_DATABASE_URL` | lookup user по email для `POST /teacher/students` |
-| **lexicon** | `CONTENT_DATABASE_URL` | `GET /teacher/lexemes/{id}/usage` — scan block configs |
-| **auth** | `CONTENT_DATABASE_URL`, `LEARNING_DATABASE_URL` | `GET /platform/stats` — published courses, active enrollments |
+| **learning** | `LEXICON_DATABASE_URL` | `target_language`, `resolved_lexemes` |
+| **learning** | `MEDIA_DATABASE_URL` | media metadata в уроке |
+| **content** | `LEARNING_DATABASE_URL` | список учеников, прогресс, enroll |
+| **content** | `AUTH_DATABASE_URL` | lookup user по email |
+| **lexicon** | `CONTENT_DATABASE_URL` | lexeme usage |
+| **auth** | `CONTENT_DATABASE_URL`, `LEARNING_DATABASE_URL` | platform stats |
 
 Языки дублируются в `even_lexicon` и `even_media`. После bootstrap: `just seed-languages` (или `scripts/seed-languages.sh`) — создаёт evn/ru в lexicon через API и синхронизирует строки в media DB.
 
@@ -234,7 +257,7 @@ just run-auth-local                              # foreground, Ctrl+C для о�
 | Область | Переменные / действия |
 |---------|----------------------|
 | **Secrets** | `JWT_SECRET` — уникальный длинный секрет; `POSTGRES_PASSWORD`; `S3_ACCESS_KEY` / `S3_SECRET_KEY` (не minio defaults) |
-| **DSN** | Все `*_DATABASE_URL` для каждого сервиса; cross-DB URL в compose (`auth`, `content`, `learning`, `lexicon`) |
+| **DSN** | Все `*_DATABASE_URL` для каждого сервиса; в compose — `*_SERVICE_URL` + `INTERNAL_SERVICE_TOKEN` вместо cross-DB |
 | **CORS** | `CORS_ALLOWED_ORIGINS` на gateway — явный allowlist origin Flutter web / admin (не `*`) |
 | **S3** | `S3_PUBLIC_ENDPOINT` — URL, доступный клиенту для presigned links |
 | **Observability** | Gateway propagates `X-Request-Id` к upstream; structured logs включают `request_id` |

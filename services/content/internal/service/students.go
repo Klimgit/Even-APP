@@ -115,10 +115,10 @@ func (s *ContentService) EnrollStudent(ctx context.Context, courseID uuid.UUID, 
 		return StudentView{}, domain.ErrValidation
 	}
 	if s.learning == nil || !s.learning.Available() {
-		return StudentView{}, errors.New("learning database not configured")
+		return StudentView{}, errors.New("learning service not configured")
 	}
 	if s.auth == nil || !s.auth.Available() {
-		return StudentView{}, errors.New("auth database not configured")
+		return StudentView{}, errors.New("auth service not configured")
 	}
 
 	course, err := s.q.GetCourseByID(ctx, courseID)

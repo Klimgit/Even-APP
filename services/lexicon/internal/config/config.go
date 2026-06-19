@@ -10,10 +10,12 @@ import (
 const DefaultHTTPPort = 8082
 
 type Config struct {
-	Base               libconfig.Base
-	DatabaseURL        string
-	ContentDatabaseURL string
-	JWTSecret          string
+	Base                 libconfig.Base
+	DatabaseURL          string
+	ContentDatabaseURL   string
+	ContentServiceURL    string
+	InternalServiceToken string
+	JWTSecret            string
 }
 
 func Load() (Config, error) {
@@ -30,11 +32,17 @@ func Load() (Config, error) {
 		return Config{}, err
 	}
 	return Config{
-		Base:               base,
-		DatabaseURL:        dbURL,
-		ContentDatabaseURL: os.Getenv("CONTENT_DATABASE_URL"),
-		JWTSecret:          jwt,
+		Base:                 base,
+		DatabaseURL:          dbURL,
+		ContentDatabaseURL:   os.Getenv("CONTENT_DATABASE_URL"),
+		ContentServiceURL:    os.Getenv("CONTENT_SERVICE_URL"),
+		InternalServiceToken: libconfig.InternalServiceToken(),
+		JWTSecret:            jwt,
 	}, nil
+}
+
+func (c Config) HasContentHTTP() bool {
+	return c.ContentServiceURL != ""
 }
 
 func (c Config) HasContentDB() bool {

@@ -11,13 +11,16 @@ import (
 const DefaultHTTPPort = 8081
 
 type Config struct {
-	Base                libconfig.Base
-	DatabaseURL         string
-	ContentDatabaseURL  string
-	LearningDatabaseURL string
-	JWTSecret           string
-	AccessTTL           time.Duration
-	RefreshTTL          time.Duration
+	Base                 libconfig.Base
+	DatabaseURL          string
+	ContentDatabaseURL   string
+	LearningDatabaseURL  string
+	ContentServiceURL    string
+	LearningServiceURL   string
+	InternalServiceToken string
+	JWTSecret            string
+	AccessTTL            time.Duration
+	RefreshTTL           time.Duration
 }
 
 func Load() (Config, error) {
@@ -42,14 +45,25 @@ func Load() (Config, error) {
 		return Config{}, err
 	}
 	return Config{
-		Base:                base,
-		DatabaseURL:         dbURL,
-		ContentDatabaseURL:  os.Getenv("CONTENT_DATABASE_URL"),
-		LearningDatabaseURL: os.Getenv("LEARNING_DATABASE_URL"),
-		JWTSecret:           jwt,
-		AccessTTL:           access,
-		RefreshTTL:          refresh,
+		Base:                 base,
+		DatabaseURL:          dbURL,
+		ContentDatabaseURL:   os.Getenv("CONTENT_DATABASE_URL"),
+		LearningDatabaseURL:  os.Getenv("LEARNING_DATABASE_URL"),
+		ContentServiceURL:    os.Getenv("CONTENT_SERVICE_URL"),
+		LearningServiceURL:   os.Getenv("LEARNING_SERVICE_URL"),
+		InternalServiceToken: libconfig.InternalServiceToken(),
+		JWTSecret:            jwt,
+		AccessTTL:            access,
+		RefreshTTL:           refresh,
 	}, nil
+}
+
+func (c Config) HasContentHTTP() bool {
+	return c.ContentServiceURL != ""
+}
+
+func (c Config) HasLearningHTTP() bool {
+	return c.LearningServiceURL != ""
 }
 
 func parseDuration(key string, def time.Duration) (time.Duration, error) {

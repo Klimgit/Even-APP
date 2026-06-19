@@ -7,6 +7,7 @@ package query
 
 import (
 	"context"
+	"time"
 
 	"github.com/google/uuid"
 )
@@ -190,6 +191,57 @@ func (q *Queries) ListUsers(ctx context.Context, arg ListUsersParams) ([]User, e
 			&i.ID,
 			&i.Email,
 			&i.PasswordHash,
+			&i.DisplayName,
+			&i.Role,
+			&i.IsAdmin,
+			&i.CreatedAt,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const listUsersByIDs = `-- name: ListUsersByIDs :many
+SELECT id, email, display_name, role, is_admin, created_at
+FROM users
+WHERE id = ANY($1::uuid[])
+`
+
+type ListUsersByIDsParams struct {
+	Column1 []uuid.UUID
+}
+
+type ListUsersByIDsRow struct {
+	ID          uuid.UUID
+	Email       string
+	DisplayName *string
+	Role        string
+	IsAdmin     bool
+	CreatedAt   time.Time
+}
+
+// ListUsersByIDs
+//
+//	SELECT id, email, display_name, role, is_admin, created_at
+//	FROM users
+//	WHERE id = ANY($1::uuid[])
+func (q *Queries) ListUsersByIDs(ctx context.Context, arg ListUsersByIDsParams) ([]ListUsersByIDsRow, error) {
+	rows, err := q.db.Query(ctx, listUsersByIDs, arg.Column1)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []ListUsersByIDsRow
+	for rows.Next() {
+		var i ListUsersByIDsRow
+		if err := rows.Scan(
+			&i.ID,
+			&i.Email,
 			&i.DisplayName,
 			&i.Role,
 			&i.IsAdmin,

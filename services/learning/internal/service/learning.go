@@ -18,12 +18,12 @@ import (
 type LearningService struct {
 	db      *pgxpool.Pool
 	q       *query.Queries
-	content *repository.ContentReader
-	lexicon *repository.LexiconReader
-	media   *repository.MediaReader
+	content repository.ContentSource
+	lexicon repository.LexiconSource
+	media   repository.MediaSource
 }
 
-func NewLearningService(db *pgxpool.Pool, content *repository.ContentReader, lexicon *repository.LexiconReader, media *repository.MediaReader) *LearningService {
+func NewLearningService(db *pgxpool.Pool, content repository.ContentSource, lexicon repository.LexiconSource, media repository.MediaSource) *LearningService {
 	return &LearningService{db: db, q: query.New(db), content: content, lexicon: lexicon, media: media}
 }
 
@@ -38,7 +38,7 @@ func (s *LearningService) JoinCourse(ctx context.Context, userID uuid.UUID, invi
 		return nil, domain.ErrValidation
 	}
 	if !s.content.Available() {
-		return nil, errors.New("content database not configured")
+		return nil, errors.New("content service not configured")
 	}
 
 	course, err := s.content.GetCourseByInviteCode(ctx, code)
@@ -697,7 +697,7 @@ type PublicCourseListItem struct {
 
 func (s *LearningService) ListPublicCourses(ctx context.Context) ([]PublicCourseListItem, error) {
 	if !s.content.Available() {
-		return nil, errors.New("content database not configured")
+		return nil, errors.New("content service not configured")
 	}
 	courses, err := s.content.ListPublishedCourses(ctx)
 	if err != nil {

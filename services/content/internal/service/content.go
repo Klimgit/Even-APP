@@ -13,11 +13,11 @@ import (
 
 type ContentService struct {
 	q        *query.Queries
-	learning *repository.LearningReader
-	auth     *repository.AuthReader
+	learning repository.LearningSource
+	auth     repository.AuthSource
 }
 
-func NewContentService(q *query.Queries, learning *repository.LearningReader, auth *repository.AuthReader) *ContentService {
+func NewContentService(q *query.Queries, learning repository.LearningSource, auth repository.AuthSource) *ContentService {
 	return &ContentService{q: q, learning: learning, auth: auth}
 }
 

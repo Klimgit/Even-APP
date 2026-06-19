@@ -59,6 +59,11 @@ func envInt(key string, def int) (int, error) {
 	return n, nil
 }
 
+// InternalServiceToken returns the shared secret for service-to-service routes.
+func InternalServiceToken() string {
+	return envString("INTERNAL_SERVICE_TOKEN", "dev-internal-token")
+}
+
 func envDuration(key string, def time.Duration) (time.Duration, error) {
 	v := os.Getenv(key)
 	if v == "" {

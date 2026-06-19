@@ -15,7 +15,9 @@ import (
 	"github.com/even-app/even-app/libs/postgres"
 	"github.com/even-app/even-app/services/learning/internal/config"
 	http_v1 "github.com/even-app/even-app/services/learning/internal/gen/http/v1"
+	"github.com/even-app/even-app/services/learning/internal/gen/query"
 	learnhandler "github.com/even-app/even-app/services/learning/internal/handler"
+	"github.com/even-app/even-app/services/learning/internal/internalapi"
 	"github.com/even-app/even-app/services/learning/internal/repository"
 	"github.com/even-app/even-app/services/learning/internal/service"
 	"github.com/joho/godotenv"
@@ -39,42 +41,49 @@ func main() {
 	}
 	defer pool.Close()
 
-	var contentPool *repository.ContentReader
-	if cfg.HasContentDB() {
+	var contentSource repository.ContentSource
+	if cfg.HasContentHTTP() {
+		contentSource = repository.NewContentRemote(cfg.ContentServiceURL, cfg.InternalServiceToken)
+	} else if cfg.HasContentDB() {
 		cp, err := postgres.NewPool(ctx, cfg.ContentDatabaseURL)
 		if err != nil {
 			log.Fatalf("content database: %v", err)
 		}
 		defer cp.Close()
-		contentPool = repository.NewContentReader(cp)
+		contentSource = repository.NewContentReader(cp)
 	}
 
-	var lexiconPool *repository.LexiconReader
-	if cfg.HasLexiconDB() {
+	var lexiconSource repository.LexiconSource
+	if cfg.HasLexiconHTTP() {
+		lexiconSource = repository.NewLexiconRemote(cfg.LexiconServiceURL, cfg.InternalServiceToken)
+	} else if cfg.HasLexiconDB() {
 		lp, err := postgres.NewPool(ctx, cfg.LexiconDatabaseURL)
 		if err != nil {
 			log.Fatalf("lexicon database: %v", err)
 		}
 		defer lp.Close()
-		lexiconPool = repository.NewLexiconReader(lp)
+		lexiconSource = repository.NewLexiconReader(lp)
 	}
 
-	var mediaPool *repository.MediaReader
-	if cfg.HasMediaDB() {
+	var mediaSource repository.MediaSource
+	if cfg.HasMediaHTTP() {
+		mediaSource = repository.NewMediaRemote(cfg.MediaServiceURL, cfg.InternalServiceToken)
+	} else if cfg.HasMediaDB() {
 		mp, err := postgres.NewPool(ctx, cfg.MediaDatabaseURL)
 		if err != nil {
 			log.Fatalf("media database: %v", err)
 		}
 		defer mp.Close()
-		mediaPool = repository.NewMediaReader(mp)
+		mediaSource = repository.NewMediaReader(mp)
 	}
 
 	jwtMgr := libjwt.NewManager(cfg.JWTSecret, cfg.AccessTTL())
 	ready := func(ctx context.Context) error { return pool.Ping(ctx) }
 
-	learnSvc := service.NewLearningService(pool, contentPool, lexiconPool, mediaPool)
+	learnSvc := service.NewLearningService(pool, contentSource, lexiconSource, mediaSource)
 	httpHandler := learnhandler.NewHTTPHandler(learnSvc)
 	secHandler := learnhandler.NewSecurityHandler(jwtMgr)
+	internalHandler := internalapi.New(query.New(pool))
 
 	oasServer, err := http_v1.NewServer(httpHandler, secHandler)
 	if err != nil {
@@ -85,6 +94,7 @@ func main() {
 	server.RegisterHealth(mux, "learning", "/api/v1/courses/health")
 	server.RegisterReady(mux, ready, "/api/v1/courses/ready")
 	mux.Handle("GET /api/v1/openapi.yaml", http_v1.SpecHandler())
+	mux.Handle("/api/v1/internal/", middleware.RequireInternalToken(http.StripPrefix("/api/v1/internal", internalHandler)))
 	mux.Handle("/", oasServer)
 
 	handler := middleware.Recovery(logr, middleware.Logging(logr, mux))

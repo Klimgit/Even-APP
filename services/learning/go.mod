@@ -3,6 +3,7 @@ module github.com/even-app/even-app/services/learning
 go 1.25.0
 
 require (
+	github.com/even-app/even-app/libs/clients v0.0.0
 	github.com/even-app/even-app/libs/config v0.0.0
 	github.com/even-app/even-app/libs/core v0.0.0
 	github.com/even-app/even-app/libs/http v0.0.0
@@ -42,6 +43,7 @@ require (
 )
 
 replace (
+	github.com/even-app/even-app/libs/clients => ../../libs/clients
 	github.com/even-app/even-app/libs/config => ../../libs/config
 	github.com/even-app/even-app/libs/core => ../../libs/core
 	github.com/even-app/even-app/libs/http => ../../libs/http

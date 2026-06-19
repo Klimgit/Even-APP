@@ -310,3 +310,26 @@ func intPtrToInt32(p *int) *int32 {
 	v := int32(*p)
 	return &v
 }
+
+// MediaViewsByIDs resolves media metadata with presigned GET URLs for internal callers.
+func (s *MediaService) MediaViewsByIDs(ctx context.Context, ids []uuid.UUID) ([]map[string]any, error) {
+	if len(ids) == 0 {
+		return []map[string]any{}, nil
+	}
+	rows, err := s.q.ListMediaByIDs(ctx, query.ListMediaByIDsParams{Column1: ids})
+	if err != nil {
+		return nil, err
+	}
+	out := make([]map[string]any, 0, len(rows))
+	for _, row := range rows {
+		url, err := s.s3.PresignGet(ctx, row.ObjectKey)
+		if err != nil {
+			return nil, err
+		}
+		out = append(out, map[string]any{
+			"id": row.ID, "scope": row.Scope, "display_name": row.DisplayName,
+			"mime_type": row.MimeType, "media_kind": row.MediaKind, "url": url,
+		})
+	}
+	return out, nil
+}

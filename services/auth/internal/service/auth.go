@@ -22,10 +22,10 @@ type AuthService struct {
 	q          *query.Queries
 	jwt        *libjwt.Manager
 	refreshTTL time.Duration
-	stats      *repository.PlatformStatsReader
+	stats      repository.StatsSource
 }
 
-func NewAuthService(q *query.Queries, jwt *libjwt.Manager, refreshTTL time.Duration, stats *repository.PlatformStatsReader) *AuthService {
+func NewAuthService(q *query.Queries, jwt *libjwt.Manager, refreshTTL time.Duration, stats repository.StatsSource) *AuthService {
 	return &AuthService{q: q, jwt: jwt, refreshTTL: refreshTTL, stats: stats}
 }
 
