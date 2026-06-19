@@ -6,6 +6,8 @@ import 'package:online_cource_app/SignUp/sign_up_scree.dart';
 import 'package:online_cource_app/Utils/dialouge_utils.dart';
 import 'package:online_cource_app/Utils/toast_messages.dart';
 import 'package:online_cource_app/controllers/auth_controller.dart';
+import 'package:online_cource_app/features/student/student_shell.dart';
+import 'package:online_cource_app/features/teacher/api_teacher_dashboard.dart';
 import 'package:online_cource_app/navigation/main_navigation.dart';
 import 'package:online_cource_app/teacher/teacher_dashboard.dart';
 import 'package:online_cource_app/theme/app_theme.dart';
@@ -26,7 +28,9 @@ class _LoginPageState extends State<LoginPage>
   final _formKey = GlobalKey<FormState>();
   bool _isPasswordVisible = false;
   bool _isLoading = false;
-  AuthController auth = Get.find<AuthController>();
+
+  AuthController? get _firebaseAuth =>
+      kUseApiAuth ? null : Get.find<AuthController>();
 
   @override
   void initState() {
@@ -71,18 +75,18 @@ class _LoginPageState extends State<LoginPage>
     }
 
     try {
-      showLoadingDialouge(context, 'Signing in...');
-      final user = await auth.signInUsers(context, email, password);
+      showLoadingDialouge(context, 'Вход…');
+      final user = await _firebaseAuth!.signInUsers(context, email, password);
 
       if (user == null) {
         Get.back();
-        showErrorToast(context, 'Invalid email or password');
+        showErrorToast(context, 'Неверный email или пароль');
       } else {
         Get.back();
         // Ensure the Firestore user document is loaded before routing so the
         // role check below is accurate, then send to the right home screen.
-        await auth.fetchUserData();
-        if (auth.isTeacher) {
+        await _firebaseAuth!.fetchUserData();
+        if (_firebaseAuth!.isTeacher) {
           Get.offAll(() => const TeacherDashboard());
         } else {
           Get.offAll(() => const MainNavigationScreen());
@@ -90,7 +94,7 @@ class _LoginPageState extends State<LoginPage>
       }
     } catch (e) {
       Get.back();
-      showErrorToast(context, 'Error: ${e.toString()}');
+      showErrorToast(context, 'Ошибка: ${e.toString()}');
     } finally {
       setState(() {
         _isLoading = false;
@@ -101,19 +105,19 @@ class _LoginPageState extends State<LoginPage>
   Future<void> _loginViaApi(String email, String password) async {
     final apiAuth = Get.find<ApiAuthController>();
     try {
-      showLoadingDialouge(context, 'Signing in...');
+      showLoadingDialouge(context, 'Вход…');
       final error = await apiAuth.login(email, password);
       Get.back();
       if (error != null) {
         showErrorToast(context, error);
       } else if (apiAuth.isTeacher) {
-        Get.offAll(() => const TeacherDashboard());
+        Get.offAll(() => const ApiTeacherDashboard());
       } else {
-        Get.offAll(() => const MainNavigationScreen());
+        Get.offAll(() => const StudentShell());
       }
     } catch (e) {
       Get.back();
-      showErrorToast(context, 'Error: ${e.toString()}');
+      showErrorToast(context, 'Ошибка: ${e.toString()}');
     } finally {
       setState(() {
         _isLoading = false;
@@ -163,7 +167,7 @@ class _LoginPageState extends State<LoginPage>
                     ),
                     const SizedBox(height: 40),
                     Text(
-                      'Welcome Back!',
+                      'С возвращением!',
                       style:
                           Theme.of(context).textTheme.displayMedium?.copyWith(
                                 fontWeight: FontWeight.bold,
@@ -172,7 +176,7 @@ class _LoginPageState extends State<LoginPage>
                     ),
                     const SizedBox(height: 8),
                     Text(
-                      'Sign in to continue your learning journey',
+                      'Войдите, чтобы продолжить обучение',
                       style: Theme.of(context).textTheme.bodyLarge?.copyWith(
                             color: AppTheme.secondaryTextColor,
                           ),
@@ -182,7 +186,7 @@ class _LoginPageState extends State<LoginPage>
                       controller: _emailController,
                       decoration: InputDecoration(
                         labelText: 'Email',
-                        hintText: 'Enter your email',
+                        hintText: 'Введите email',
                         prefixIcon: Icon(Icons.email,
                             color: AppTheme.secondaryTextColor),
                         border: OutlineInputBorder(
@@ -205,10 +209,10 @@ class _LoginPageState extends State<LoginPage>
                       keyboardType: TextInputType.emailAddress,
                       validator: (value) {
                         if (value == null || value.isEmpty) {
-                          return 'Please enter your email';
+                          return 'Введите email';
                         }
                         if (!GetUtils.isEmail(value)) {
-                          return 'Please enter a valid email';
+                          return 'Некорректный email';
                         }
                         return null;
                       },
@@ -218,8 +222,8 @@ class _LoginPageState extends State<LoginPage>
                       controller: _passwordController,
                       obscureText: !_isPasswordVisible,
                       decoration: InputDecoration(
-                        labelText: 'Password',
-                        hintText: 'Enter your password',
+                        labelText: 'Пароль',
+                        hintText: 'Введите пароль',
                         prefixIcon: Icon(Icons.lock,
                             color: AppTheme.secondaryTextColor),
                         suffixIcon: IconButton(
@@ -254,10 +258,10 @@ class _LoginPageState extends State<LoginPage>
                       ),
                       validator: (value) {
                         if (value == null || value.isEmpty) {
-                          return 'Please enter your password';
+                          return 'Введите пароль';
                         }
-                        if (value.length < 6) {
-                          return 'Password must be at least 6 characters';
+                        if (value.length < 8) {
+                          return 'Минимум 8 символов';
                         }
                         return null;
                       },
@@ -272,7 +276,7 @@ class _LoginPageState extends State<LoginPage>
                         style: TextButton.styleFrom(
                           foregroundColor: AppTheme.primaryColor,
                         ),
-                        child: const Text('Forgot Password?'),
+                        child: const Text('Забыли пароль?'),
                       ),
                     ),
                     const SizedBox(height: 24),
@@ -298,7 +302,7 @@ class _LoginPageState extends State<LoginPage>
                                 ),
                               )
                             : const Text(
-                                'Sign In',
+                                'Войти',
                                 style: TextStyle(
                                   fontSize: 16,
                                   fontWeight: FontWeight.bold,
@@ -308,60 +312,10 @@ class _LoginPageState extends State<LoginPage>
                     ),
                     const SizedBox(height: 24),
                     Row(
-                      children: [
-                        Expanded(
-                          child: Divider(color: AppTheme.dividerColor),
-                        ),
-                        Padding(
-                          padding: const EdgeInsets.symmetric(horizontal: 16),
-                          child: Text(
-                            'OR',
-                            style: TextStyle(
-                              color: AppTheme.secondaryTextColor,
-                              fontWeight: FontWeight.w500,
-                            ),
-                          ),
-                        ),
-                        Expanded(
-                          child: Divider(color: AppTheme.dividerColor),
-                        ),
-                      ],
-                    ),
-                    const SizedBox(height: 24),
-                    Row(
-                      mainAxisAlignment: MainAxisAlignment.center,
-                      children: [
-                        _buildSocialLoginButton(
-                          onTap: () {
-                            // Google login
-                          },
-                          icon: Icons.g_mobiledata,
-                          color: Colors.red,
-                        ),
-                        const SizedBox(width: 16),
-                        _buildSocialLoginButton(
-                          onTap: () {
-                            // Facebook login
-                          },
-                          icon: Icons.facebook,
-                          color: Colors.blue,
-                        ),
-                        const SizedBox(width: 16),
-                        _buildSocialLoginButton(
-                          onTap: () {
-                            // Apple login
-                          },
-                          icon: Icons.apple,
-                          color: Colors.black,
-                        ),
-                      ],
-                    ),
-                    const SizedBox(height: 24),
-                    Row(
                       mainAxisAlignment: MainAxisAlignment.center,
                       children: [
                         Text(
-                          "Don't have an account? ",
+                          'Нет аккаунта? ',
                           style: TextStyle(
                             color: AppTheme.secondaryTextColor,
                           ),
@@ -376,7 +330,7 @@ class _LoginPageState extends State<LoginPage>
                             minimumSize: const Size(0, 30),
                           ),
                           child: const Text(
-                            'Sign Up',
+                            'Регистрация',
                             style: TextStyle(
                               fontWeight: FontWeight.bold,
                             ),
@@ -389,37 +343,6 @@ class _LoginPageState extends State<LoginPage>
               ),
             ),
           ),
-        ),
-      ),
-    );
-  }
-
-  Widget _buildSocialLoginButton({
-    required VoidCallback onTap,
-    required IconData icon,
-    required Color color,
-  }) {
-    return InkWell(
-      onTap: onTap,
-      borderRadius: BorderRadius.circular(16),
-      child: Container(
-        width: 60,
-        height: 60,
-        decoration: BoxDecoration(
-          color: Colors.white,
-          borderRadius: BorderRadius.circular(16),
-          boxShadow: [
-            BoxShadow(
-              color: Colors.grey.withOpacity(0.1),
-              blurRadius: 10,
-              spreadRadius: 5,
-            ),
-          ],
-        ),
-        child: Icon(
-          icon,
-          size: 30,
-          color: color,
         ),
       ),
     );

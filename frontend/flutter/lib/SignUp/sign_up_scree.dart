@@ -3,8 +3,8 @@ import 'package:get/get.dart';
 import 'package:online_cource_app/api/api_client.dart';
 import 'package:online_cource_app/controllers/api_auth_controller.dart';
 import 'package:online_cource_app/Login/login_page.dart';
-import 'package:online_cource_app/navigation/main_navigation.dart';
-import 'package:online_cource_app/teacher/teacher_dashboard.dart';
+import 'package:online_cource_app/features/student/student_shell.dart';
+import 'package:online_cource_app/features/teacher/api_teacher_dashboard.dart';
 import 'package:online_cource_app/Utils/dialouge_utils.dart';
 import 'package:online_cource_app/Utils/toast_messages.dart';
 import 'package:online_cource_app/controllers/auth_controller.dart';
@@ -27,7 +27,10 @@ class _SignUpPageState extends State<SignUpPage>
   final _formKey = GlobalKey<FormState>();
   bool _isPasswordVisible = false;
   bool _isLoading = false;
-  AuthController auth = Get.find<AuthController>();
+  String _role = 'student';
+
+  AuthController? get _firebaseAuth =>
+      kUseApiAuth ? null : Get.find<AuthController>();
 
   @override
   void initState() {
@@ -70,15 +73,15 @@ class _SignUpPageState extends State<SignUpPage>
     }
 
     try {
-      showLoadingDialouge(context, 'Signing up...');
-      await auth.signUpNewUsers(context, _emailController.text.trim(),
+      showLoadingDialouge(context, 'Регистрация…');
+      await _firebaseAuth!.signUpNewUsers(context, _emailController.text.trim(),
           _passwordController.text.trim(), _nameController.text.trim());
       Get.back();
-      showSuccessToast(context, 'Successfully signed up');
+      showSuccessToast(context, 'Регистрация успешна');
       Get.to(() => const LoginPage());
     } catch (e) {
       Get.back();
-      showErrorToast(context, 'Error: ${e.toString()}');
+      showErrorToast(context, 'Ошибка: ${e.toString()}');
     } finally {
       setState(() {
         _isLoading = false;
@@ -89,29 +92,28 @@ class _SignUpPageState extends State<SignUpPage>
   Future<void> _signUpViaApi() async {
     final apiAuth = Get.find<ApiAuthController>();
     try {
-      showLoadingDialouge(context, 'Signing up...');
-      // Role defaults to "student"; a role picker can be added later.
+      showLoadingDialouge(context, 'Регистрация…');
+      // Role selected by user on the form.
       final error = await apiAuth.register(
         email: _emailController.text.trim(),
         password: _passwordController.text.trim(),
         displayName: _nameController.text.trim(),
-        role: 'student',
+        role: _role,
       );
       Get.back();
       if (error != null) {
         showErrorToast(context, error);
       } else {
-        // register() already established the session; route by role.
-        showSuccessToast(context, 'Successfully signed up');
+        showSuccessToast(context, 'Регистрация успешна');
         if (apiAuth.isTeacher) {
-          Get.offAll(() => const TeacherDashboard());
+          Get.offAll(() => const ApiTeacherDashboard());
         } else {
-          Get.offAll(() => const MainNavigationScreen());
+          Get.offAll(() => const StudentShell());
         }
       }
     } catch (e) {
       Get.back();
-      showErrorToast(context, 'Error: ${e.toString()}');
+      showErrorToast(context, 'Ошибка: ${e.toString()}');
     } finally {
       setState(() {
         _isLoading = false;
@@ -161,7 +163,7 @@ class _SignUpPageState extends State<SignUpPage>
                     ),
                     const SizedBox(height: 40),
                     Text(
-                      'Create Account',
+                      'Регистрация',
                       style:
                           Theme.of(context).textTheme.displayMedium?.copyWith(
                                 fontWeight: FontWeight.bold,
@@ -170,7 +172,7 @@ class _SignUpPageState extends State<SignUpPage>
                     ),
                     const SizedBox(height: 8),
                     Text(
-                      'Sign up to start your learning adventure',
+                      'Создайте аккаунт для начала обучения',
                       style: Theme.of(context).textTheme.bodyLarge?.copyWith(
                             color: AppTheme.secondaryTextColor,
                           ),
@@ -179,8 +181,8 @@ class _SignUpPageState extends State<SignUpPage>
                     TextFormField(
                       controller: _nameController,
                       decoration: InputDecoration(
-                        labelText: 'Full Name',
-                        hintText: 'Enter your full name',
+                        labelText: 'Имя',
+                        hintText: 'Введите имя',
                         prefixIcon: Icon(Icons.person,
                             color: AppTheme.secondaryTextColor),
                         border: OutlineInputBorder(
@@ -202,7 +204,7 @@ class _SignUpPageState extends State<SignUpPage>
                       ),
                       validator: (value) {
                         if (value == null || value.isEmpty) {
-                          return 'Please enter your name';
+                          return 'Введите имя';
                         }
                         return null;
                       },
@@ -212,7 +214,7 @@ class _SignUpPageState extends State<SignUpPage>
                       controller: _emailController,
                       decoration: InputDecoration(
                         labelText: 'Email',
-                        hintText: 'Enter your email',
+                        hintText: 'Введите email',
                         prefixIcon: Icon(Icons.email,
                             color: AppTheme.secondaryTextColor),
                         border: OutlineInputBorder(
@@ -235,10 +237,10 @@ class _SignUpPageState extends State<SignUpPage>
                       keyboardType: TextInputType.emailAddress,
                       validator: (value) {
                         if (value == null || value.isEmpty) {
-                          return 'Please enter your email';
+                          return 'Введите email';
                         }
                         if (!GetUtils.isEmail(value)) {
-                          return 'Please enter a valid email';
+                          return 'Некорректный email';
                         }
                         return null;
                       },
@@ -248,8 +250,8 @@ class _SignUpPageState extends State<SignUpPage>
                       controller: _passwordController,
                       obscureText: !_isPasswordVisible,
                       decoration: InputDecoration(
-                        labelText: 'Password',
-                        hintText: 'Enter your password',
+                        labelText: 'Пароль',
+                        hintText: 'Введите пароль',
                         prefixIcon: Icon(Icons.lock,
                             color: AppTheme.secondaryTextColor),
                         suffixIcon: IconButton(
@@ -284,12 +286,36 @@ class _SignUpPageState extends State<SignUpPage>
                       ),
                       validator: (value) {
                         if (value == null || value.isEmpty) {
-                          return 'Please enter your password';
+                          return 'Введите пароль';
                         }
-                        if (value.length < 6) {
-                          return 'Password must be at least 6 characters';
+                        if (value.length < 8) {
+                          return 'Минимум 8 символов';
                         }
                         return null;
+                      },
+                    ),
+                    const SizedBox(height: 20),
+                    Text(
+                      'Я регистрируюсь как',
+                      style: Theme.of(context).textTheme.titleMedium,
+                    ),
+                    const SizedBox(height: 12),
+                    SegmentedButton<String>(
+                      segments: const [
+                        ButtonSegment(
+                          value: 'student',
+                          label: Text('Ученик'),
+                          icon: Icon(Icons.school_outlined),
+                        ),
+                        ButtonSegment(
+                          value: 'teacher',
+                          label: Text('Учитель'),
+                          icon: Icon(Icons.person_outline),
+                        ),
+                      ],
+                      selected: {_role},
+                      onSelectionChanged: (values) {
+                        setState(() => _role = values.first);
                       },
                     ),
                     const SizedBox(height: 32),
@@ -315,7 +341,7 @@ class _SignUpPageState extends State<SignUpPage>
                                 ),
                               )
                             : const Text(
-                                'Sign Up',
+                                'Зарегистрироваться',
                                 style: TextStyle(
                                   fontSize: 16,
                                   fontWeight: FontWeight.bold,
@@ -325,60 +351,10 @@ class _SignUpPageState extends State<SignUpPage>
                     ),
                     const SizedBox(height: 24),
                     Row(
-                      children: [
-                        Expanded(
-                          child: Divider(color: AppTheme.dividerColor),
-                        ),
-                        Padding(
-                          padding: const EdgeInsets.symmetric(horizontal: 16),
-                          child: Text(
-                            'OR',
-                            style: TextStyle(
-                              color: AppTheme.secondaryTextColor,
-                              fontWeight: FontWeight.w500,
-                            ),
-                          ),
-                        ),
-                        Expanded(
-                          child: Divider(color: AppTheme.dividerColor),
-                        ),
-                      ],
-                    ),
-                    const SizedBox(height: 24),
-                    Row(
-                      mainAxisAlignment: MainAxisAlignment.center,
-                      children: [
-                        _buildSocialSignUpButton(
-                          onTap: () {
-                            // Google sign up
-                          },
-                          icon: Icons.g_mobiledata,
-                          color: Colors.red,
-                        ),
-                        const SizedBox(width: 16),
-                        _buildSocialSignUpButton(
-                          onTap: () {
-                            // Facebook sign up
-                          },
-                          icon: Icons.facebook,
-                          color: Colors.blue,
-                        ),
-                        const SizedBox(width: 16),
-                        _buildSocialSignUpButton(
-                          onTap: () {
-                            // Apple sign up
-                          },
-                          icon: Icons.apple,
-                          color: Colors.black,
-                        ),
-                      ],
-                    ),
-                    const SizedBox(height: 24),
-                    Row(
                       mainAxisAlignment: MainAxisAlignment.center,
                       children: [
                         Text(
-                          "Already have an account? ",
+                          'Уже есть аккаунт? ',
                           style: TextStyle(
                             color: AppTheme.secondaryTextColor,
                           ),
@@ -393,7 +369,7 @@ class _SignUpPageState extends State<SignUpPage>
                             minimumSize: const Size(0, 30),
                           ),
                           child: const Text(
-                            'Sign In',
+                            'Войти',
                             style: TextStyle(
                               fontWeight: FontWeight.bold,
                             ),
@@ -406,37 +382,6 @@ class _SignUpPageState extends State<SignUpPage>
               ),
             ),
           ),
-        ),
-      ),
-    );
-  }
-
-  Widget _buildSocialSignUpButton({
-    required VoidCallback onTap,
-    required IconData icon,
-    required Color color,
-  }) {
-    return InkWell(
-      onTap: onTap,
-      borderRadius: BorderRadius.circular(16),
-      child: Container(
-        width: 60,
-        height: 60,
-        decoration: BoxDecoration(
-          color: Colors.white,
-          borderRadius: BorderRadius.circular(16),
-          boxShadow: [
-            BoxShadow(
-              color: Colors.grey.withOpacity(0.1),
-              blurRadius: 10,
-              spreadRadius: 5,
-            ),
-          ],
-        ),
-        child: Icon(
-          icon,
-          size: 30,
-          color: color,
         ),
       ),
     );

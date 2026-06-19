@@ -10,6 +10,18 @@ const String kApiBaseUrl = String.fromEnvironment(
   defaultValue: 'http://localhost:8080/api/v1',
 );
 
+/// Gateway origin without the `/api/v1` suffix (public routes like `/languages`).
+String get kGatewayOrigin {
+  final trimmed = kApiBaseUrl.endsWith('/')
+      ? kApiBaseUrl.substring(0, kApiBaseUrl.length - 1)
+      : kApiBaseUrl;
+  const suffix = '/api/v1';
+  if (trimmed.endsWith(suffix)) {
+    return trimmed.substring(0, trimmed.length - suffix.length);
+  }
+  return trimmed;
+}
+
 /// Feature flag for the migration off Firebase: when true, auth (login,
 /// register, session, role routing) goes through the REST backend instead of
 /// Firebase. Off by default so the Firebase-backed screens keep working until

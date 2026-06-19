@@ -200,6 +200,9 @@ seed-dev:
 seed-znakomstvo:
     @./scripts/seed-znakomstvo.sh
 
+seed-even-basics:
+    @./scripts/seed-even-basics-course.sh
+
 verify-mvp-corners:
     @./scripts/verify-mvp-corners.sh
 

@@ -953,7 +953,8 @@ func walkLexemeIDs(v any, seen map[uuid.UUID]struct{}) {
 	switch t := v.(type) {
 	case map[string]any:
 		for k, val := range t {
-			if k == "lexeme_id" || k == "lexemeId" {
+			if k == "lexeme_id" || k == "lexemeId" ||
+				k == "correct_lexeme_id" || k == "answer_lexeme_id" {
 				if s, ok := val.(string); ok {
 					if id, err := uuid.Parse(s); err == nil {
 						seen[id] = struct{}{}

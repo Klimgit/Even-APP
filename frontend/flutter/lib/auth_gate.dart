@@ -5,6 +5,8 @@ import 'package:online_cource_app/api/api_client.dart';
 import 'package:online_cource_app/controllers/api_auth_controller.dart';
 import 'package:online_cource_app/controllers/auth_controller.dart';
 import 'package:online_cource_app/Login/login_page.dart';
+import 'package:online_cource_app/features/student/student_shell.dart';
+import 'package:online_cource_app/features/teacher/api_teacher_dashboard.dart';
 import 'package:online_cource_app/navigation/main_navigation.dart';
 import 'package:online_cource_app/teacher/teacher_dashboard.dart';
 import 'package:online_cource_app/theme/app_theme.dart';
@@ -64,8 +66,8 @@ class AuthGate extends StatelessWidget {
         return const LoginPage();
       }
       return auth.isTeacher
-          ? const TeacherDashboard()
-          : const MainNavigationScreen(initialIndex: 0);
+          ? const ApiTeacherDashboard()
+          : const StudentShell();
     });
   }
 
@@ -89,7 +91,7 @@ class AuthGate extends StatelessWidget {
             ),
             const SizedBox(height: 24),
             Text(
-              'Loading your experience...',
+              'Загрузка…',
               style: TextStyle(
                 fontSize: 16,
                 fontWeight: FontWeight.w500,
@@ -118,7 +120,7 @@ class AuthGate extends StatelessWidget {
               ),
               const SizedBox(height: 24),
               const Text(
-                'Oops! Something went wrong',
+                'Что-то пошло не так',
                 style: TextStyle(
                   fontSize: 24,
                   fontWeight: FontWeight.bold,
@@ -138,7 +140,7 @@ class AuthGate extends StatelessWidget {
               const SizedBox(height: 32),
               ElevatedButton(
                 onPressed: () => Get.offAll(() => const AuthGate()),
-                child: const Text('Try Again'),
+                child: const Text('Повторить'),
               ),
             ],
           ),

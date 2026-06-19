@@ -25,13 +25,16 @@ void main() async {
         : [DeviceOrientation.portraitUp, DeviceOrientation.portraitDown],
   );
 
-  // Initialize Firebase
-  await Firebase.initializeApp(
-    options: DefaultFirebaseOptions.currentPlatform,
-  );
+  if (!kUseApiAuth) {
+    await Firebase.initializeApp(
+      options: DefaultFirebaseOptions.currentPlatform,
+    );
+  }
 
-  // Register controllers
-  Get.lazyPut(() => AuthController(), fenix: true);
+  // Register Firebase-backed auth only when still in use.
+  if (!kUseApiAuth) {
+    Get.lazyPut(() => AuthController(), fenix: true);
+  }
 
   // REST API auth stack (only when migrated off Firebase auth).
   if (kUseApiAuth) {
@@ -66,7 +69,7 @@ class MyApp extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return GetMaterialApp(
-      title: 'E-Learning App',
+      title: 'Even App',
       debugShowCheckedModeBanner: false,
       theme: AppTheme.lightTheme(),
       home: const AuthGate(),
