@@ -2,7 +2,11 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 
+import 'package:online_cource_app/api/api_client.dart';
+import 'package:online_cource_app/controllers/api_auth_controller.dart';
 import 'package:online_cource_app/controllers/auth_controller.dart';
+import 'package:online_cource_app/Login/login_page.dart';
+import 'package:online_cource_app/teacher/lessons/lesson_list_screen.dart';
 import 'package:online_cource_app/theme/app_theme.dart';
 
 /// Teacher / admin workspace.
@@ -49,6 +53,16 @@ class _TeacherDashboardState extends State<TeacherDashboard> {
     );
   }
 
+  Future<void> _logout() async {
+    if (kUseApiAuth) {
+      await Get.find<ApiAuthController>().logout();
+    } else {
+      await _auth.signOutUsers();
+    }
+    // Login pushed this screen with offAll, so navigate back explicitly.
+    Get.offAll(() => const LoginPage());
+  }
+
   // ---------------------------------------------------------------------------
   // Top bar
   // ---------------------------------------------------------------------------
@@ -75,7 +89,7 @@ class _TeacherDashboardState extends State<TeacherDashboard> {
           PopupMenuButton<String>(
             offset: const Offset(0, 48),
             onSelected: (value) {
-              if (value == 'logout') _auth.signOutUsers();
+              if (value == 'logout') _logout();
             },
             itemBuilder: (context) => const [
               PopupMenuItem(value: 'logout', child: Text('Выйти')),
@@ -260,7 +274,7 @@ class _ClassesSectionState extends State<_ClassesSection> {
             runSpacing: 16,
             crossAxisAlignment: WrapCrossAlignment.start,
             children: [
-              for (final doc in docs) _classCard(doc.data()),
+              for (final doc in docs) _classCard(doc.id, doc.data()),
               if (!_showPublic) _createCard(),
             ],
           ),
@@ -269,35 +283,41 @@ class _ClassesSectionState extends State<_ClassesSection> {
     );
   }
 
-  Widget _classCard(Map<String, dynamic> data) {
+  Widget _classCard(String id, Map<String, dynamic> data) {
     final name = (data['name'] as String?) ?? 'Без названия';
     final colorValue = (data['coverColor'] as int?) ?? 0xFF9BE8B4;
-    return SizedBox(
-      width: 150,
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Container(
-            height: 80,
-            decoration: BoxDecoration(
-              color: Color(colorValue),
-              borderRadius: BorderRadius.circular(6),
+    return InkWell(
+      onTap: () => Get.to(
+          () => LessonListScreen(classId: id, className: name)),
+      borderRadius: BorderRadius.circular(6),
+      child: SizedBox(
+        width: 150,
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Container(
+              height: 80,
+              decoration: BoxDecoration(
+                color: Color(colorValue),
+                borderRadius: BorderRadius.circular(6),
+              ),
             ),
-          ),
-          const SizedBox(height: 6),
-          Container(
-            width: double.infinity,
-            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
-            decoration: BoxDecoration(
-              border: Border.all(color: AppTheme.dividerColor),
-              borderRadius: BorderRadius.circular(4),
+            const SizedBox(height: 6),
+            Container(
+              width: double.infinity,
+              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+              decoration: BoxDecoration(
+                border: Border.all(color: AppTheme.dividerColor),
+                borderRadius: BorderRadius.circular(4),
+              ),
+              child: Text(
+                name,
+                style:
+                    const TextStyle(fontSize: 14, fontWeight: FontWeight.w500),
+              ),
             ),
-            child: Text(
-              name,
-              style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w500),
-            ),
-          ),
-        ],
+          ],
+        ),
       ),
     );
   }

@@ -29,6 +29,28 @@ class ListenChoiceExercise extends ExerciseData {
     this.languageCode = 'en-US',
   });
 
+  static const String typeId = 'listen_choice';
+
+  factory ListenChoiceExercise.fromJson(Map<String, dynamic> json) {
+    final rawOptions = json['options'] as List?;
+    return ListenChoiceExercise(
+      word: json['word'] as String? ?? '',
+      correctAnswer: json['correctAnswer'] as String? ?? '',
+      options: rawOptions?.map((e) => e as String).toList(),
+      prompt: json['prompt'] as String? ?? 'Tap to listen, then answer',
+      languageCode: json['languageCode'] as String? ?? 'en-US',
+    );
+  }
+
+  Map<String, dynamic> toJson() => {
+        'type': typeId,
+        'word': word,
+        'correctAnswer': correctAnswer,
+        'options': options,
+        'prompt': prompt,
+        'languageCode': languageCode,
+      };
+
   @override
   Widget build({required ValueChanged<bool> onResult}) =>
       _ListenChoiceWidget(data: this, onResult: onResult);

@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
+import 'package:online_cource_app/api/api_client.dart';
+import 'package:online_cource_app/controllers/api_auth_controller.dart';
 import 'package:online_cource_app/SignUp/sign_up_scree.dart';
 import 'package:online_cource_app/Utils/dialouge_utils.dart';
 import 'package:online_cource_app/Utils/toast_messages.dart';
@@ -62,6 +64,12 @@ class _LoginPageState extends State<LoginPage>
     String email = _emailController.text.trim();
     String password = _passwordController.text.trim();
 
+    // REST-backed sign-in (migration off Firebase).
+    if (kUseApiAuth) {
+      await _loginViaApi(email, password);
+      return;
+    }
+
     try {
       showLoadingDialouge(context, 'Signing in...');
       final user = await auth.signInUsers(context, email, password);
@@ -79,6 +87,29 @@ class _LoginPageState extends State<LoginPage>
         } else {
           Get.offAll(() => const MainNavigationScreen());
         }
+      }
+    } catch (e) {
+      Get.back();
+      showErrorToast(context, 'Error: ${e.toString()}');
+    } finally {
+      setState(() {
+        _isLoading = false;
+      });
+    }
+  }
+
+  Future<void> _loginViaApi(String email, String password) async {
+    final apiAuth = Get.find<ApiAuthController>();
+    try {
+      showLoadingDialouge(context, 'Signing in...');
+      final error = await apiAuth.login(email, password);
+      Get.back();
+      if (error != null) {
+        showErrorToast(context, error);
+      } else if (apiAuth.isTeacher) {
+        Get.offAll(() => const TeacherDashboard());
+      } else {
+        Get.offAll(() => const MainNavigationScreen());
       }
     } catch (e) {
       Get.back();

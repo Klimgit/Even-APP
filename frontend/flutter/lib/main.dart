@@ -4,6 +4,8 @@ import 'package:flutter/services.dart';
 import 'package:get/get.dart';
 import 'package:flutter_easyloading/flutter_easyloading.dart';
 
+import 'package:online_cource_app/api/api_client.dart';
+import 'package:online_cource_app/api/api_providers.dart';
 import 'package:online_cource_app/auth_gate.dart';
 import 'package:online_cource_app/controllers/auth_controller.dart';
 import 'package:online_cource_app/firebase_options.dart';
@@ -30,6 +32,11 @@ void main() async {
 
   // Register controllers
   Get.lazyPut(() => AuthController(), fenix: true);
+
+  // REST API auth stack (only when migrated off Firebase auth).
+  if (kUseApiAuth) {
+    setupApiDependencies();
+  }
 
   // Configure EasyLoading
   configureEasyLoading();

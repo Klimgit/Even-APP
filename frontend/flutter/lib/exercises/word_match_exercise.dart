@@ -11,6 +11,13 @@ class WordPair {
   final String target;
 
   const WordPair({required this.known, required this.target});
+
+  factory WordPair.fromJson(Map<String, dynamic> json) => WordPair(
+        known: json['known'] as String? ?? '',
+        target: json['target'] as String? ?? '',
+      );
+
+  Map<String, dynamic> toJson() => {'known': known, 'target': target};
 }
 
 /// Exercise type 3: two columns of words (known on the left, target on the
@@ -25,6 +32,25 @@ class WordMatchExercise extends ExerciseData {
     required this.pairs,
     this.prompt = 'Match the pairs',
   });
+
+  static const String typeId = 'word_match';
+
+  factory WordMatchExercise.fromJson(Map<String, dynamic> json) {
+    final rawPairs = json['pairs'] as List?;
+    return WordMatchExercise(
+      prompt: json['prompt'] as String? ?? 'Match the pairs',
+      pairs: rawPairs
+              ?.map((e) => WordPair.fromJson(e as Map<String, dynamic>))
+              .toList() ??
+          const [],
+    );
+  }
+
+  Map<String, dynamic> toJson() => {
+        'type': typeId,
+        'prompt': prompt,
+        'pairs': pairs.map((p) => p.toJson()).toList(),
+      };
 
   @override
   Widget build({required ValueChanged<bool> onResult}) =>
