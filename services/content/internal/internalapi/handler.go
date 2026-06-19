@@ -74,6 +74,7 @@ func (h *Handler) getCourseByInvite(w http.ResponseWriter, r *http.Request) {
 		"ui_language_id":     row.UiLanguageID,
 		"owner_id":           row.OwnerID,
 		"is_published":       row.IsPublished,
+		"visibility":         row.Visibility,
 		"invite_code":        invite,
 	})
 }
@@ -101,6 +102,7 @@ func (h *Handler) getCourseByID(w http.ResponseWriter, r *http.Request) {
 		"ui_language_id":     row.UiLanguageID,
 		"owner_id":           row.OwnerID,
 		"is_published":       row.IsPublished,
+		"visibility":         row.Visibility,
 	})
 }
 
@@ -112,10 +114,6 @@ func (h *Handler) listPublishedCourses(w http.ResponseWriter, r *http.Request) {
 	}
 	out := make([]map[string]any, 0, len(rows))
 	for _, row := range rows {
-		invite := ""
-		if row.InviteCode != nil {
-			invite = *row.InviteCode
-		}
 		out = append(out, map[string]any{
 			"id": row.ID, "title": row.Title,
 			"target_language_id": row.TargetLanguageID,
@@ -124,7 +122,7 @@ func (h *Handler) listPublishedCourses(w http.ResponseWriter, r *http.Request) {
 			"ui_language_id":     row.UiLanguageID,
 			"owner_id":           row.OwnerID,
 			"is_published":       row.IsPublished,
-			"invite_code":        invite,
+			"visibility":         row.Visibility,
 		})
 	}
 	writeJSON(w, http.StatusOK, out)

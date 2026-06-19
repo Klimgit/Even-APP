@@ -60,6 +60,16 @@ func conflictJoin(msg string) (*http_v1.JoinCourseConflict, error) {
 	return &r, nil
 }
 
+func notFoundEnroll(msg string) (*http_v1.EnrollCourseNotFound, error) {
+	r := http_v1.EnrollCourseNotFound(errBody(msg))
+	return &r, nil
+}
+
+func conflictEnroll(msg string) (*http_v1.EnrollCourseConflict, error) {
+	r := http_v1.EnrollCourseConflict(errBody(msg))
+	return &r, nil
+}
+
 func notFound(msg string) (*http_v1.ErrorResponse, error) {
 	r := errBody(msg)
 	return &r, nil

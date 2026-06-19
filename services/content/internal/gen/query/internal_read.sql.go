@@ -36,6 +36,7 @@ SELECT
     c.ui_language_id,
     c.owner_id,
     c.is_published,
+    c.visibility,
     ic.code AS invite_code
 FROM courses c
 JOIN course_invite_codes ic ON ic.course_id = c.id
@@ -51,6 +52,7 @@ type GetCourseByInviteCodeRow struct {
 	UiLanguageID       uuid.UUID
 	OwnerID            uuid.UUID
 	IsPublished        bool
+	Visibility         string
 	InviteCode         string
 }
 
@@ -65,6 +67,7 @@ type GetCourseByInviteCodeRow struct {
 //	    c.ui_language_id,
 //	    c.owner_id,
 //	    c.is_published,
+//	    c.visibility,
 //	    ic.code AS invite_code
 //	FROM courses c
 //	JOIN course_invite_codes ic ON ic.course_id = c.id
@@ -81,6 +84,7 @@ func (q *Queries) GetCourseByInviteCode(ctx context.Context, code string) (GetCo
 		&i.UiLanguageID,
 		&i.OwnerID,
 		&i.IsPublished,
+		&i.Visibility,
 		&i.InviteCode,
 	)
 	return i, err
@@ -158,10 +162,9 @@ SELECT
     c.ui_language_id,
     c.owner_id,
     c.is_published,
-    ic.code AS invite_code
+    c.visibility
 FROM courses c
-LEFT JOIN course_invite_codes ic ON ic.course_id = c.id
-WHERE c.is_published = true
+WHERE c.is_published = true AND c.visibility = 'public'
 ORDER BY c.updated_at DESC
 `
 
@@ -174,7 +177,7 @@ type ListPublishedCoursesRow struct {
 	UiLanguageID       uuid.UUID
 	OwnerID            uuid.UUID
 	IsPublished        bool
-	InviteCode         *string
+	Visibility         string
 }
 
 // ListPublishedCourses
@@ -188,10 +191,9 @@ type ListPublishedCoursesRow struct {
 //	    c.ui_language_id,
 //	    c.owner_id,
 //	    c.is_published,
-//	    ic.code AS invite_code
+//	    c.visibility
 //	FROM courses c
-//	LEFT JOIN course_invite_codes ic ON ic.course_id = c.id
-//	WHERE c.is_published = true
+//	WHERE c.is_published = true AND c.visibility = 'public'
 //	ORDER BY c.updated_at DESC
 func (q *Queries) ListPublishedCourses(ctx context.Context) ([]ListPublishedCoursesRow, error) {
 	rows, err := q.db.Query(ctx, listPublishedCourses)
@@ -211,7 +213,7 @@ func (q *Queries) ListPublishedCourses(ctx context.Context) ([]ListPublishedCour
 			&i.UiLanguageID,
 			&i.OwnerID,
 			&i.IsPublished,
-			&i.InviteCode,
+			&i.Visibility,
 		); err != nil {
 			return nil, err
 		}

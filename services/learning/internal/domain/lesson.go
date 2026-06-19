@@ -53,6 +53,7 @@ type CourseView struct {
 	UILanguageID     uuid.UUID
 	OwnerID          uuid.UUID
 	IsPublished      bool
+	Visibility       string
 	InviteCode       string
 }
 

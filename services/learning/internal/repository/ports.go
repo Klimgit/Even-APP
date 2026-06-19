@@ -145,6 +145,6 @@ func mapRemoteCourse(c dto.CourseView) domain.CourseView {
 		ID: c.ID, Title: c.Title, TargetLanguageID: c.TargetLanguageID,
 		TargetLangCode: c.TargetLangCode, TargetLangName: c.TargetLangName,
 		UILanguageID: c.UILanguageID, OwnerID: c.OwnerID, IsPublished: c.IsPublished,
-		InviteCode: c.InviteCode,
+		Visibility: c.Visibility, InviteCode: c.InviteCode,
 	}
 }

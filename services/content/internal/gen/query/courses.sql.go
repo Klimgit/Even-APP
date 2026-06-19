@@ -7,14 +7,15 @@ package query
 
 import (
 	"context"
+	"time"
 
 	"github.com/google/uuid"
 )
 
 const createCourse = `-- name: CreateCourse :one
-INSERT INTO courses (title, target_language_id, ui_language_id, owner_id)
-VALUES ($1, $2, $3, $4)
-RETURNING id, title, target_language_id, ui_language_id, owner_id, is_published, created_at, updated_at
+INSERT INTO courses (title, target_language_id, ui_language_id, owner_id, visibility)
+VALUES ($1, $2, $3, $4, $5)
+RETURNING id, title, target_language_id, ui_language_id, owner_id, is_published, visibility, created_at, updated_at
 `
 
 type CreateCourseParams struct {
@@ -22,21 +23,35 @@ type CreateCourseParams struct {
 	TargetLanguageID uuid.UUID
 	UiLanguageID     uuid.UUID
 	OwnerID          uuid.UUID
+	Visibility       string
+}
+
+type CreateCourseRow struct {
+	ID               uuid.UUID
+	Title            string
+	TargetLanguageID uuid.UUID
+	UiLanguageID     uuid.UUID
+	OwnerID          uuid.UUID
+	IsPublished      bool
+	Visibility       string
+	CreatedAt        time.Time
+	UpdatedAt        time.Time
 }
 
 // CreateCourse
 //
-//	INSERT INTO courses (title, target_language_id, ui_language_id, owner_id)
-//	VALUES ($1, $2, $3, $4)
-//	RETURNING id, title, target_language_id, ui_language_id, owner_id, is_published, created_at, updated_at
-func (q *Queries) CreateCourse(ctx context.Context, arg CreateCourseParams) (Course, error) {
+//	INSERT INTO courses (title, target_language_id, ui_language_id, owner_id, visibility)
+//	VALUES ($1, $2, $3, $4, $5)
+//	RETURNING id, title, target_language_id, ui_language_id, owner_id, is_published, visibility, created_at, updated_at
+func (q *Queries) CreateCourse(ctx context.Context, arg CreateCourseParams) (CreateCourseRow, error) {
 	row := q.db.QueryRow(ctx, createCourse,
 		arg.Title,
 		arg.TargetLanguageID,
 		arg.UiLanguageID,
 		arg.OwnerID,
+		arg.Visibility,
 	)
-	var i Course
+	var i CreateCourseRow
 	err := row.Scan(
 		&i.ID,
 		&i.Title,
@@ -44,6 +59,7 @@ func (q *Queries) CreateCourse(ctx context.Context, arg CreateCourseParams) (Cou
 		&i.UiLanguageID,
 		&i.OwnerID,
 		&i.IsPublished,
+		&i.Visibility,
 		&i.CreatedAt,
 		&i.UpdatedAt,
 	)
@@ -63,19 +79,31 @@ func (q *Queries) DeleteCourse(ctx context.Context, id uuid.UUID) error {
 }
 
 const getCourseByID = `-- name: GetCourseByID :one
-SELECT id, title, target_language_id, ui_language_id, owner_id, is_published, created_at, updated_at
+SELECT id, title, target_language_id, ui_language_id, owner_id, is_published, visibility, created_at, updated_at
 FROM courses
 WHERE id = $1
 `
 
+type GetCourseByIDRow struct {
+	ID               uuid.UUID
+	Title            string
+	TargetLanguageID uuid.UUID
+	UiLanguageID     uuid.UUID
+	OwnerID          uuid.UUID
+	IsPublished      bool
+	Visibility       string
+	CreatedAt        time.Time
+	UpdatedAt        time.Time
+}
+
 // GetCourseByID
 //
-//	SELECT id, title, target_language_id, ui_language_id, owner_id, is_published, created_at, updated_at
+//	SELECT id, title, target_language_id, ui_language_id, owner_id, is_published, visibility, created_at, updated_at
 //	FROM courses
 //	WHERE id = $1
-func (q *Queries) GetCourseByID(ctx context.Context, id uuid.UUID) (Course, error) {
+func (q *Queries) GetCourseByID(ctx context.Context, id uuid.UUID) (GetCourseByIDRow, error) {
 	row := q.db.QueryRow(ctx, getCourseByID, id)
-	var i Course
+	var i GetCourseByIDRow
 	err := row.Scan(
 		&i.ID,
 		&i.Title,
@@ -83,6 +111,7 @@ func (q *Queries) GetCourseByID(ctx context.Context, id uuid.UUID) (Course, erro
 		&i.UiLanguageID,
 		&i.OwnerID,
 		&i.IsPublished,
+		&i.Visibility,
 		&i.CreatedAt,
 		&i.UpdatedAt,
 	)
@@ -108,27 +137,39 @@ func (q *Queries) GetCourseOwner(ctx context.Context, id uuid.UUID) (uuid.UUID, 
 }
 
 const listCoursesByOwner = `-- name: ListCoursesByOwner :many
-SELECT id, title, target_language_id, ui_language_id, owner_id, is_published, created_at, updated_at
+SELECT id, title, target_language_id, ui_language_id, owner_id, is_published, visibility, created_at, updated_at
 FROM courses
 WHERE owner_id = $1
 ORDER BY updated_at DESC, title
 `
 
+type ListCoursesByOwnerRow struct {
+	ID               uuid.UUID
+	Title            string
+	TargetLanguageID uuid.UUID
+	UiLanguageID     uuid.UUID
+	OwnerID          uuid.UUID
+	IsPublished      bool
+	Visibility       string
+	CreatedAt        time.Time
+	UpdatedAt        time.Time
+}
+
 // ListCoursesByOwner
 //
-//	SELECT id, title, target_language_id, ui_language_id, owner_id, is_published, created_at, updated_at
+//	SELECT id, title, target_language_id, ui_language_id, owner_id, is_published, visibility, created_at, updated_at
 //	FROM courses
 //	WHERE owner_id = $1
 //	ORDER BY updated_at DESC, title
-func (q *Queries) ListCoursesByOwner(ctx context.Context, ownerID uuid.UUID) ([]Course, error) {
+func (q *Queries) ListCoursesByOwner(ctx context.Context, ownerID uuid.UUID) ([]ListCoursesByOwnerRow, error) {
 	rows, err := q.db.Query(ctx, listCoursesByOwner, ownerID)
 	if err != nil {
 		return nil, err
 	}
 	defer rows.Close()
-	var items []Course
+	var items []ListCoursesByOwnerRow
 	for rows.Next() {
-		var i Course
+		var i ListCoursesByOwnerRow
 		if err := rows.Scan(
 			&i.ID,
 			&i.Title,
@@ -136,6 +177,7 @@ func (q *Queries) ListCoursesByOwner(ctx context.Context, ownerID uuid.UUID) ([]
 			&i.UiLanguageID,
 			&i.OwnerID,
 			&i.IsPublished,
+			&i.Visibility,
 			&i.CreatedAt,
 			&i.UpdatedAt,
 		); err != nil {
@@ -153,18 +195,30 @@ const publishCourse = `-- name: PublishCourse :one
 UPDATE courses
 SET is_published = true, updated_at = now()
 WHERE id = $1
-RETURNING id, title, target_language_id, ui_language_id, owner_id, is_published, created_at, updated_at
+RETURNING id, title, target_language_id, ui_language_id, owner_id, is_published, visibility, created_at, updated_at
 `
+
+type PublishCourseRow struct {
+	ID               uuid.UUID
+	Title            string
+	TargetLanguageID uuid.UUID
+	UiLanguageID     uuid.UUID
+	OwnerID          uuid.UUID
+	IsPublished      bool
+	Visibility       string
+	CreatedAt        time.Time
+	UpdatedAt        time.Time
+}
 
 // PublishCourse
 //
 //	UPDATE courses
 //	SET is_published = true, updated_at = now()
 //	WHERE id = $1
-//	RETURNING id, title, target_language_id, ui_language_id, owner_id, is_published, created_at, updated_at
-func (q *Queries) PublishCourse(ctx context.Context, id uuid.UUID) (Course, error) {
+//	RETURNING id, title, target_language_id, ui_language_id, owner_id, is_published, visibility, created_at, updated_at
+func (q *Queries) PublishCourse(ctx context.Context, id uuid.UUID) (PublishCourseRow, error) {
 	row := q.db.QueryRow(ctx, publishCourse, id)
-	var i Course
+	var i PublishCourseRow
 	err := row.Scan(
 		&i.ID,
 		&i.Title,
@@ -172,6 +226,7 @@ func (q *Queries) PublishCourse(ctx context.Context, id uuid.UUID) (Course, erro
 		&i.UiLanguageID,
 		&i.OwnerID,
 		&i.IsPublished,
+		&i.Visibility,
 		&i.CreatedAt,
 		&i.UpdatedAt,
 	)
@@ -184,16 +239,30 @@ SET
     title = COALESCE($1, title),
     target_language_id = COALESCE($2, target_language_id),
     ui_language_id = COALESCE($3, ui_language_id),
+    visibility = COALESCE($4, visibility),
     updated_at = now()
-WHERE id = $4
-RETURNING id, title, target_language_id, ui_language_id, owner_id, is_published, created_at, updated_at
+WHERE id = $5
+RETURNING id, title, target_language_id, ui_language_id, owner_id, is_published, visibility, created_at, updated_at
 `
 
 type UpdateCourseParams struct {
 	Title            *string
 	TargetLanguageID *uuid.UUID
 	UiLanguageID     *uuid.UUID
+	Visibility       *string
 	ID               uuid.UUID
+}
+
+type UpdateCourseRow struct {
+	ID               uuid.UUID
+	Title            string
+	TargetLanguageID uuid.UUID
+	UiLanguageID     uuid.UUID
+	OwnerID          uuid.UUID
+	IsPublished      bool
+	Visibility       string
+	CreatedAt        time.Time
+	UpdatedAt        time.Time
 }
 
 // UpdateCourse
@@ -203,17 +272,19 @@ type UpdateCourseParams struct {
 //	    title = COALESCE($1, title),
 //	    target_language_id = COALESCE($2, target_language_id),
 //	    ui_language_id = COALESCE($3, ui_language_id),
+//	    visibility = COALESCE($4, visibility),
 //	    updated_at = now()
-//	WHERE id = $4
-//	RETURNING id, title, target_language_id, ui_language_id, owner_id, is_published, created_at, updated_at
-func (q *Queries) UpdateCourse(ctx context.Context, arg UpdateCourseParams) (Course, error) {
+//	WHERE id = $5
+//	RETURNING id, title, target_language_id, ui_language_id, owner_id, is_published, visibility, created_at, updated_at
+func (q *Queries) UpdateCourse(ctx context.Context, arg UpdateCourseParams) (UpdateCourseRow, error) {
 	row := q.db.QueryRow(ctx, updateCourse,
 		arg.Title,
 		arg.TargetLanguageID,
 		arg.UiLanguageID,
+		arg.Visibility,
 		arg.ID,
 	)
-	var i Course
+	var i UpdateCourseRow
 	err := row.Scan(
 		&i.ID,
 		&i.Title,
@@ -221,6 +292,7 @@ func (q *Queries) UpdateCourse(ctx context.Context, arg UpdateCourseParams) (Cou
 		&i.UiLanguageID,
 		&i.OwnerID,
 		&i.IsPublished,
+		&i.Visibility,
 		&i.CreatedAt,
 		&i.UpdatedAt,
 	)

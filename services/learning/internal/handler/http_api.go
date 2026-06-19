@@ -47,6 +47,26 @@ func (h *HTTPHandler) JoinCourse(ctx context.Context, req *http_v1.JoinCourseReq
 	}, nil
 }
 
+func (h *HTTPHandler) EnrollCourse(ctx context.Context, params http_v1.EnrollCourseParams) (http_v1.EnrollCourseRes, error) {
+	claims, ok := middleware.ClaimsFromContext(ctx)
+	if !ok {
+		return nil, domain.ErrUnauthorized
+	}
+	out, err := h.svc.EnrollPublicCourse(ctx, claims.UserID, params.CourseId)
+	if err != nil {
+		if errors.Is(err, domain.ErrNotFound) {
+			return notFoundEnroll("course not found or not public")
+		}
+		if errors.Is(err, domain.ErrConflict) {
+			return conflictEnroll("already enrolled")
+		}
+		return nil, err
+	}
+	return &http_v1.JoinCourseResponse{
+		CourseID: out.CourseID, EnrollmentID: out.EnrollmentID,
+	}, nil
+}
+
 func (h *HTTPHandler) ListCourses(ctx context.Context) (http_v1.ListCoursesRes, error) {
 	claims, ok := middleware.ClaimsFromContext(ctx)
 	if !ok {
@@ -116,9 +136,6 @@ func (h *HTTPHandler) ListPublicCourses(ctx context.Context) ([]http_v1.PublicCo
 				ID: r.LanguageID, Code: r.TargetLangCode, Name: r.TargetLangName,
 				NativeName: r.TargetLangName, Direction: http_v1.LanguageDirectionLtr, IsActive: true,
 			},
-		}
-		if r.InviteCode != "" {
-			item.InviteCode = http_v1.NewOptString(r.InviteCode)
 		}
 		out = append(out, item)
 	}

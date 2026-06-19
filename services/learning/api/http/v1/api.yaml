@@ -75,7 +75,7 @@ paths:
     get:
       operationId: listPublicCourses
       tags: [Student, Courses, Public]
-      summary: List published courses open for enrollment
+      summary: List published public courses open for self-enrollment
       responses:
         "200":
           description: OK
@@ -85,6 +85,48 @@ paths:
                 type: array
                 items:
                   $ref: "#/components/schemas/PublicCourseListItem"
+        default:
+          $ref: "#/components/responses/DefaultError"
+
+  /api/v1/courses/{courseId}/enroll:
+    post:
+      operationId: enrollCourse
+      tags: [Student, Courses]
+      summary: Self-enroll in a published public course
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: courseId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        "201":
+          description: Enrolled
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/JoinCourseResponse"
+        "401":
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "404":
+          description: Course not found or not public
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "409":
+          description: Already enrolled
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
         default:
           $ref: "#/components/responses/DefaultError"
 
@@ -596,8 +638,6 @@ components:
           $ref: "#/components/schemas/Language"
         is_published:
           type: boolean
-        invite_code:
-          type: string
 
     ProgressSummary:
       type: object

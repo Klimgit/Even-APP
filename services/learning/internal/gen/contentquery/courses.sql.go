@@ -22,6 +22,7 @@ SELECT
     c.ui_language_id,
     c.owner_id,
     c.is_published,
+    c.visibility,
     ic.code AS invite_code,
     c.created_at,
     c.updated_at
@@ -43,6 +44,7 @@ type GetCourseByIDRow struct {
 	UiLanguageID       uuid.UUID
 	OwnerID            uuid.UUID
 	IsPublished        bool
+	Visibility         string
 	InviteCode         *string
 	CreatedAt          time.Time
 	UpdatedAt          time.Time
@@ -59,6 +61,7 @@ type GetCourseByIDRow struct {
 //	    c.ui_language_id,
 //	    c.owner_id,
 //	    c.is_published,
+//	    c.visibility,
 //	    ic.code AS invite_code,
 //	    c.created_at,
 //	    c.updated_at
@@ -77,6 +80,7 @@ func (q *Queries) GetCourseByID(ctx context.Context, arg GetCourseByIDParams) (G
 		&i.UiLanguageID,
 		&i.OwnerID,
 		&i.IsPublished,
+		&i.Visibility,
 		&i.InviteCode,
 		&i.CreatedAt,
 		&i.UpdatedAt,
@@ -94,6 +98,7 @@ SELECT
     c.ui_language_id,
     c.owner_id,
     c.is_published,
+    c.visibility,
     ic.code AS invite_code,
     c.created_at,
     c.updated_at
@@ -115,6 +120,7 @@ type GetCourseByInviteCodeRow struct {
 	UiLanguageID       uuid.UUID
 	OwnerID            uuid.UUID
 	IsPublished        bool
+	Visibility         string
 	InviteCode         string
 	CreatedAt          time.Time
 	UpdatedAt          time.Time
@@ -131,6 +137,7 @@ type GetCourseByInviteCodeRow struct {
 //	    c.ui_language_id,
 //	    c.owner_id,
 //	    c.is_published,
+//	    c.visibility,
 //	    ic.code AS invite_code,
 //	    c.created_at,
 //	    c.updated_at
@@ -149,6 +156,7 @@ func (q *Queries) GetCourseByInviteCode(ctx context.Context, arg GetCourseByInvi
 		&i.UiLanguageID,
 		&i.OwnerID,
 		&i.IsPublished,
+		&i.Visibility,
 		&i.InviteCode,
 		&i.CreatedAt,
 		&i.UpdatedAt,
@@ -401,12 +409,11 @@ SELECT
     c.ui_language_id,
     c.owner_id,
     c.is_published,
-    ic.code AS invite_code,
+    c.visibility,
     c.created_at,
     c.updated_at
 FROM courses c
-LEFT JOIN course_invite_codes ic ON ic.course_id = c.id
-WHERE c.is_published = true
+WHERE c.is_published = true AND c.visibility = 'public'
 ORDER BY c.updated_at DESC
 `
 
@@ -419,7 +426,7 @@ type ListPublishedCoursesRow struct {
 	UiLanguageID       uuid.UUID
 	OwnerID            uuid.UUID
 	IsPublished        bool
-	InviteCode         *string
+	Visibility         string
 	CreatedAt          time.Time
 	UpdatedAt          time.Time
 }
@@ -435,12 +442,11 @@ type ListPublishedCoursesRow struct {
 //	    c.ui_language_id,
 //	    c.owner_id,
 //	    c.is_published,
-//	    ic.code AS invite_code,
+//	    c.visibility,
 //	    c.created_at,
 //	    c.updated_at
 //	FROM courses c
-//	LEFT JOIN course_invite_codes ic ON ic.course_id = c.id
-//	WHERE c.is_published = true
+//	WHERE c.is_published = true AND c.visibility = 'public'
 //	ORDER BY c.updated_at DESC
 func (q *Queries) ListPublishedCourses(ctx context.Context) ([]ListPublishedCoursesRow, error) {
 	rows, err := q.db.Query(ctx, listPublishedCourses)
@@ -460,7 +466,7 @@ func (q *Queries) ListPublishedCourses(ctx context.Context) ([]ListPublishedCour
 			&i.UiLanguageID,
 			&i.OwnerID,
 			&i.IsPublished,
-			&i.InviteCode,
+			&i.Visibility,
 			&i.CreatedAt,
 			&i.UpdatedAt,
 		); err != nil {

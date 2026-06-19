@@ -993,7 +993,7 @@ components:
 
     Course:
       type: object
-      required: [id, title, target_language_id, ui_language_id, owner_id, is_published]
+      required: [id, title, target_language_id, ui_language_id, owner_id, is_published, visibility]
       properties:
         id:
           type: string
@@ -1011,6 +1011,9 @@ components:
           format: uuid
         is_published:
           type: boolean
+        visibility:
+          type: string
+          enum: [public, invite_only]
         invite_code:
           type: string
 
@@ -1026,6 +1029,9 @@ components:
         ui_language_id:
           type: string
           format: uuid
+        visibility:
+          type: string
+          enum: [public, invite_only]
 
     PatchCourseRequest:
       type: object
@@ -1038,6 +1044,9 @@ components:
         ui_language_id:
           type: string
           format: uuid
+        visibility:
+          type: string
+          enum: [public, invite_only]
 
     LessonSummary:
       type: object

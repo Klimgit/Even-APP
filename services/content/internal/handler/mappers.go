@@ -17,6 +17,7 @@ func mapCourse(v service.CourseView) http_v1.Course {
 		UILanguageID:     v.Course.UiLanguageID,
 		OwnerID:          v.Course.OwnerID,
 		IsPublished:      v.Course.IsPublished,
+		Visibility:       http_v1.CourseVisibility(v.Course.Visibility),
 	}
 	if v.InviteCode != "" {
 		out.InviteCode = http_v1.NewOptString(v.InviteCode)
