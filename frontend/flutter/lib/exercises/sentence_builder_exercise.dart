@@ -26,6 +26,26 @@ class SentenceBuilderExercise extends ExerciseData {
     this.languageCode = 'en-US',
   });
 
+  static const String typeId = 'sentence_builder';
+
+  factory SentenceBuilderExercise.fromJson(Map<String, dynamic> json) {
+    final rawWords = json['correctWords'] as List?;
+    return SentenceBuilderExercise(
+      promptText: json['promptText'] as String? ?? '',
+      speakText: json['speakText'] as String? ?? '',
+      correctWords: rawWords?.map((e) => e as String).toList() ?? const [],
+      languageCode: json['languageCode'] as String? ?? 'en-US',
+    );
+  }
+
+  Map<String, dynamic> toJson() => {
+        'type': typeId,
+        'promptText': promptText,
+        'speakText': speakText,
+        'correctWords': correctWords,
+        'languageCode': languageCode,
+      };
+
   @override
   Widget build({required ValueChanged<bool> onResult}) =>
       _SentenceBuilderWidget(data: this, onResult: onResult);

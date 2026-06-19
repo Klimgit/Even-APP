@@ -14,4 +14,8 @@ abstract class ExerciseData {
   /// The widget owns its "Check" button and reports the outcome through
   /// [onResult] exactly once, after the learner checks their answer.
   Widget build({required ValueChanged<bool> onResult});
+
+  /// Serializes this exercise (including a `type` discriminator) so lessons
+  /// built by teachers can be persisted and rebuilt. See `exercise_catalog.dart`.
+  Map<String, dynamic> toJson();
 }

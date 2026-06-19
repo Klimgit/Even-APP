@@ -3,6 +3,7 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:get/get.dart';
 import 'package:online_cource_app/Courses/course_details.dart';
 import 'package:online_cource_app/Model/course_model.dart';
+import 'package:online_cource_app/theme/app_theme.dart';
 
 class CourseListPage extends StatelessWidget {
   const CourseListPage({super.key});
@@ -10,8 +11,12 @@ class CourseListPage extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
+      backgroundColor: AppTheme.backgroundColor,
       appBar: AppBar(
         title: const Text('Courses'),
+        backgroundColor: AppTheme.backgroundColor,
+        elevation: 0,
+        foregroundColor: AppTheme.textColor,
       ),
       body: StreamBuilder(
         stream: FirebaseFirestore.instance.collection('courses').snapshots(),
@@ -20,18 +25,34 @@ class CourseListPage extends StatelessWidget {
             return const Center(child: CircularProgressIndicator());
           }
 
-          var courses = snapshot.data!.docs;
+          final courses = snapshot.data!.docs;
+          if (courses.isEmpty) {
+            return const Center(child: Text('No courses yet'));
+          }
 
-          return ListView.builder(
-            itemCount: courses.length,
-            itemBuilder: (context, index) {
-              var course = CourseModel.fromJson(
-                  courses[index].data() as Map<String, dynamic>);
-
-              return CourseCard(
-                course: course,
-              );
-            },
+          // Same layout as Home → Popular Courses: 3 per row on desktop, 2 on
+          // narrow screens; each card shows only the cover icon and the title.
+          return Padding(
+            padding: const EdgeInsets.all(20),
+            child: LayoutBuilder(
+              builder: (context, constraints) {
+                final crossAxisCount = constraints.maxWidth >= 900 ? 3 : 2;
+                return GridView.builder(
+                  gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
+                    crossAxisCount: crossAxisCount,
+                    childAspectRatio: 2.6,
+                    crossAxisSpacing: 16,
+                    mainAxisSpacing: 16,
+                  ),
+                  itemCount: courses.length,
+                  itemBuilder: (context, index) {
+                    final course = CourseModel.fromJson(
+                        courses[index].data() as Map<String, dynamic>);
+                    return CourseCard(course: course);
+                  },
+                );
+              },
+            ),
           );
         },
       ),
@@ -41,97 +62,51 @@ class CourseListPage extends StatelessWidget {
 
 class CourseCard extends StatelessWidget {
   final CourseModel course;
-  const CourseCard({super.key, 
-    required this.course,
-  });
+  const CourseCard({super.key, required this.course});
 
   @override
   Widget build(BuildContext context) {
-    return InkWell(
-      onTap: () {
-        Get.to(() => CourseDetailsPage(course: course));
-      },
-      child: Card(
-        margin: const EdgeInsets.all(10.0),
-        shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(15.0),
+    return GestureDetector(
+      onTap: () => Get.to(() => CourseDetailsPage(course: course)),
+      child: Container(
+        padding: const EdgeInsets.all(12),
+        decoration: BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.circular(8),
+          border: Border.all(color: AppTheme.dividerColor),
         ),
-        child: ClipRRect(
-          borderRadius: BorderRadius.circular(15.0),
-          child: Stack(
-            children: [
-              Image.network(
+        child: Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Expanded(
+              child: Text(
+                course.title,
+                style: Theme.of(context)
+                    .textTheme
+                    .titleMedium
+                    ?.copyWith(fontWeight: FontWeight.bold),
+                maxLines: 3,
+                overflow: TextOverflow.ellipsis,
+              ),
+            ),
+            const SizedBox(width: 12),
+            ClipRRect(
+              borderRadius: BorderRadius.circular(8),
+              child: Image.network(
                 course.cover,
+                width: 56,
+                height: 56,
                 fit: BoxFit.cover,
-                width: double.infinity,
-                height: 200.0,
-              ),
-              Container(
-                width: double.infinity,
-                height: 200.0,
-                decoration: const BoxDecoration(
-                  gradient: LinearGradient(
-                    begin: Alignment.topCenter,
-                    end: Alignment.bottomCenter,
-                    colors: [Colors.transparent, Colors.black54],
-                  ),
+                errorBuilder: (context, error, stackTrace) => Container(
+                  width: 56,
+                  height: 56,
+                  color: AppTheme.dividerColor,
+                  child: Icon(Icons.image_not_supported,
+                      color: AppTheme.secondaryTextColor, size: 24),
                 ),
               ),
-              Positioned(
-                bottom: 10.0,
-                left: 10.0,
-                right: 10.0,
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      course.title,
-                      style: const TextStyle(
-                        color: Colors.white,
-                        fontSize: 20.0,
-                        fontWeight: FontWeight.bold,
-                        shadows: [
-                          Shadow(
-                            offset: Offset(2.0, 2.0),
-                            blurRadius: 3.0,
-                            color: Colors.black,
-                          ),
-                        ],
-                      ),
-                    ),
-                    Text(
-                      'Duration: ${course.duration}',
-                      style: const TextStyle(
-                        color: Colors.white,
-                        fontSize: 16.0,
-                        shadows: [
-                          Shadow(
-                            offset: Offset(2.0, 2.0),
-                            blurRadius: 3.0,
-                            color: Colors.black,
-                          ),
-                        ],
-                      ),
-                    ),
-                    Text(
-                      'Instructor: ${course.instructors.join(', ')}',
-                      style: const TextStyle(
-                        color: Colors.white,
-                        fontSize: 16.0,
-                        shadows: [
-                          Shadow(
-                            offset: Offset(2.0, 2.0),
-                            blurRadius: 3.0,
-                            color: Colors.black,
-                          ),
-                        ],
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-            ],
-          ),
+            ),
+          ],
         ),
       ),
     );
