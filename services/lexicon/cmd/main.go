@@ -17,6 +17,8 @@ import (
 	http_v1 "github.com/even-app/even-app/services/lexicon/internal/gen/http/v1"
 	"github.com/even-app/even-app/services/lexicon/internal/gen/query"
 	lexhandler "github.com/even-app/even-app/services/lexicon/internal/handler"
+	"github.com/even-app/even-app/services/lexicon/internal/internalapi"
+	"github.com/even-app/even-app/services/lexicon/internal/repository"
 	"github.com/even-app/even-app/services/lexicon/internal/service"
 	"github.com/joho/godotenv"
 )
@@ -39,13 +41,26 @@ func main() {
 	}
 	defer pool.Close()
 
+	var contentSource repository.ContentSource
+	if cfg.HasContentHTTP() {
+		contentSource = repository.NewContentRemote(cfg.ContentServiceURL, cfg.InternalServiceToken)
+	} else if cfg.HasContentDB() {
+		contentPool, err := postgres.NewPool(ctx, cfg.ContentDatabaseURL)
+		if err != nil {
+			log.Fatalf("content database: %v", err)
+		}
+		defer contentPool.Close()
+		contentSource = repository.NewContentReader(contentPool)
+	}
+
 	jwtMgr := libjwt.NewManager(cfg.JWTSecret, cfg.AccessTTL())
 	ready := func(ctx context.Context) error { return pool.Ping(ctx) }
 
 	querier := query.New(pool)
-	lexSvc := service.NewLexiconService(querier)
+	lexSvc := service.NewLexiconService(querier, contentSource)
 	httpHandler := lexhandler.NewHTTPHandler(lexSvc)
 	secHandler := lexhandler.NewSecurityHandler(jwtMgr)
+	internalHandler := internalapi.New(querier)
 
 	oasServer, err := http_v1.NewServer(httpHandler, secHandler)
 	if err != nil {
@@ -56,6 +71,7 @@ func main() {
 	server.RegisterHealth(mux, "lexicon", "/api/v1/platform/health")
 	server.RegisterReady(mux, ready, "/api/v1/platform/ready")
 	mux.Handle("GET /api/v1/openapi.yaml", http_v1.SpecHandler())
+	mux.Handle("/api/v1/internal/", middleware.RequireInternalToken(http.StripPrefix("/api/v1/internal", internalHandler)))
 	mux.Handle("/", oasServer)
 
 	handler := middleware.Recovery(logr, middleware.Logging(logr, mux))

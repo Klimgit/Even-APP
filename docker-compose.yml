@@ -2,6 +2,7 @@ name: even-app
 
 x-service-env: &service-env
   LOG_LEVEL: ${LOG_LEVEL:-info}
+  INTERNAL_SERVICE_TOKEN: ${INTERNAL_SERVICE_TOKEN:-dev-internal-token}
 
 services:
   postgres:
@@ -133,6 +134,8 @@ services:
       <<: *service-env
       HTTP_PORT: 8081
       DATABASE_URL: postgres://${POSTGRES_USER:-even}:${POSTGRES_PASSWORD:-even}@postgres:5432/even_auth?sslmode=disable
+      CONTENT_SERVICE_URL: http://content:8083
+      LEARNING_SERVICE_URL: http://learning:8084
       JWT_SECRET: ${JWT_SECRET:-dev-change-me}
     ports:
       - "8081:8081"
@@ -183,6 +186,7 @@ services:
       <<: *service-env
       HTTP_PORT: 8082
       DATABASE_URL: postgres://${POSTGRES_USER:-even}:${POSTGRES_PASSWORD:-even}@postgres:5432/even_lexicon?sslmode=disable
+      CONTENT_SERVICE_URL: http://content:8083
       JWT_SECRET: ${JWT_SECRET}
     ports:
       - "8082:8082"
@@ -204,6 +208,8 @@ services:
       <<: *service-env
       HTTP_PORT: 8083
       DATABASE_URL: postgres://${POSTGRES_USER:-even}:${POSTGRES_PASSWORD:-even}@postgres:5432/even_content?sslmode=disable
+      LEARNING_SERVICE_URL: http://learning:8084
+      AUTH_SERVICE_URL: http://auth:8081
       JWT_SECRET: ${JWT_SECRET:-dev-change-me}
     ports:
       - "8083:8083"
@@ -225,7 +231,9 @@ services:
       <<: *service-env
       HTTP_PORT: 8084
       DATABASE_URL: postgres://${POSTGRES_USER:-even}:${POSTGRES_PASSWORD:-even}@postgres:5432/even_learning?sslmode=disable
-      CONTENT_DATABASE_URL: postgres://${POSTGRES_USER:-even}:${POSTGRES_PASSWORD:-even}@postgres:5432/even_content?sslmode=disable
+      CONTENT_SERVICE_URL: http://content:8083
+      LEXICON_SERVICE_URL: http://lexicon:8082
+      MEDIA_SERVICE_URL: http://media:8085
       JWT_SECRET: ${JWT_SECRET:-dev-change-me}
     ports:
       - "8084:8084"
@@ -252,6 +260,7 @@ services:
       LEXICON_URL: http://lexicon:8082
       CONTENT_URL: http://content:8083
       LEARNING_URL: http://learning:8084
+      CORS_ALLOWED_ORIGINS: ${CORS_ALLOWED_ORIGINS:-}
     ports:
       - "8080:8080"
     depends_on:

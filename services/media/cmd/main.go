@@ -18,6 +18,7 @@ import (
 	http_v1 "github.com/even-app/even-app/services/media/internal/gen/http/v1"
 	"github.com/even-app/even-app/services/media/internal/gen/query"
 	mediahandler "github.com/even-app/even-app/services/media/internal/handler"
+	"github.com/even-app/even-app/services/media/internal/internalapi"
 	"github.com/even-app/even-app/services/media/internal/service"
 	"github.com/joho/godotenv"
 )
@@ -52,6 +53,7 @@ func main() {
 	mediaSvc := service.NewMediaService(querier, s3c, cfg.S3.Bucket, cfg.Media.UserQuotaBytes)
 	httpHandler := mediahandler.NewHTTPHandler(mediaSvc)
 	secHandler := mediahandler.NewSecurityHandler(jwtMgr)
+	internalHandler := internalapi.New(mediaSvc)
 
 	oasServer, err := http_v1.NewServer(httpHandler, secHandler)
 	if err != nil {
@@ -62,6 +64,7 @@ func main() {
 	server.RegisterHealth(mux, "media", "/api/v1/platform/health")
 	server.RegisterReady(mux, ready, "/api/v1/platform/ready")
 	mux.Handle("GET /api/v1/openapi.yaml", http_v1.SpecHandler())
+	mux.Handle("/api/v1/internal/", middleware.RequireInternalToken(http.StripPrefix("/api/v1/internal", internalHandler)))
 	mux.Handle("/", oasServer)
 
 	handler := middleware.Recovery(logr, middleware.Logging(logr, mux))

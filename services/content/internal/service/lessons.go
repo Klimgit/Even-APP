@@ -209,8 +209,8 @@ func (s *ContentService) CreateBlock(ctx context.Context, lessonID, userID uuid.
 	if err := s.assertLessonOwner(ctx, lessonID, userID, isAdmin); err != nil {
 		return query.LessonBlock{}, err
 	}
-	if params.BlockType == "" {
-		return query.LessonBlock{}, domain.ErrValidation
+	if err := validateBlockInput(params.BlockType, params.Config); err != nil {
+		return query.LessonBlock{}, err
 	}
 	params.LessonID = lessonID
 	if len(params.Config) == 0 {
@@ -234,12 +234,31 @@ func (s *ContentService) PatchBlock(ctx context.Context, blockID, userID uuid.UU
 	if err := s.assertBlockOwner(ctx, blockID, userID, isAdmin); err != nil {
 		return query.LessonBlock{}, err
 	}
+	if params.BlockType != nil || len(params.Config) > 0 {
+		blockType := ""
+		if params.BlockType != nil {
+			blockType = *params.BlockType
+		} else {
+			existing, err := s.q.GetBlockByID(ctx, blockID)
+			if err != nil {
+				return query.LessonBlock{}, mapNotFound(err)
+			}
+			blockType = existing.BlockType
+		}
+		if err := validateBlockInput(blockType, params.Config); err != nil {
+			return query.LessonBlock{}, err
+		}
+	}
 	params.ID = blockID
 	row, err := s.q.UpdateBlock(ctx, params)
 	if err != nil {
 		return query.LessonBlock{}, mapNotFound(err)
 	}
 	return row, nil
+}
+
+func validateBlockInput(blockType string, config []byte) error {
+	return domain.ValidateBlockConfig(blockType, config)
 }
 
 func (s *ContentService) DeleteBlock(ctx context.Context, blockID, userID uuid.UUID, isAdmin bool) error {

@@ -17,7 +17,10 @@ import (
 	http_v1 "github.com/even-app/even-app/services/auth/internal/gen/http/v1"
 	"github.com/even-app/even-app/services/auth/internal/gen/query"
 	authhandler "github.com/even-app/even-app/services/auth/internal/handler"
+	"github.com/even-app/even-app/services/auth/internal/internalapi"
+	"github.com/even-app/even-app/services/auth/internal/repository"
 	"github.com/even-app/even-app/services/auth/internal/service"
+	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/joho/godotenv"
 )
 
@@ -43,9 +46,35 @@ func main() {
 	ready := func(ctx context.Context) error { return pool.Ping(ctx) }
 
 	querier := query.New(pool)
-	authSvc := service.NewAuthService(querier, jwtMgr, cfg.RefreshTTL)
+
+	var statsSource repository.StatsSource
+	if cfg.HasContentHTTP() || cfg.HasLearningHTTP() {
+		statsSource = repository.NewPlatformStatsRemote(cfg.ContentServiceURL, cfg.LearningServiceURL, cfg.InternalServiceToken)
+	} else {
+		var contentPool, learningPool *pgxpool.Pool
+		if cfg.ContentDatabaseURL != "" {
+			cp, err := postgres.NewPool(ctx, cfg.ContentDatabaseURL)
+			if err != nil {
+				log.Fatalf("content database: %v", err)
+			}
+			defer cp.Close()
+			contentPool = cp
+		}
+		if cfg.LearningDatabaseURL != "" {
+			lp, err := postgres.NewPool(ctx, cfg.LearningDatabaseURL)
+			if err != nil {
+				log.Fatalf("learning database: %v", err)
+			}
+			defer lp.Close()
+			learningPool = lp
+		}
+		statsSource = repository.NewPlatformStatsReader(contentPool, learningPool)
+	}
+
+	authSvc := service.NewAuthService(querier, jwtMgr, cfg.RefreshTTL, statsSource)
 	httpHandler := authhandler.NewHTTPHandler(authSvc)
 	secHandler := authhandler.NewSecurityHandler(jwtMgr)
+	internalHandler := internalapi.New(querier)
 
 	oasServer, err := http_v1.NewServer(httpHandler, secHandler)
 	if err != nil {
@@ -56,9 +85,10 @@ func main() {
 	server.RegisterHealth(mux, "auth", "/api/v1/auth/health")
 	server.RegisterReady(mux, ready, "/api/v1/auth/ready")
 	mux.Handle("GET /api/v1/openapi.yaml", http_v1.SpecHandler())
+	mux.Handle("/api/v1/internal/", middleware.RequireInternalToken(http.StripPrefix("/api/v1/internal", internalHandler)))
 	mux.Handle("/", oasServer)
 
-	handler := middleware.Recovery(logr, middleware.Logging(logr, mux))
+	handler := middleware.Recovery(logr, middleware.Logging(logr, middleware.AuthRateLimit(mux)))
 
 	if err := server.Run(ctx, server.Options{
 		ServiceName: "auth",

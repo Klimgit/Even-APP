@@ -280,6 +280,90 @@ func (q *Queries) GetNextDueReviewItem(ctx context.Context, arg GetNextDueReview
 	return i, err
 }
 
+const getProgressSummary = `-- name: GetProgressSummary :one
+SELECT
+    (SELECT COUNT(*)::int FROM course_enrollments ce WHERE ce.user_id = $1 AND ce.status = 'active') AS enrolled_courses,
+    (SELECT COUNT(*)::int FROM user_vocabulary uv WHERE uv.user_id = $1) AS dictionary_words,
+    (SELECT COUNT(*)::int FROM user_review_items uri WHERE uri.user_id = $1 AND uri.status = 'pending' AND uri.due_at <= now()) AS review_due,
+    (SELECT COUNT(*)::int FROM user_block_progress ubp WHERE ubp.user_id = $1 AND ubp.status = 'completed') AS completed_blocks,
+    (SELECT COUNT(*)::int
+     FROM published_lesson_snapshots pls
+     JOIN course_enrollments ce ON ce.course_id = pls.course_id AND ce.user_id = $1 AND ce.status = 'active'
+     WHERE (
+         SELECT COUNT(*)::int
+         FROM jsonb_array_elements(pls.snapshot->'blocks') AS elem
+         WHERE COALESCE((elem->>'is_gradable')::bool, false) = true
+     ) > 0
+     AND (
+         SELECT COUNT(*) FILTER (WHERE ubp.status = 'completed')::int
+         FROM user_block_progress ubp
+         WHERE ubp.user_id = $1
+           AND ubp.lesson_block_id IN (
+               SELECT (elem->>'id')::uuid
+               FROM jsonb_array_elements(pls.snapshot->'blocks') AS elem
+               WHERE COALESCE((elem->>'is_gradable')::bool, false) = true
+           )
+     ) = (
+         SELECT COUNT(*)::int
+         FROM jsonb_array_elements(pls.snapshot->'blocks') AS elem
+         WHERE COALESCE((elem->>'is_gradable')::bool, false) = true
+     )) AS completed_lessons
+`
+
+type GetProgressSummaryParams struct {
+	UserID uuid.UUID
+}
+
+type GetProgressSummaryRow struct {
+	EnrolledCourses  int32
+	DictionaryWords  int32
+	ReviewDue        int32
+	CompletedBlocks  int32
+	CompletedLessons int32
+}
+
+// GetProgressSummary
+//
+//	SELECT
+//	    (SELECT COUNT(*)::int FROM course_enrollments ce WHERE ce.user_id = $1 AND ce.status = 'active') AS enrolled_courses,
+//	    (SELECT COUNT(*)::int FROM user_vocabulary uv WHERE uv.user_id = $1) AS dictionary_words,
+//	    (SELECT COUNT(*)::int FROM user_review_items uri WHERE uri.user_id = $1 AND uri.status = 'pending' AND uri.due_at <= now()) AS review_due,
+//	    (SELECT COUNT(*)::int FROM user_block_progress ubp WHERE ubp.user_id = $1 AND ubp.status = 'completed') AS completed_blocks,
+//	    (SELECT COUNT(*)::int
+//	     FROM published_lesson_snapshots pls
+//	     JOIN course_enrollments ce ON ce.course_id = pls.course_id AND ce.user_id = $1 AND ce.status = 'active'
+//	     WHERE (
+//	         SELECT COUNT(*)::int
+//	         FROM jsonb_array_elements(pls.snapshot->'blocks') AS elem
+//	         WHERE COALESCE((elem->>'is_gradable')::bool, false) = true
+//	     ) > 0
+//	     AND (
+//	         SELECT COUNT(*) FILTER (WHERE ubp.status = 'completed')::int
+//	         FROM user_block_progress ubp
+//	         WHERE ubp.user_id = $1
+//	           AND ubp.lesson_block_id IN (
+//	               SELECT (elem->>'id')::uuid
+//	               FROM jsonb_array_elements(pls.snapshot->'blocks') AS elem
+//	               WHERE COALESCE((elem->>'is_gradable')::bool, false) = true
+//	           )
+//	     ) = (
+//	         SELECT COUNT(*)::int
+//	         FROM jsonb_array_elements(pls.snapshot->'blocks') AS elem
+//	         WHERE COALESCE((elem->>'is_gradable')::bool, false) = true
+//	     )) AS completed_lessons
+func (q *Queries) GetProgressSummary(ctx context.Context, arg GetProgressSummaryParams) (GetProgressSummaryRow, error) {
+	row := q.db.QueryRow(ctx, getProgressSummary, arg.UserID)
+	var i GetProgressSummaryRow
+	err := row.Scan(
+		&i.EnrolledCourses,
+		&i.DictionaryWords,
+		&i.ReviewDue,
+		&i.CompletedBlocks,
+		&i.CompletedLessons,
+	)
+	return i, err
+}
+
 const getPublishedLessonSnapshot = `-- name: GetPublishedLessonSnapshot :one
 SELECT lesson_id, course_id, version, snapshot, published_at, updated_at FROM published_lesson_snapshots WHERE lesson_id = $1
 `
@@ -386,6 +470,57 @@ func (q *Queries) InsertBlockAttempt(ctx context.Context, arg InsertBlockAttempt
 		arg.Context,
 	)
 	return err
+}
+
+const listEnrollmentsByCourse = `-- name: ListEnrollmentsByCourse :many
+SELECT user_id, course_id, status, enrolled_at, enrolled_by
+FROM course_enrollments
+WHERE course_id = $1 AND status = 'active'
+ORDER BY enrolled_at DESC
+`
+
+type ListEnrollmentsByCourseParams struct {
+	CourseID uuid.UUID
+}
+
+type ListEnrollmentsByCourseRow struct {
+	UserID     uuid.UUID
+	CourseID   uuid.UUID
+	Status     string
+	EnrolledAt time.Time
+	EnrolledBy *uuid.UUID
+}
+
+// ListEnrollmentsByCourse
+//
+//	SELECT user_id, course_id, status, enrolled_at, enrolled_by
+//	FROM course_enrollments
+//	WHERE course_id = $1 AND status = 'active'
+//	ORDER BY enrolled_at DESC
+func (q *Queries) ListEnrollmentsByCourse(ctx context.Context, arg ListEnrollmentsByCourseParams) ([]ListEnrollmentsByCourseRow, error) {
+	rows, err := q.db.Query(ctx, listEnrollmentsByCourse, arg.CourseID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []ListEnrollmentsByCourseRow
+	for rows.Next() {
+		var i ListEnrollmentsByCourseRow
+		if err := rows.Scan(
+			&i.UserID,
+			&i.CourseID,
+			&i.Status,
+			&i.EnrolledAt,
+			&i.EnrolledBy,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
 }
 
 const listEnrollmentsByUser = `-- name: ListEnrollmentsByUser :many

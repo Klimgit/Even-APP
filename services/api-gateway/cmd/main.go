@@ -8,7 +8,6 @@ import (
 	"syscall"
 
 	"github.com/even-app/even-app/libs/core/logger"
-	"github.com/even-app/even-app/libs/http/middleware"
 	"github.com/even-app/even-app/libs/http/server"
 	libjwt "github.com/even-app/even-app/libs/jwt"
 	"github.com/even-app/even-app/services/api-gateway/internal/config"
@@ -33,13 +32,12 @@ func main() {
 	if err != nil {
 		log.Fatalf("gateway handler: %v", err)
 	}
-	handlerChain := middleware.Recovery(logr, middleware.Logging(logr, h))
 
 	if err := server.Run(ctx, server.Options{
 		ServiceName: "api-gateway",
 		Port:        cfg.Base.HTTPPort,
 		Logger:      logr,
-		Handler:     handlerChain,
+		Handler:     h,
 	}); err != nil {
 		logr.Error("server stopped", "err", err)
 		os.Exit(1)

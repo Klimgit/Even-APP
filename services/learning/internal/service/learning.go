@@ -18,11 +18,13 @@ import (
 type LearningService struct {
 	db      *pgxpool.Pool
 	q       *query.Queries
-	content *repository.ContentReader
+	content repository.ContentSource
+	lexicon repository.LexiconSource
+	media   repository.MediaSource
 }
 
-func NewLearningService(db *pgxpool.Pool, content *repository.ContentReader) *LearningService {
-	return &LearningService{db: db, q: query.New(db), content: content}
+func NewLearningService(db *pgxpool.Pool, content repository.ContentSource, lexicon repository.LexiconSource, media repository.MediaSource) *LearningService {
+	return &LearningService{db: db, q: query.New(db), content: content, lexicon: lexicon, media: media}
 }
 
 type JoinResult struct {
@@ -36,7 +38,7 @@ func (s *LearningService) JoinCourse(ctx context.Context, userID uuid.UUID, invi
 		return nil, domain.ErrValidation
 	}
 	if !s.content.Available() {
-		return nil, errors.New("content database not configured")
+		return nil, errors.New("content service not configured")
 	}
 
 	course, err := s.content.GetCourseByInviteCode(ctx, code)
@@ -661,6 +663,7 @@ func (s *LearningService) loadCourse(ctx context.Context, courseID uuid.UUID) (*
 	if s.content.Available() {
 		c, err := s.content.GetCourseByID(ctx, courseID)
 		if err == nil {
+			s.enrichCourseLanguage(ctx, &c)
 			return &c, nil
 		}
 		if !errors.Is(err, pgx.ErrNoRows) {
@@ -668,6 +671,237 @@ func (s *LearningService) loadCourse(ctx context.Context, courseID uuid.UUID) (*
 		}
 	}
 	return nil, domain.ErrNotFound
+}
+
+func (s *LearningService) enrichCourseLanguage(ctx context.Context, c *domain.CourseView) {
+	if c == nil || !s.lexicon.Available() || c.TargetLanguageID == uuid.Nil {
+		return
+	}
+	lang, err := s.lexicon.GetLanguage(ctx, c.TargetLanguageID)
+	if err != nil {
+		return
+	}
+	c.TargetLangCode = lang.Code
+	c.TargetLangName = lang.Name
+}
+
+type PublicCourseListItem struct {
+	ID             uuid.UUID
+	Title          string
+	TargetLangCode string
+	TargetLangName string
+	LanguageID     uuid.UUID
+	IsPublished    bool
+	InviteCode     string
+}
+
+func (s *LearningService) ListPublicCourses(ctx context.Context) ([]PublicCourseListItem, error) {
+	if !s.content.Available() {
+		return nil, errors.New("content service not configured")
+	}
+	courses, err := s.content.ListPublishedCourses(ctx)
+	if err != nil {
+		return nil, err
+	}
+	langIDs := make([]uuid.UUID, 0, len(courses))
+	for _, c := range courses {
+		if c.TargetLanguageID != uuid.Nil {
+			langIDs = append(langIDs, c.TargetLanguageID)
+		}
+	}
+	langs, _ := s.lexiconLanguages(ctx, langIDs)
+	out := make([]PublicCourseListItem, 0, len(courses))
+	for _, c := range courses {
+		item := PublicCourseListItem{
+			ID: c.ID, Title: c.Title, LanguageID: c.TargetLanguageID,
+			IsPublished: c.IsPublished, InviteCode: c.InviteCode,
+		}
+		if lang, ok := langs[c.TargetLanguageID]; ok {
+			item.TargetLangCode = lang.Code
+			item.TargetLangName = lang.Name
+		}
+		out = append(out, item)
+	}
+	return out, nil
+}
+
+type ProgressSummary struct {
+	EnrolledCourses  int
+	DictionaryWords  int
+	ReviewDue        int
+	CompletedBlocks  int
+	CompletedLessons int
+}
+
+func (s *LearningService) GetProgressSummary(ctx context.Context, userID uuid.UUID) (ProgressSummary, error) {
+	row, err := s.q.GetProgressSummary(ctx, query.GetProgressSummaryParams{UserID: userID})
+	if err != nil {
+		return ProgressSummary{}, err
+	}
+	return ProgressSummary{
+		EnrolledCourses:  int(row.EnrolledCourses),
+		DictionaryWords:  int(row.DictionaryWords),
+		ReviewDue:        int(row.ReviewDue),
+		CompletedBlocks:  int(row.CompletedBlocks),
+		CompletedLessons: int(row.CompletedLessons),
+	}, nil
+}
+
+type ReviewSession struct {
+	Item         ReviewItemView
+	PendingCount int
+	DueCount     int
+}
+
+func (s *LearningService) StartReviewSession(ctx context.Context, userID uuid.UUID) (*ReviewSession, error) {
+	counts, err := s.q.CountReviewItems(ctx, query.CountReviewItemsParams{UserID: userID})
+	if err != nil {
+		return nil, err
+	}
+	row, err := s.q.GetNextDueReviewItem(ctx, query.GetNextDueReviewItemParams{UserID: userID})
+	if err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			return nil, nil
+		}
+		return nil, err
+	}
+	item, err := s.reviewRowToView(ctx, row)
+	if err != nil {
+		return nil, err
+	}
+	return &ReviewSession{
+		Item:         item,
+		PendingCount: int(counts.PendingCount),
+		DueCount:     int(counts.DueCount),
+	}, nil
+}
+
+func (s *LearningService) LexemeLookup(ctx context.Context, snap *domain.LessonSnapshot) map[uuid.UUID]repository.LexemeView {
+	ids := collectLexemeIDs(snap)
+	if len(ids) == 0 || !s.lexicon.Available() {
+		return nil
+	}
+	out, err := s.lexicon.LexemesByIDs(ctx, ids)
+	if err != nil {
+		return nil
+	}
+	return out
+}
+
+func (s *LearningService) MediaLookup(ctx context.Context, snap *domain.LessonSnapshot) map[uuid.UUID]repository.MediaView {
+	ids := collectMediaIDs(snap)
+	if len(ids) == 0 || !s.media.Available() {
+		return nil
+	}
+	out, err := s.media.MediaByIDs(ctx, ids)
+	if err != nil {
+		return nil
+	}
+	return out
+}
+
+func collectLexemeIDs(snap *domain.LessonSnapshot) []uuid.UUID {
+	if snap == nil {
+		return nil
+	}
+	seen := make(map[uuid.UUID]struct{})
+	for _, b := range snap.Blocks {
+		collectLexemeIDsFromConfig(b.Config, seen)
+	}
+	out := make([]uuid.UUID, 0, len(seen))
+	for id := range seen {
+		out = append(out, id)
+	}
+	return out
+}
+
+func collectLexemeIDsFromConfig(cfg json.RawMessage, seen map[uuid.UUID]struct{}) {
+	var raw any
+	if err := json.Unmarshal(cfg, &raw); err != nil {
+		return
+	}
+	walkLexemeIDs(raw, seen)
+}
+
+func walkLexemeIDs(v any, seen map[uuid.UUID]struct{}) {
+	switch t := v.(type) {
+	case map[string]any:
+		for k, val := range t {
+			if k == "lexeme_id" || k == "lexemeId" {
+				if s, ok := val.(string); ok {
+					if id, err := uuid.Parse(s); err == nil {
+						seen[id] = struct{}{}
+					}
+				}
+			}
+			if k == "lexeme_ids" || k == "lexemeIds" {
+				if arr, ok := val.([]any); ok {
+					for _, item := range arr {
+						if s, ok := item.(string); ok {
+							if id, err := uuid.Parse(s); err == nil {
+								seen[id] = struct{}{}
+							}
+						}
+					}
+				}
+			}
+			walkLexemeIDs(val, seen)
+		}
+	case []any:
+		for _, item := range t {
+			walkLexemeIDs(item, seen)
+		}
+	}
+}
+
+func collectMediaIDs(snap *domain.LessonSnapshot) []uuid.UUID {
+	if snap == nil {
+		return nil
+	}
+	seen := make(map[uuid.UUID]struct{})
+	for _, b := range snap.Blocks {
+		collectMediaIDsFromConfig(b.Config, seen)
+	}
+	out := make([]uuid.UUID, 0, len(seen))
+	for id := range seen {
+		out = append(out, id)
+	}
+	return out
+}
+
+func collectMediaIDsFromConfig(cfg json.RawMessage, seen map[uuid.UUID]struct{}) {
+	var raw any
+	if err := json.Unmarshal(cfg, &raw); err != nil {
+		return
+	}
+	walkMediaIDs(raw, seen)
+}
+
+func walkMediaIDs(v any, seen map[uuid.UUID]struct{}) {
+	switch t := v.(type) {
+	case map[string]any:
+		for k, val := range t {
+			if k == "media_asset_id" || k == "mediaAssetId" {
+				if s, ok := val.(string); ok {
+					if id, err := uuid.Parse(s); err == nil {
+						seen[id] = struct{}{}
+					}
+				}
+			}
+			walkMediaIDs(val, seen)
+		}
+	case []any:
+		for _, item := range t {
+			walkMediaIDs(item, seen)
+		}
+	}
+}
+
+func (s *LearningService) lexiconLanguages(ctx context.Context, ids []uuid.UUID) (map[uuid.UUID]repository.LanguageView, error) {
+	if !s.lexicon.Available() {
+		return map[uuid.UUID]repository.LanguageView{}, nil
+	}
+	return s.lexicon.LanguagesByIDs(ctx, ids)
 }
 
 func (s *LearningService) courseListItem(ctx context.Context, userID, courseID uuid.UUID) (CourseListItem, error) {

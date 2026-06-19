@@ -38,11 +38,38 @@ func (h *HTTPHandler) teacher(ctx context.Context) (teacherClaims, error) {
 }
 
 func (h *HTTPHandler) ListBlockTypes(ctx context.Context) (http_v1.ListBlockTypesRes, error) {
-	if _, err := h.teacher(ctx); err != nil {
+	t, err := h.teacher(ctx)
+	if err != nil {
 		return nil, err
 	}
-	out := http_v1.ListBlockTypesOKApplicationJSON(mapBlockTypes(domain.MVPBlockTypeCatalog()))
+	favs, err := h.svc.ListFavoriteBlockTypes(ctx, t.UserID)
+	if err != nil {
+		return nil, err
+	}
+	out := http_v1.ListBlockTypesOKApplicationJSON(mapBlockTypes(domain.FullBlockTypeCatalog(), favs))
 	return &out, nil
+}
+
+func (h *HTTPHandler) AddTeacherBlockTypeFavorite(ctx context.Context, params http_v1.AddTeacherBlockTypeFavoriteParams) (http_v1.AddTeacherBlockTypeFavoriteRes, error) {
+	t, err := h.teacher(ctx)
+	if err != nil {
+		return nil, err
+	}
+	if err := h.svc.AddFavoriteBlockType(ctx, t.UserID, params.BlockType); err != nil {
+		return nil, err
+	}
+	return &http_v1.AddTeacherBlockTypeFavoriteNoContent{}, nil
+}
+
+func (h *HTTPHandler) RemoveTeacherBlockTypeFavorite(ctx context.Context, params http_v1.RemoveTeacherBlockTypeFavoriteParams) (http_v1.RemoveTeacherBlockTypeFavoriteRes, error) {
+	t, err := h.teacher(ctx)
+	if err != nil {
+		return nil, err
+	}
+	if err := h.svc.RemoveFavoriteBlockType(ctx, t.UserID, params.BlockType); err != nil {
+		return nil, err
+	}
+	return &http_v1.RemoveTeacherBlockTypeFavoriteNoContent{}, nil
 }
 
 func (h *HTTPHandler) ListTeacherCourses(ctx context.Context) (http_v1.ListTeacherCoursesRes, error) {
@@ -464,10 +491,24 @@ func (h *HTTPHandler) ListTeacherCourseStudents(ctx context.Context, params http
 	if err != nil {
 		return nil, err
 	}
-	if _, err := h.svc.GetCourse(ctx, params.CourseId, t.UserID, t.IsAdmin); err != nil {
+	rows, err := h.svc.ListCourseStudents(ctx, params.CourseId, t.UserID, t.IsAdmin)
+	if err != nil {
 		return nil, err
 	}
-	out := http_v1.ListTeacherCourseStudentsOKApplicationJSON([]http_v1.Student{})
+	out := http_v1.ListTeacherCourseStudentsOKApplicationJSON(mapStudents(rows))
+	return &out, nil
+}
+
+func (h *HTTPHandler) EnrollTeacherStudent(ctx context.Context, req *http_v1.EnrollStudentRequest) (http_v1.EnrollTeacherStudentRes, error) {
+	t, err := h.teacher(ctx)
+	if err != nil {
+		return nil, err
+	}
+	row, err := h.svc.EnrollStudent(ctx, req.CourseID, req.Email, t.UserID, t.IsAdmin)
+	if err != nil {
+		return nil, err
+	}
+	out := mapStudent(row)
 	return &out, nil
 }
 

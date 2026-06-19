@@ -18,7 +18,9 @@ Base URL: `/api/v1`
 | content | Teacher | courses, lessons, blocks, coverage, **teacher media library**, invite code, students list |
 | learning | Student | `POST /courses/join`, courses, lessons, flow, progress, review, dictionary |
 
-**Вне MVP (Phase 2):** `grammar-topics`, email-enrollment (`/teacher/students` POST), manual enrollments, block-type favorites, `POST /review/session`.
+**Реализовано (ранее Phase 2):** `grammar-topics`, email-enrollment (`POST /teacher/students`), block-type favorites, `POST /review/session`, `GET /progress/summary`, bulk lexicon import, `GET /platform/stats`.
+
+**Вне MVP (ещё не реализовано):** manual enrollments (admin без invite), audit log, `time_spent_seconds` в progress summary.
 
 ---
 
@@ -150,6 +152,14 @@ Base URL: `/api/v1`
 
 ---
 
+### GET /courses/public
+
+Опубликованные курсы (каталог). JWT опционален.
+
+**Response 200:** `PublicCourseListItem[]`
+
+---
+
 ### GET /courses
 
 Курсы текущего пользователя (из `course_enrollments`).
@@ -186,7 +196,7 @@ Base URL: `/api/v1`
 
 Полный урок с разделами и блоками. **RequireEnrollment**.
 
-**Response 200:** `LessonDTO`
+**Response 200:** `LessonDTO` + `resolved_lexemes` (map lexeme_id → lexeme) + `resolved_media` (map media_asset_id → URL/metadata из `even_media`).
 
 ---
 
@@ -241,6 +251,16 @@ Playbook прохождения: блоки + review-injection.
   "blocks": [ { "lesson_block_id": "...", "status": "completed", "score": 1.0 } ]
 }
 ```
+
+---
+
+### GET /progress/summary
+
+Агрегированная статистика ученика (dashboard).
+
+**Auth:** JWT (не требует enrollment в конкретный курс).
+
+**Response 200:** `ProgressSummary` — `enrolled_courses`, `completed_lessons`, `completed_blocks`, `dictionary_words`, `review_due`.
 
 ---
 
@@ -717,6 +737,24 @@ Query: `?q=`, `?role=teacher|student`, `?page=`, `?limit=`
 
 ---
 
+### GET /platform/stats
+
+**MVP.** Агрегаты для admin UI: пользователи (auth DB), опубликованные курсы и активные enrollments (cross-DB).
+
+**RequirePlatformAdmin**
+
+**Response 200:**
+
+```json
+{
+  "users": { "total": 0, "students": 0, "teachers": 0, "admins": 0 },
+  "published_courses": 0,
+  "active_enrollments": 0
+}
+```
+
+---
+
 ## Platform — языки
 
 ### GET /platform/languages
@@ -860,6 +898,14 @@ Query: `?q=`, `?role=teacher|student`, `?page=`, `?limit=`
 **Body:** `CreateLexemeRequest`
 
 **Response 201:** `LexemeDTO`
+
+---
+
+### POST /platform/languages/{code}/lexicon/import
+
+Bulk import лексем (JSON array of `CreateLexemeRequest`). Дубликаты по lemma пропускаются (`skipped`).
+
+**Response 200:** `{ created, skipped, failed }`
 
 ---
 
@@ -1009,25 +1055,25 @@ Query: `?q=`, `?kind=image|audio|video`, `?page=`, `?limit=`
 
 ---
 
-## Phase 2 — грамматика (topics)
+## Platform — grammar topics
 
-> Не в MVP (нет `grammar_table` / `grammar_exercise` в 17 BlockType).
+> Block types `grammar_table` / `grammar_exercise` в каталоге — Phase 2 preview; CRUD topics реализован.
 
 ### GET /platform/languages/{code}/grammar-topics
 
-**Phase 2**
+**RequirePlatformAdmin**
 
 ### POST /platform/languages/{code}/grammar-topics
 
-**Phase 2**
+**RequirePlatformAdmin**
 
 ### PATCH /platform/grammar-topics/{topicId}
 
-**Phase 2**
+**RequirePlatformAdmin**
 
 ### DELETE /platform/grammar-topics/{topicId}
 
-**Phase 2**
+**RequirePlatformAdmin**
 
 ---
 

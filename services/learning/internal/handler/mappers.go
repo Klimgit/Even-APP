@@ -5,7 +5,9 @@ import (
 
 	"github.com/even-app/even-app/services/learning/internal/domain"
 	http_v1 "github.com/even-app/even-app/services/learning/internal/gen/http/v1"
+	"github.com/even-app/even-app/services/learning/internal/repository"
 	"github.com/even-app/even-app/services/learning/internal/service"
+	"github.com/google/uuid"
 )
 
 func mapCourse(c domain.CourseView) http_v1.Course {
@@ -74,7 +76,7 @@ func mapOutlineBlock(b service.OutlineBlock) http_v1.CourseOutlineBlock {
 	return out
 }
 
-func mapLesson(s domain.LessonSnapshot) http_v1.Lesson {
+func mapLesson(s domain.LessonSnapshot, lexemes map[uuid.UUID]repository.LexemeView, media map[uuid.UUID]repository.MediaView) http_v1.Lesson {
 	sections := make([]http_v1.LessonSection, 0, len(s.Sections))
 	blocksBySection := map[string][]http_v1.LessonBlock{}
 	orphanBlocks := make([]http_v1.LessonBlock, 0)
@@ -100,11 +102,50 @@ func mapLesson(s domain.LessonSnapshot) http_v1.Lesson {
 			Blocks:      orphanBlocks,
 		})
 	}
-	return http_v1.Lesson{
+	out := http_v1.Lesson{
 		ID: s.ID, CourseID: s.CourseID, Title: s.Title,
 		SortOrder: s.SortOrder, Version: s.Version,
 		Status: http_v1.LessonStatus(s.Status), Sections: sections,
 	}
+	if resolved := mapResolvedLexemes(lexemes); resolved != nil {
+		out.ResolvedLexemes = http_v1.NewOptLessonResolvedLexemes(resolved)
+	}
+	if resolvedMedia := mapResolvedMedia(media); resolvedMedia != nil {
+		out.ResolvedMedia = http_v1.NewOptLessonResolvedMedia(resolvedMedia)
+	}
+	return out
+}
+
+func mapResolvedMedia(items map[uuid.UUID]repository.MediaView) http_v1.LessonResolvedMedia {
+	if len(items) == 0 {
+		return nil
+	}
+	out := make(http_v1.LessonResolvedMedia, len(items))
+	for id, m := range items {
+		item := http_v1.ResolvedMedia{
+			ID: m.ID, URL: repository.MediaRefURL(m.Scope, m.ID),
+			DisplayName: m.DisplayName, MimeType: m.MimeType,
+			MediaKind: http_v1.ResolvedMediaMediaKind(m.MediaKind),
+			Scope:     http_v1.ResolvedMediaScope(m.Scope),
+		}
+		out[id.String()] = item
+	}
+	return out
+}
+
+func mapResolvedLexemes(lexemes map[uuid.UUID]repository.LexemeView) http_v1.LessonResolvedLexemes {
+	if len(lexemes) == 0 {
+		return nil
+	}
+	out := make(http_v1.LessonResolvedLexemes, len(lexemes))
+	for id, lx := range lexemes {
+		item := http_v1.ResolvedLexeme{ID: lx.ID, Lemma: lx.Lemma}
+		if lx.PartOfSpeech != nil {
+			item.PartOfSpeech = http_v1.NewOptString(*lx.PartOfSpeech)
+		}
+		out[id.String()] = item
+	}
+	return out
 }
 
 func mapBlock(b domain.BlockSnap) http_v1.LessonBlock {

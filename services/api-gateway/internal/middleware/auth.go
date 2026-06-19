@@ -30,7 +30,7 @@ func IsPublic(r *http.Request) bool {
 	case http.MethodGet:
 		switch path {
 		case "/health", "/api/v1/health", "/api/v1/ready", "/api/v1/openapi.yaml", "/api/v1/gateway/status",
-			"/api/v1/auth/demo/public", "/api/v1/auth/demo/notes":
+			"/api/v1/auth/demo/public", "/api/v1/auth/demo/notes", "/api/v1/courses/public":
 			return true
 		}
 		if isPublicUpstreamSystemGET(path) {

@@ -17,6 +17,8 @@ import (
 	http_v1 "github.com/even-app/even-app/services/content/internal/gen/http/v1"
 	"github.com/even-app/even-app/services/content/internal/gen/query"
 	contenthandler "github.com/even-app/even-app/services/content/internal/handler"
+	"github.com/even-app/even-app/services/content/internal/internalapi"
+	"github.com/even-app/even-app/services/content/internal/repository"
 	"github.com/even-app/even-app/services/content/internal/service"
 	"github.com/joho/godotenv"
 )
@@ -39,13 +41,38 @@ func main() {
 	}
 	defer pool.Close()
 
+	var learningSource repository.LearningSource
+	if cfg.HasLearningHTTP() {
+		learningSource = repository.NewLearningRemote(cfg.LearningServiceURL, cfg.InternalServiceToken)
+	} else if cfg.HasLearningDB() {
+		lp, err := postgres.NewPool(ctx, cfg.LearningDatabaseURL)
+		if err != nil {
+			log.Fatalf("learning database: %v", err)
+		}
+		defer lp.Close()
+		learningSource = repository.NewLearningReader(lp)
+	}
+
+	var authSource repository.AuthSource
+	if cfg.HasAuthHTTP() {
+		authSource = repository.NewAuthRemote(cfg.AuthServiceURL, cfg.InternalServiceToken)
+	} else if cfg.HasAuthDB() {
+		ap, err := postgres.NewPool(ctx, cfg.AuthDatabaseURL)
+		if err != nil {
+			log.Fatalf("auth database: %v", err)
+		}
+		defer ap.Close()
+		authSource = repository.NewAuthReader(ap)
+	}
+
 	jwtMgr := libjwt.NewManager(cfg.JWTSecret, cfg.AccessTTL())
 	ready := func(ctx context.Context) error { return pool.Ping(ctx) }
 
 	querier := query.New(pool)
-	contentSvc := service.NewContentService(querier)
+	contentSvc := service.NewContentService(querier, learningSource, authSource)
 	httpHandler := contenthandler.NewHTTPHandler(contentSvc)
 	secHandler := contenthandler.NewSecurityHandler(jwtMgr)
+	internalHandler := internalapi.New(querier, contentSvc)
 
 	oasServer, err := http_v1.NewServer(httpHandler, secHandler)
 	if err != nil {
@@ -56,6 +83,7 @@ func main() {
 	server.RegisterHealth(mux, "content", "/api/v1/teacher/health")
 	server.RegisterReady(mux, ready, "/api/v1/teacher/ready")
 	mux.Handle("GET /api/v1/openapi.yaml", http_v1.SpecHandler())
+	mux.Handle("/api/v1/internal/", middleware.RequireInternalToken(http.StripPrefix("/api/v1/internal", internalHandler)))
 	mux.Handle("/", oasServer)
 
 	handler := middleware.Recovery(logr, middleware.Logging(logr, mux))

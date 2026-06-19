@@ -391,6 +391,89 @@ func (q *Queries) ListLessonSections(ctx context.Context, arg ListLessonSections
 	return items, nil
 }
 
+const listPublishedCourses = `-- name: ListPublishedCourses :many
+SELECT
+    c.id,
+    c.title,
+    c.target_language_id,
+    ''::text AS target_language_code,
+    ''::text AS target_language_name,
+    c.ui_language_id,
+    c.owner_id,
+    c.is_published,
+    ic.code AS invite_code,
+    c.created_at,
+    c.updated_at
+FROM courses c
+LEFT JOIN course_invite_codes ic ON ic.course_id = c.id
+WHERE c.is_published = true
+ORDER BY c.updated_at DESC
+`
+
+type ListPublishedCoursesRow struct {
+	ID                 uuid.UUID
+	Title              string
+	TargetLanguageID   uuid.UUID
+	TargetLanguageCode string
+	TargetLanguageName string
+	UiLanguageID       uuid.UUID
+	OwnerID            uuid.UUID
+	IsPublished        bool
+	InviteCode         *string
+	CreatedAt          time.Time
+	UpdatedAt          time.Time
+}
+
+// ListPublishedCourses
+//
+//	SELECT
+//	    c.id,
+//	    c.title,
+//	    c.target_language_id,
+//	    ''::text AS target_language_code,
+//	    ''::text AS target_language_name,
+//	    c.ui_language_id,
+//	    c.owner_id,
+//	    c.is_published,
+//	    ic.code AS invite_code,
+//	    c.created_at,
+//	    c.updated_at
+//	FROM courses c
+//	LEFT JOIN course_invite_codes ic ON ic.course_id = c.id
+//	WHERE c.is_published = true
+//	ORDER BY c.updated_at DESC
+func (q *Queries) ListPublishedCourses(ctx context.Context) ([]ListPublishedCoursesRow, error) {
+	rows, err := q.db.Query(ctx, listPublishedCourses)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []ListPublishedCoursesRow
+	for rows.Next() {
+		var i ListPublishedCoursesRow
+		if err := rows.Scan(
+			&i.ID,
+			&i.Title,
+			&i.TargetLanguageID,
+			&i.TargetLanguageCode,
+			&i.TargetLanguageName,
+			&i.UiLanguageID,
+			&i.OwnerID,
+			&i.IsPublished,
+			&i.InviteCode,
+			&i.CreatedAt,
+			&i.UpdatedAt,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const listPublishedLessonsByCourse = `-- name: ListPublishedLessonsByCourse :many
 SELECT id, course_id, title, sort_order, version, status, published_at, updated_at
 FROM lessons

@@ -843,6 +843,47 @@ paths:
         default:
           $ref: "#/components/responses/DefaultError"
 
+  /api/v1/platform/languages/{code}/lexicon/import:
+    post:
+      operationId: importPlatformLexicon
+      tags: [PlatformLexicon]
+      summary: Bulk import lexemes from JSON (platform admin)
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: code
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ImportLexiconRequest"
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ImportLexiconResponse"
+        "401":
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "403":
+          description: Platform admin required
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        default:
+          $ref: "#/components/responses/DefaultError"
+
   /api/v1/platform/lexemes/{lexemeId}:
     get:
       operationId: getPlatformLexeme
@@ -1444,6 +1485,166 @@ paths:
         default:
           $ref: "#/components/responses/DefaultError"
 
+  /api/v1/platform/languages/{code}/grammar-topics:
+    get:
+      operationId: listPlatformGrammarTopics
+      tags: [Platform, Grammar]
+      summary: List grammar topics for a language (platform admin)
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: code
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/GrammarTopic"
+        "401":
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "403":
+          description: Platform admin required
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        default:
+          $ref: "#/components/responses/DefaultError"
+    post:
+      operationId: createPlatformGrammarTopic
+      tags: [Platform, Grammar]
+      summary: Create grammar topic (platform admin)
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: code
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateGrammarTopicRequest"
+      responses:
+        "201":
+          description: Created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/GrammarTopic"
+        "401":
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "403":
+          description: Platform admin required
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        default:
+          $ref: "#/components/responses/DefaultError"
+
+  /api/v1/platform/grammar-topics/{topicId}:
+    patch:
+      operationId: patchPlatformGrammarTopic
+      tags: [Platform, Grammar]
+      summary: Update grammar topic (platform admin)
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: topicId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/PatchGrammarTopicRequest"
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/GrammarTopic"
+        "401":
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "403":
+          description: Platform admin required
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "404":
+          description: Not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        default:
+          $ref: "#/components/responses/DefaultError"
+    delete:
+      operationId: deletePlatformGrammarTopic
+      tags: [Platform, Grammar]
+      summary: Delete grammar topic (platform admin)
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: topicId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        "204":
+          description: Deleted
+        "401":
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "403":
+          description: Platform admin required
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "404":
+          description: Not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        default:
+          $ref: "#/components/responses/DefaultError"
+
 components:
   securitySchemes:
     bearerAuth:
@@ -1735,6 +1936,26 @@ components:
           items:
             $ref: "#/components/schemas/CreateLexemeTranslationInput"
 
+    ImportLexiconRequest:
+      type: object
+      required: [items]
+      properties:
+        items:
+          type: array
+          items:
+            $ref: "#/components/schemas/CreateLexemeRequest"
+
+    ImportLexiconResponse:
+      type: object
+      required: [created, skipped, failed]
+      properties:
+        created:
+          type: integer
+        skipped:
+          type: integer
+        failed:
+          type: integer
+
     CreateLexemeTranslationInput:
       type: object
       required: [target_language_id, text]
@@ -1851,6 +2072,44 @@ components:
         usage_kind:
           type: string
           enum: [introduced, exercised, referenced]
+
+    GrammarTopic:
+      type: object
+      required: [id, language_id, title, sort_order]
+      properties:
+        id:
+          type: string
+          format: uuid
+        language_id:
+          type: string
+          format: uuid
+        title:
+          type: string
+        description:
+          type: string
+        sort_order:
+          type: integer
+
+    CreateGrammarTopicRequest:
+      type: object
+      required: [title]
+      properties:
+        title:
+          type: string
+        description:
+          type: string
+        sort_order:
+          type: integer
+
+    PatchGrammarTopicRequest:
+      type: object
+      properties:
+        title:
+          type: string
+        description:
+          type: string
+        sort_order:
+          type: integer
 
     ErrorResponse:
       type: object

@@ -159,14 +159,3 @@ func (s *ContentService) GetFormsCoverage(ctx context.Context, courseID, userID 
 	}
 	return out, nil
 }
-
-func (s *ContentService) GetStudentProgress(ctx context.Context, courseID, studentID, userID uuid.UUID, isAdmin bool) (StudentProgressView, error) {
-	if err := s.assertCourseOwner(ctx, courseID, userID, isAdmin); err != nil {
-		return StudentProgressView{}, err
-	}
-	return StudentProgressView{
-		UserID:   studentID,
-		CourseID: courseID,
-		Lessons:  nil,
-	}, nil
-}

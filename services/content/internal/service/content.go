@@ -6,16 +6,19 @@ import (
 
 	"github.com/even-app/even-app/services/content/internal/domain"
 	"github.com/even-app/even-app/services/content/internal/gen/query"
+	"github.com/even-app/even-app/services/content/internal/repository"
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
 )
 
 type ContentService struct {
-	q *query.Queries
+	q        *query.Queries
+	learning repository.LearningSource
+	auth     repository.AuthSource
 }
 
-func NewContentService(q *query.Queries) *ContentService {
-	return &ContentService{q: q}
+func NewContentService(q *query.Queries, learning repository.LearningSource, auth repository.AuthSource) *ContentService {
+	return &ContentService{q: q, learning: learning, auth: auth}
 }
 
 func mapNotFound(err error) error {

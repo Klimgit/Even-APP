@@ -1,6 +1,7 @@
 package config
 
 import (
+	"os"
 	"time"
 
 	libconfig "github.com/even-app/even-app/libs/config"
@@ -9,9 +10,12 @@ import (
 const DefaultHTTPPort = 8082
 
 type Config struct {
-	Base        libconfig.Base
-	DatabaseURL string
-	JWTSecret   string
+	Base                 libconfig.Base
+	DatabaseURL          string
+	ContentDatabaseURL   string
+	ContentServiceURL    string
+	InternalServiceToken string
+	JWTSecret            string
 }
 
 func Load() (Config, error) {
@@ -27,7 +31,22 @@ func Load() (Config, error) {
 	if err != nil {
 		return Config{}, err
 	}
-	return Config{Base: base, DatabaseURL: dbURL, JWTSecret: jwt}, nil
+	return Config{
+		Base:                 base,
+		DatabaseURL:          dbURL,
+		ContentDatabaseURL:   os.Getenv("CONTENT_DATABASE_URL"),
+		ContentServiceURL:    os.Getenv("CONTENT_SERVICE_URL"),
+		InternalServiceToken: libconfig.InternalServiceToken(),
+		JWTSecret:            jwt,
+	}, nil
+}
+
+func (c Config) HasContentHTTP() bool {
+	return c.ContentServiceURL != ""
+}
+
+func (c Config) HasContentDB() bool {
+	return c.ContentDatabaseURL != ""
 }
 
 func (c Config) AccessTTL() time.Duration {

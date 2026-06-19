@@ -54,6 +54,35 @@ paths:
         default:
           $ref: "#/components/responses/DefaultError"
 
+  /api/v1/platform/stats:
+    get:
+      operationId: getPlatformStats
+      tags: [Platform]
+      summary: Platform-wide statistics (admin)
+      security:
+        - bearerAuth: []
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PlatformStatsResponse"
+        "401":
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "403":
+          description: Forbidden
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        default:
+          $ref: "#/components/responses/DefaultError"
+
   /api/v1/platform/users/{userId}:
     patch:
       operationId: patchPlatformUser
@@ -527,3 +556,24 @@ components:
         admins:
           type: integer
           format: int32
+
+    PlatformStatsResponse:
+      type: object
+      required: [users, published_courses, active_enrollments]
+      properties:
+        users:
+          type: object
+          required: [total, students, teachers, admins]
+          properties:
+            total:
+              type: integer
+            students:
+              type: integer
+            teachers:
+              type: integer
+            admins:
+              type: integer
+        published_courses:
+          type: integer
+        active_enrollments:
+          type: integer

@@ -818,6 +818,44 @@ UserBlockProgressDTO {
   score: number
   attempts: number
 }
+
+ProgressSummary {
+  enrolled_courses: number
+  completed_lessons: number
+  completed_blocks: number
+  dictionary_words: number
+  review_due: number
+  // time_spent_seconds — Phase 2 (migration pending)
+}
+
+PublicCourseListItem {
+  id: string
+  title: string
+  target_language: LanguageDTO
+  lesson_count?: number
+}
+
+ResolvedLexeme {
+  id: string
+  lemma: string
+  part_of_speech?: string
+  translations?: LexemeTranslationDTO[]
+  // …subset of LexemeDTO for lesson payload
+}
+
+ResolvedMedia {
+  id: string
+  url: string
+  kind?: string
+  mime_type?: string
+  display_name?: string
+}
+
+PlatformStatsResponse {
+  users: { total: number; students: number; teachers: number; admins: number }
+  published_courses: number
+  active_enrollments: number
+}
 ```
 
 ---

@@ -103,6 +103,65 @@ func (h *HTTPHandler) ListCourseLessons(ctx context.Context, params http_v1.List
 	return &http_v1.CourseLessonListResponse{Items: items}, nil
 }
 
+func (h *HTTPHandler) ListPublicCourses(ctx context.Context) ([]http_v1.PublicCourseListItem, error) {
+	rows, err := h.svc.ListPublicCourses(ctx)
+	if err != nil {
+		return nil, err
+	}
+	out := make([]http_v1.PublicCourseListItem, 0, len(rows))
+	for _, r := range rows {
+		item := http_v1.PublicCourseListItem{
+			ID: r.ID, Title: r.Title, IsPublished: r.IsPublished,
+			TargetLanguage: http_v1.Language{
+				ID: r.LanguageID, Code: r.TargetLangCode, Name: r.TargetLangName,
+				NativeName: r.TargetLangName, Direction: http_v1.LanguageDirectionLtr, IsActive: true,
+			},
+		}
+		if r.InviteCode != "" {
+			item.InviteCode = http_v1.NewOptString(r.InviteCode)
+		}
+		out = append(out, item)
+	}
+	return out, nil
+}
+
+func (h *HTTPHandler) GetProgressSummary(ctx context.Context) (http_v1.GetProgressSummaryRes, error) {
+	claims, ok := middleware.ClaimsFromContext(ctx)
+	if !ok {
+		return nil, domain.ErrUnauthorized
+	}
+	summary, err := h.svc.GetProgressSummary(ctx, claims.UserID)
+	if err != nil {
+		return nil, err
+	}
+	return &http_v1.ProgressSummary{
+		EnrolledCourses:  summary.EnrolledCourses,
+		DictionaryWords:  summary.DictionaryWords,
+		ReviewDue:        summary.ReviewDue,
+		CompletedBlocks:  summary.CompletedBlocks,
+		CompletedLessons: summary.CompletedLessons,
+	}, nil
+}
+
+func (h *HTTPHandler) StartReviewSession(ctx context.Context) (http_v1.StartReviewSessionRes, error) {
+	claims, ok := middleware.ClaimsFromContext(ctx)
+	if !ok {
+		return nil, domain.ErrUnauthorized
+	}
+	session, err := h.svc.StartReviewSession(ctx, claims.UserID)
+	if err != nil {
+		return nil, err
+	}
+	if session == nil {
+		return &http_v1.StartReviewSessionNoContent{}, nil
+	}
+	return &http_v1.ReviewSessionResponse{
+		Item:         mapReviewItem(session.Item),
+		PendingCount: session.PendingCount,
+		DueCount:     session.DueCount,
+	}, nil
+}
+
 func (h *HTTPHandler) GetCourseOutline(ctx context.Context, params http_v1.GetCourseOutlineParams) (http_v1.GetCourseOutlineRes, error) {
 	claims, ok := middleware.ClaimsFromContext(ctx)
 	if !ok {
@@ -134,7 +193,7 @@ func (h *HTTPHandler) GetLesson(ctx context.Context, params http_v1.GetLessonPar
 		}
 		return nil, err
 	}
-	out := mapLesson(*snap)
+	out := mapLesson(*snap, h.svc.LexemeLookup(ctx, snap), h.svc.MediaLookup(ctx, snap))
 	return &out, nil
 }
 

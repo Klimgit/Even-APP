@@ -101,14 +101,15 @@ func mapBlock(row query.LessonBlock) http_v1.LessonBlock {
 	return out
 }
 
-func mapBlockTypes(cats []domain.BlockTypeCategory) []http_v1.BlockTypeCategory {
+func mapBlockTypes(cats []domain.BlockTypeCategory, favorites map[string]struct{}) []http_v1.BlockTypeCategory {
 	out := make([]http_v1.BlockTypeCategory, len(cats))
 	for i, cat := range cats {
 		types := make([]http_v1.BlockTypeInfo, len(cat.Types))
 		for j, t := range cat.Types {
+			_, isFav := favorites[t.BlockType]
 			info := http_v1.BlockTypeInfo{
 				BlockType: t.BlockType, Title: t.Title,
-				IsGradable: t.IsGradable, IsFavorite: false,
+				IsGradable: t.IsGradable, IsFavorite: isFav,
 			}
 			if t.Description != "" {
 				info.Description = http_v1.NewOptString(t.Description)
@@ -166,6 +167,28 @@ func mapFormsCoverage(rows []service.FormCoverage) []http_v1.FormsCoverage {
 		out[i] = http_v1.FormsCoverage{
 			LexemeID: mustParseUUID(row.LexemeID), Lemma: row.Lemma, Forms: forms,
 		}
+	}
+	return out
+}
+
+func mapStudent(v service.StudentView) http_v1.Student {
+	out := http_v1.Student{
+		ID: v.ID, Email: v.Email,
+		EnrolledCourses: make([]http_v1.StudentEnrolledCourse, len(v.EnrolledCourses)),
+	}
+	if v.DisplayName != nil {
+		out.DisplayName = http_v1.NewOptString(*v.DisplayName)
+	}
+	for i, c := range v.EnrolledCourses {
+		out.EnrolledCourses[i] = http_v1.StudentEnrolledCourse{ID: c.ID, Title: c.Title}
+	}
+	return out
+}
+
+func mapStudents(rows []service.StudentView) []http_v1.Student {
+	out := make([]http_v1.Student, len(rows))
+	for i, row := range rows {
+		out[i] = mapStudent(row)
 	}
 	return out
 }

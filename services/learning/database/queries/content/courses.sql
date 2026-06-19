@@ -32,6 +32,24 @@ FROM courses c
 LEFT JOIN course_invite_codes ic ON ic.course_id = c.id
 WHERE c.id = $1;
 
+-- name: ListPublishedCourses :many
+SELECT
+    c.id,
+    c.title,
+    c.target_language_id,
+    ''::text AS target_language_code,
+    ''::text AS target_language_name,
+    c.ui_language_id,
+    c.owner_id,
+    c.is_published,
+    ic.code AS invite_code,
+    c.created_at,
+    c.updated_at
+FROM courses c
+LEFT JOIN course_invite_codes ic ON ic.course_id = c.id
+WHERE c.is_published = true
+ORDER BY c.updated_at DESC;
+
 -- name: ListPublishedLessonsByCourse :many
 SELECT id, course_id, title, sort_order, version, status, published_at, updated_at
 FROM lessons

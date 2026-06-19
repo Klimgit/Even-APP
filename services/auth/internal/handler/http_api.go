@@ -141,6 +141,28 @@ func (h *HTTPHandler) PatchPlatformUser(ctx context.Context, req *http_v1.PatchP
 	return &user, nil
 }
 
+func (h *HTTPHandler) GetPlatformStats(ctx context.Context) (http_v1.GetPlatformStatsRes, error) {
+	claims, ok := middleware.ClaimsFromContext(ctx)
+	if !ok {
+		return nil, domain.ErrUnauthorized
+	}
+	stats, err := h.svc.GetPlatformStats(ctx, claims.IsAdmin)
+	if err != nil {
+		if errors.Is(err, domain.ErrForbidden) {
+			return forbiddenGetPlatformStats()
+		}
+		return nil, err
+	}
+	return &http_v1.PlatformStatsResponse{
+		Users: http_v1.PlatformStatsResponseUsers{
+			Total: stats.TotalUsers, Students: stats.Students,
+			Teachers: stats.Teachers, Admins: stats.Admins,
+		},
+		PublishedCourses:  stats.PublishedCourses,
+		ActiveEnrollments: stats.ActiveEnrollments,
+	}, nil
+}
+
 func (h *HTTPHandler) DemoNotes(ctx context.Context) (*http_v1.DemoNotesResponse, error) {
 	notes, err := h.svc.ListDemoNotes(ctx)
 	if err != nil {
@@ -287,6 +309,11 @@ func forbiddenListPlatformUsers() (*http_v1.ListPlatformUsersForbidden, error) {
 
 func forbiddenPatchPlatformUser() (*http_v1.PatchPlatformUserForbidden, error) {
 	r := http_v1.PatchPlatformUserForbidden(errBody("platform admin required"))
+	return &r, nil
+}
+
+func forbiddenGetPlatformStats() (*http_v1.GetPlatformStatsForbidden, error) {
+	r := http_v1.GetPlatformStatsForbidden(errBody("platform admin required"))
 	return &r, nil
 }
 

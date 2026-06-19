@@ -145,7 +145,18 @@ if not has_block("vocabulary_set"):
     if code != 201:
         raise SystemExit(f"block vocabulary_set → {code} {resp}")
 
-exercise = next((b for b in blocks if b.get("block_type") == "prompt_choose_word"), None)
+code, full = req("GET", f"/api/v1/teacher/lessons/{lesson_id}")
+if code != 200:
+    raise SystemExit(f"refresh lesson for patch → {code}")
+vocab = next((b for b in all_blocks(full) if b.get("block_type") == "vocabulary_set"), None)
+if vocab:
+    code, resp = req("PATCH", f"/api/v1/teacher/blocks/{vocab['id']}", {
+        "config": {"lexeme_ids": [ashatkan_id, distractor_id], "show_images": False, "show_audio": False},
+    })
+    if code != 200:
+        raise SystemExit(f"patch vocabulary_set → {code} {resp}")
+
+exercise = next((b for b in all_blocks(full) if b.get("block_type") == "prompt_choose_word"), None)
 if exercise is None:
     code, exercise = req("POST", f"/api/v1/teacher/lessons/{lesson_id}/blocks", {
         "section_id": section_id, "sort_order": 2, "block_type": "prompt_choose_word", "title": "Выбрать слово",
@@ -157,6 +168,21 @@ if exercise is None:
     })
     if code != 201:
         raise SystemExit(f"block exercise → {code} {exercise}")
+
+code, full = req("GET", f"/api/v1/teacher/lessons/{lesson_id}")
+if code != 200:
+    raise SystemExit(f"refresh lesson after exercise → {code}")
+exercise = next((b for b in all_blocks(full) if b.get("block_type") == "prompt_choose_word"), None)
+if exercise:
+    code, resp = req("PATCH", f"/api/v1/teacher/blocks/{exercise['id']}", {
+        "config": {
+            "prompt": {"items": [{"kind": "text", "text": "Выберите перевод «спасибо»"}]},
+            "choices": [{"lexeme_id": ashatkan_id}, {"lexeme_id": distractor_id}],
+            "correct_index": 0,
+        },
+    })
+    if code != 200:
+        raise SystemExit(f"patch exercise → {code} {resp}")
 
 code, full = req("GET", f"/api/v1/teacher/lessons/{lesson_id}")
 if code != 200:
