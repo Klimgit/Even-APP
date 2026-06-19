@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 
 import 'package:online_cource_app/exercises/exercise.dart';
 import 'package:online_cource_app/exercises/listen_choice_exercise.dart';
+import 'package:online_cource_app/exercises/material_exercise.dart';
 import 'package:online_cource_app/exercises/sentence_builder_exercise.dart';
 import 'package:online_cource_app/exercises/word_match_exercise.dart';
 
@@ -14,6 +15,8 @@ ExerciseData exerciseFromJson(Map<String, dynamic> json) {
       return SentenceBuilderExercise.fromJson(json);
     case WordMatchExercise.typeId:
       return WordMatchExercise.fromJson(json);
+    case MaterialExercise.typeId:
+      return MaterialExercise.fromJson(json);
     default:
       throw ArgumentError('Unknown exercise type: ${json['type']}');
   }
@@ -53,6 +56,12 @@ const List<ExerciseType> exerciseTypes = [
     label: 'Match words',
     description: 'Match words in two columns by meaning',
     icon: Icons.compare_arrows_rounded,
+  ),
+  ExerciseType(
+    id: MaterialExercise.typeId,
+    label: 'Study material',
+    description: 'Text, images, audio and video to read/watch',
+    icon: Icons.article_rounded,
   ),
 ];
 

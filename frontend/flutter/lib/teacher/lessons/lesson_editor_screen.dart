@@ -264,6 +264,10 @@ class _LessonEditorScreenState extends State<LessonEditorScreen> {
         return (json['correctWords'] as List?)?.join(' ') ?? '';
       case 'word_match':
         return '${(json['pairs'] as List?)?.length ?? 0} pairs';
+      case 'material':
+        final title = json['title'] as String? ?? '';
+        final count = (json['elements'] as List?)?.length ?? 0;
+        return title.isNotEmpty ? title : '$count element${count == 1 ? '' : 's'}';
       default:
         return '';
     }

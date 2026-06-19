@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:online_cource_app/exercises/exercise.dart';
 import 'package:online_cource_app/exercises/exercise_catalog.dart';
 import 'package:online_cource_app/exercises/listen_choice_exercise.dart';
+import 'package:online_cource_app/exercises/material_exercise.dart';
 import 'package:online_cource_app/exercises/sentence_builder_exercise.dart';
 import 'package:online_cource_app/exercises/word_match_exercise.dart';
 import 'package:online_cource_app/theme/app_theme.dart';
@@ -40,6 +41,10 @@ class _StepEditorScreenState extends State<StepEditorScreen> {
   // Match words
   final _wmPrompt = TextEditingController();
   final List<List<TextEditingController>> _wmPairs = [];
+
+  // Study material
+  final _matTitle = TextEditingController();
+  final List<_MatElement> _matElements = [];
 
   @override
   void initState() {
@@ -80,6 +85,12 @@ class _StepEditorScreenState extends State<StepEditorScreen> {
           TextEditingController(text: p.target),
         ]);
       }
+    } else if (initial is MaterialExercise) {
+      _matTitle.text = initial.title;
+      for (final el in initial.elements) {
+        _matElements.add(_MatElement(
+            kind: el.kind, controller: TextEditingController(text: el.value)));
+      }
     }
   }
 
@@ -93,6 +104,10 @@ class _StepEditorScreenState extends State<StepEditorScreen> {
     }
     for (final pair in _wmPairs) {
       for (final c in pair) c.dispose();
+    }
+    _matTitle.dispose();
+    for (final e in _matElements) {
+      e.controller.dispose();
     }
     super.dispose();
   }
@@ -157,6 +172,19 @@ class _StepEditorScreenState extends State<StepEditorScreen> {
           pairs: pairs,
         ));
         return null;
+      case MaterialExercise.typeId:
+        final elements = <MaterialElement>[];
+        for (final e in _matElements) {
+          final value = e.controller.text.trim();
+          if (value.isEmpty) continue;
+          elements.add(MaterialElement(kind: e.kind, value: value));
+        }
+        if (elements.isEmpty) return 'Add at least one element';
+        onOk(MaterialExercise(
+          title: _matTitle.text.trim(),
+          elements: elements,
+        ));
+        return null;
       default:
         return 'Unknown type';
     }
@@ -202,8 +230,76 @@ class _StepEditorScreenState extends State<StepEditorScreen> {
         return _sentenceForm();
       case WordMatchExercise.typeId:
         return _matchForm();
+      case MaterialExercise.typeId:
+        return _materialForm();
       default:
         return const [Text('Unknown exercise type')];
+    }
+  }
+
+  // --- Study material ---
+  List<Widget> _materialForm() {
+    return [
+      _field(_matTitle, 'Title (optional)'),
+      const SizedBox(height: 8),
+      const Text('Content (shown top to bottom):',
+          style: TextStyle(fontWeight: FontWeight.w600)),
+      for (var i = 0; i < _matElements.length; i++)
+        Padding(
+          padding: const EdgeInsets.symmetric(vertical: 4),
+          child: Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Padding(
+                padding: const EdgeInsets.only(top: 14),
+                child: Icon(_kindIcon(_matElements[i].kind),
+                    size: 20, color: AppTheme.accentColor),
+              ),
+              const SizedBox(width: 8),
+              Expanded(
+                child: _field(
+                  _matElements[i].controller,
+                  _matElements[i].kind == MaterialElementKind.text
+                      ? 'Text'
+                      : '${_matElements[i].kind.name} URL',
+                ),
+              ),
+              IconButton(
+                icon: const Icon(Icons.remove_circle_outline),
+                onPressed: () => setState(() {
+                  _matElements[i].controller.dispose();
+                  _matElements.removeAt(i);
+                }),
+              ),
+            ],
+          ),
+        ),
+      const SizedBox(height: 8),
+      Wrap(
+        spacing: 8,
+        children: [
+          for (final kind in MaterialElementKind.values)
+            OutlinedButton.icon(
+              onPressed: () => setState(() => _matElements.add(_MatElement(
+                  kind: kind, controller: TextEditingController()))),
+              icon: Icon(_kindIcon(kind), size: 18),
+              label: Text(kind.name),
+            ),
+        ],
+      ),
+    ];
+  }
+
+  IconData _kindIcon(MaterialElementKind kind) {
+    switch (kind) {
+      case MaterialElementKind.text:
+        return Icons.notes_rounded;
+      case MaterialElementKind.image:
+        return Icons.image_outlined;
+      case MaterialElementKind.audio:
+        return Icons.audiotrack_rounded;
+      case MaterialElementKind.video:
+        return Icons.videocam_outlined;
     }
   }
 
@@ -321,4 +417,11 @@ class _StepEditorScreenState extends State<StepEditorScreen> {
       ),
     );
   }
+}
+
+/// Editable study-material element (kind + its text/URL controller).
+class _MatElement {
+  final MaterialElementKind kind;
+  final TextEditingController controller;
+  _MatElement({required this.kind, required this.controller});
 }

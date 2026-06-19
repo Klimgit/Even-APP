@@ -9,10 +9,14 @@ class LessonRunner extends StatefulWidget {
   final String title;
   final List<ExerciseData> exercises;
 
+  /// Called once when the learner reaches the end of the lesson.
+  final VoidCallback? onCompleted;
+
   const LessonRunner({
     super.key,
     required this.title,
     required this.exercises,
+    this.onCompleted,
   });
 
   @override
@@ -28,6 +32,7 @@ class _LessonRunnerState extends State<LessonRunner> {
     if (correct) _correct++;
     if (_index + 1 >= widget.exercises.length) {
       setState(() => _finished = true);
+      widget.onCompleted?.call();
     } else {
       setState(() => _index++);
     }

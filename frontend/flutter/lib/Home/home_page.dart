@@ -6,6 +6,8 @@ import 'package:online_cource_app/Courses/enhanced_course_details.dart';
 import 'package:online_cource_app/Detail/course_detail.dart';
 import 'package:online_cource_app/Model/course_model.dart';
 import 'package:online_cource_app/Model/model.dart.dart';
+import 'package:online_cource_app/Courses/course_progress_service.dart';
+import 'package:online_cource_app/Courses/student_course_screen.dart';
 import 'package:online_cource_app/theme/app_theme.dart';
 import 'package:online_cource_app/exercises/demo_lesson.dart';
 import 'package:online_cource_app/exercises/lesson_runner.dart';
@@ -205,94 +207,166 @@ class _MyHomePageState extends State<MyHomePage>
   }
 
   Widget _buildContinueLearningSection() {
-    if (_isLoading) {
-      return _buildLoadingCourseCards();
-    }
-
-    // Placeholder for enrolled courses
     return SizedBox(
-      height: 200,
-      child: ListView.builder(
-        scrollDirection: Axis.horizontal,
-        itemCount: 3,
-        itemBuilder: (context, index) {
-          return Container(
-            margin: const EdgeInsets.only(right: 16),
-            width: 280,
-            decoration: BoxDecoration(
-              color: Colors.white,
-              borderRadius: BorderRadius.circular(8),
-              border: Border.all(color: AppTheme.dividerColor),
+      height: 170,
+      child: StreamBuilder<List<CourseProgress>>(
+        stream: CourseProgressService.startedCoursesStream(),
+        builder: (context, snapshot) {
+          if (!snapshot.hasData) {
+            return _buildLoadingCourseCards();
+          }
+          final started = snapshot.data!;
+          if (started.isEmpty) {
+            return _notEnrolledCard();
+          }
+          return ListView.builder(
+            scrollDirection: Axis.horizontal,
+            itemCount: started.length,
+            itemBuilder: (context, index) => _progressCard(started[index]),
+          );
+        },
+      ),
+    );
+  }
+
+  Widget _notEnrolledCard() {
+    return Align(
+      alignment: Alignment.centerLeft,
+      child: Container(
+        width: 280,
+        padding: const EdgeInsets.all(16),
+        decoration: BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.circular(8),
+          border: Border.all(color: AppTheme.dividerColor),
+        ),
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Icon(Icons.school_outlined,
+                size: 36, color: AppTheme.secondaryTextColor),
+            const SizedBox(height: 12),
+            Text(
+              'Пока вы не записаны на курсы',
+              textAlign: TextAlign.center,
+              style: TextStyle(
+                color: AppTheme.secondaryTextColor,
+                fontWeight: FontWeight.w500,
+              ),
             ),
-            child: Stack(
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _progressCard(CourseProgress p) {
+    final percent = (p.percent * 100).round();
+    return GestureDetector(
+      onTap: () => Get.to(() => StudentCourseScreen(
+            courseId: p.courseId,
+            courseName: p.name,
+            coverColor: p.coverColor,
+          )),
+      child: Container(
+        margin: const EdgeInsets.only(right: 16),
+        width: 280,
+        padding: const EdgeInsets.all(16),
+        decoration: BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.circular(8),
+          border: Border.all(color: AppTheme.dividerColor),
+        ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
               children: [
-                Positioned(
-                  right: 16,
-                  top: 16,
-                  child: CircularProgressIndicator(
-                    value: (index + 1) * 0.25,
-                    backgroundColor: Colors.grey.withOpacity(0.2),
-                    valueColor:
-                        AlwaysStoppedAnimation<Color>(AppTheme.accentColor),
-                    strokeWidth: 6,
+                Container(
+                  width: 36,
+                  height: 36,
+                  decoration: BoxDecoration(
+                    color: Color(p.coverColor),
+                    borderRadius: BorderRadius.circular(8),
                   ),
                 ),
-                Padding(
-                  padding: const EdgeInsets.all(16),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        "Course ${index + 1}",
-                        style: TextStyle(
-                          color: AppTheme.secondaryTextColor,
-                          fontWeight: FontWeight.w500,
-                        ),
-                      ),
-                      const SizedBox(height: 8),
-                      Text(
-                        "Flutter Development ${index + 1}",
-                        style: Theme.of(context).textTheme.titleLarge?.copyWith(
-                              fontWeight: FontWeight.bold,
-                            ),
-                      ),
-                      const SizedBox(height: 16),
-                      LinearProgressIndicator(
-                        value: (index + 1) * 0.25,
-                        backgroundColor: Colors.grey.withOpacity(0.2),
-                        valueColor:
-                            AlwaysStoppedAnimation<Color>(AppTheme.accentColor),
-                      ),
-                      const SizedBox(height: 8),
-                      Text(
-                        "${((index + 1) * 25).toString()}% Complete",
-                        style: TextStyle(
-                          color: AppTheme.secondaryTextColor,
-                        ),
-                      ),
-                      const Spacer(),
-                      ElevatedButton(
-                        onPressed: () {
-                          // Navigate to course
-                        },
-                        style: ElevatedButton.styleFrom(
-                          backgroundColor: AppTheme.accentColor,
-                          elevation: 0,
-                          shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(8),
-                          ),
-                          padding: const EdgeInsets.symmetric(
-                              horizontal: 24, vertical: 10),
-                        ),
-                        child: const Text("Continue"),
-                      ),
-                    ],
+                const SizedBox(width: 12),
+                Expanded(
+                  child: Text(
+                    p.name,
+                    maxLines: 2,
+                    overflow: TextOverflow.ellipsis,
+                    style: Theme.of(context)
+                        .textTheme
+                        .titleMedium
+                        ?.copyWith(fontWeight: FontWeight.bold),
                   ),
                 ),
               ],
             ),
-          );
-        },
+            const Spacer(),
+            ClipRRect(
+              borderRadius: BorderRadius.circular(4),
+              child: LinearProgressIndicator(
+                value: p.percent,
+                minHeight: 6,
+                backgroundColor: AppTheme.dividerColor,
+                valueColor:
+                    const AlwaysStoppedAnimation<Color>(AppTheme.accentColor),
+              ),
+            ),
+            const SizedBox(height: 8),
+            Text(
+              '$percent% • ${p.completedLessons.length}/${p.totalLessons} lessons',
+              style: TextStyle(color: AppTheme.secondaryTextColor),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _popularCourseCard(String id, Map<String, dynamic> data) {
+    final name = data['name'] as String? ?? 'Untitled';
+    final colorValue = data['coverColor'] as int? ?? 0xFF9BE8B4;
+    return GestureDetector(
+      onTap: () => Get.to(() => StudentCourseScreen(
+            courseId: id,
+            courseName: name,
+            coverColor: colorValue,
+          )),
+      child: Container(
+        padding: const EdgeInsets.all(12),
+        decoration: BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.circular(8),
+          border: Border.all(color: AppTheme.dividerColor),
+        ),
+        child: Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Expanded(
+              child: Text(
+                name,
+                style: Theme.of(context)
+                    .textTheme
+                    .titleMedium
+                    ?.copyWith(fontWeight: FontWeight.bold),
+                maxLines: 3,
+                overflow: TextOverflow.ellipsis,
+              ),
+            ),
+            const SizedBox(width: 12),
+            Container(
+              width: 56,
+              height: 56,
+              decoration: BoxDecoration(
+                color: Color(colorValue),
+                borderRadius: BorderRadius.circular(8),
+              ),
+            ),
+          ],
+        ),
       ),
     );
   }
@@ -582,92 +656,46 @@ class _MyHomePageState extends State<MyHomePage>
                   }),
                   const SizedBox(height: 16),
 
-                  // Course grid: 3 per row on desktop, 2 on narrow screens.
-                  // Each card shows only the cover icon and the title.
-                  LayoutBuilder(
-                    builder: (context, constraints) {
-                      final crossAxisCount =
-                          constraints.maxWidth >= 900 ? 3 : 2;
-                      return GridView.count(
-                        physics: const NeverScrollableScrollPhysics(),
-                        shrinkWrap: true,
-                        crossAxisCount: crossAxisCount,
-                        childAspectRatio: 2.6,
-                        crossAxisSpacing: 16,
-                        mainAxisSpacing: 16,
-                        children: List.generate(
-                          onlineCourceOne.length > 6
-                              ? 6
-                              : onlineCourceOne.length,
-                          (index) {
-                            return GestureDetector(
-                              onTap: () {
-                                Navigator.push(
-                                  context,
-                                  MaterialPageRoute(
-                                    builder: (context) => CoursesDetail(
-                                      imgDetail: onlineCourceOne[index]
-                                          ['img_detail'],
-                                      title: onlineCourceOne[index]['title'],
-                                      price: onlineCourceOne[index]['price'],
-                                    ),
-                                  ),
-                                );
-                              },
-                              child: Container(
-                                padding: const EdgeInsets.all(12),
-                                decoration: BoxDecoration(
-                                  color: Colors.white,
-                                  borderRadius: BorderRadius.circular(8),
-                                  border: Border.all(
-                                      color: AppTheme.dividerColor),
-                                ),
-                                child: Row(
-                                  crossAxisAlignment:
-                                      CrossAxisAlignment.start,
-                                  children: [
-                                    Expanded(
-                                      child: Text(
-                                        onlineCourceOne[index]['title'],
-                                        style: Theme.of(context)
-                                            .textTheme
-                                            .titleMedium
-                                            ?.copyWith(
-                                              fontWeight: FontWeight.bold,
-                                            ),
-                                        maxLines: 3,
-                                        overflow: TextOverflow.ellipsis,
-                                      ),
-                                    ),
-                                    const SizedBox(width: 12),
-                                    ClipRRect(
-                                      borderRadius: BorderRadius.circular(8),
-                                      child: Image.asset(
-                                        onlineCourceOne[index]['img'],
-                                        width: 56,
-                                        height: 56,
-                                        fit: BoxFit.cover,
-                                        errorBuilder:
-                                            (context, error, stackTrace) =>
-                                                Container(
-                                          width: 56,
-                                          height: 56,
-                                          color: AppTheme.dividerColor,
-                                          child: Icon(
-                                            Icons.image_not_supported,
-                                            color:
-                                                AppTheme.secondaryTextColor,
-                                            size: 24,
-                                          ),
-                                        ),
-                                      ),
-                                    ),
-                                  ],
-                                ),
-                              ),
-                            );
-                          },
-                        ),
+                  // Recommended courses — only real teacher-created courses.
+                  StreamBuilder<QuerySnapshot<Map<String, dynamic>>>(
+                    stream: FirebaseFirestore.instance
+                        .collection('classes')
+                        .snapshots(),
+                    builder: (context, snapshot) {
+                      if (!snapshot.hasData) {
+                        return const Padding(
+                          padding: EdgeInsets.all(20),
+                          child: Center(child: CircularProgressIndicator()),
+                        );
+                      }
+                      final docs = snapshot.data!.docs;
+                      if (docs.isEmpty) {
+                        return Padding(
+                          padding: const EdgeInsets.symmetric(vertical: 16),
+                          child: Text('No courses yet',
+                              style: TextStyle(
+                                  color: AppTheme.secondaryTextColor)),
+                        );
+                      }
+                      final shown =
+                          docs.length > 6 ? docs.sublist(0, 6) : docs;
+                      return LayoutBuilder(
+                        builder: (context, constraints) {
+                          final crossAxisCount =
+                              constraints.maxWidth >= 900 ? 3 : 2;
+                          return GridView.count(
+                            physics: const NeverScrollableScrollPhysics(),
+                            shrinkWrap: true,
+                            crossAxisCount: crossAxisCount,
+                            childAspectRatio: 2.6,
+                            crossAxisSpacing: 16,
+                            mainAxisSpacing: 16,
+                            children: [
+                              for (final doc in shown)
+                                _popularCourseCard(doc.id, doc.data()),
+                            ],
+                          );
+                        },
                       );
                     },
                   ),

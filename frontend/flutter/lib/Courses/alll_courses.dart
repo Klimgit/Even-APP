@@ -74,8 +74,11 @@ class CourseCard extends StatelessWidget {
     final name = (data['name'] as String?) ?? 'Untitled';
     final colorValue = (data['coverColor'] as int?) ?? 0xFF9BE8B4;
     return GestureDetector(
-      onTap: () => Get.to(
-          () => StudentCourseScreen(courseId: id, courseName: name)),
+      onTap: () => Get.to(() => StudentCourseScreen(
+            courseId: id,
+            courseName: name,
+            coverColor: colorValue,
+          )),
       child: Container(
         padding: const EdgeInsets.all(12),
         decoration: BoxDecoration(

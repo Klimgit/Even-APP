@@ -2,6 +2,7 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 
+import 'package:online_cource_app/Courses/course_progress_service.dart';
 import 'package:online_cource_app/exercises/exercise.dart';
 import 'package:online_cource_app/exercises/exercise_catalog.dart';
 import 'package:online_cource_app/exercises/lesson_runner.dart';
@@ -12,11 +13,13 @@ import 'package:online_cource_app/theme/app_theme.dart';
 class StudentCourseScreen extends StatelessWidget {
   final String courseId;
   final String courseName;
+  final int coverColor;
 
   const StudentCourseScreen({
     super.key,
     required this.courseId,
     required this.courseName,
+    this.coverColor = 0xFF9BE8B4,
   });
 
   CollectionReference<Map<String, dynamic>> get _lessons => FirebaseFirestore
@@ -25,7 +28,7 @@ class StudentCourseScreen extends StatelessWidget {
       .doc(courseId)
       .collection('lessons');
 
-  void _openLesson(Map<String, dynamic> data) {
+  void _openLesson(String lessonId, Map<String, dynamic> data, int totalLessons) {
     final rawSteps = (data['steps'] as List?) ?? const [];
     final steps = <ExerciseData>[];
     for (final e in rawSteps) {
@@ -40,9 +43,20 @@ class StudentCourseScreen extends StatelessWidget {
           snackPosition: SnackPosition.BOTTOM);
       return;
     }
+    // Opening a lesson marks the course as started (shows in Continue Learning).
+    CourseProgressService.markStarted(
+      courseId: courseId,
+      name: courseName,
+      coverColor: coverColor,
+      totalLessons: totalLessons,
+    );
     Get.to(() => LessonRunner(
           title: data['title'] as String? ?? 'Lesson',
           exercises: steps,
+          onCompleted: () => CourseProgressService.markLessonCompleted(
+            courseId: courseId,
+            lessonId: lessonId,
+          ),
         ));
   }
 
@@ -97,7 +111,9 @@ class StudentCourseScreen extends StatelessWidget {
                       Text('$stepCount step${stepCount == 1 ? '' : 's'}'),
                   trailing: Icon(Icons.play_circle_outline,
                       color: AppTheme.accentColor),
-                  onTap: stepCount == 0 ? null : () => _openLesson(data),
+                  onTap: stepCount == 0
+                      ? null
+                      : () => _openLesson(docs[index].id, data, docs.length),
                 ),
               );
             },
