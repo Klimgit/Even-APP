@@ -49,8 +49,29 @@ func (s *LearningService) JoinCourse(ctx context.Context, userID uuid.UUID, invi
 		return nil, err
 	}
 
+	return s.enrollInCourse(ctx, userID, course.ID)
+}
+
+func (s *LearningService) EnrollPublicCourse(ctx context.Context, userID, courseID uuid.UUID) (*JoinResult, error) {
+	if !s.content.Available() {
+		return nil, errors.New("content service not configured")
+	}
+	course, err := s.content.GetCourseByID(ctx, courseID)
+	if err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			return nil, domain.ErrNotFound
+		}
+		return nil, err
+	}
+	if !course.IsPublished || course.Visibility != domain.CourseVisibilityPublic {
+		return nil, domain.ErrNotFound
+	}
+	return s.enrollInCourse(ctx, userID, courseID)
+}
+
+func (s *LearningService) enrollInCourse(ctx context.Context, userID, courseID uuid.UUID) (*JoinResult, error) {
 	if _, err := s.q.GetEnrollmentByUserAndCourse(ctx, query.GetEnrollmentByUserAndCourseParams{
-		UserID: userID, CourseID: course.ID,
+		UserID: userID, CourseID: courseID,
 	}); err == nil {
 		return nil, domain.ErrConflict
 	} else if !errors.Is(err, pgx.ErrNoRows) {
@@ -58,17 +79,17 @@ func (s *LearningService) JoinCourse(ctx context.Context, userID uuid.UUID, invi
 	}
 
 	row, err := s.q.CreateEnrollment(ctx, query.CreateEnrollmentParams{
-		UserID: userID, CourseID: course.ID, EnrolledBy: &userID,
+		UserID: userID, CourseID: courseID, EnrolledBy: &userID,
 	})
 	if err != nil {
 		return nil, err
 	}
 
-	if err := s.content.SyncPublishedLessonsForCourse(ctx, s.q, course.ID); err != nil {
+	if err := s.content.SyncPublishedLessonsForCourse(ctx, s.q, courseID); err != nil {
 		return nil, err
 	}
 
-	return &JoinResult{CourseID: course.ID, EnrollmentID: row.ID}, nil
+	return &JoinResult{CourseID: courseID, EnrollmentID: row.ID}, nil
 }
 
 func (s *LearningService) ListCourses(ctx context.Context, userID uuid.UUID) ([]CourseListItem, error) {
@@ -692,7 +713,6 @@ type PublicCourseListItem struct {
 	TargetLangName string
 	LanguageID     uuid.UUID
 	IsPublished    bool
-	InviteCode     string
 }
 
 func (s *LearningService) ListPublicCourses(ctx context.Context) ([]PublicCourseListItem, error) {
@@ -714,7 +734,7 @@ func (s *LearningService) ListPublicCourses(ctx context.Context) ([]PublicCourse
 	for _, c := range courses {
 		item := PublicCourseListItem{
 			ID: c.ID, Title: c.Title, LanguageID: c.TargetLanguageID,
-			IsPublished: c.IsPublished, InviteCode: c.InviteCode,
+			IsPublished: c.IsPublished,
 		}
 		if lang, ok := langs[c.TargetLanguageID]; ok {
 			item.TargetLangCode = lang.Code

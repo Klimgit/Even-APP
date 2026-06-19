@@ -2,15 +2,56 @@ package service
 
 import (
 	"context"
+	"time"
 
 	"github.com/even-app/even-app/services/content/internal/domain"
 	"github.com/even-app/even-app/services/content/internal/gen/query"
 	"github.com/google/uuid"
 )
 
+type Course struct {
+	ID               uuid.UUID
+	Title            string
+	TargetLanguageID uuid.UUID
+	UiLanguageID     uuid.UUID
+	OwnerID          uuid.UUID
+	IsPublished      bool
+	Visibility       string
+	CreatedAt        time.Time
+	UpdatedAt        time.Time
+}
+
 type CourseView struct {
-	Course     query.Course
+	Course     Course
 	InviteCode string
+}
+
+func courseFromRow(id uuid.UUID, title string, targetLangID, uiLangID, ownerID uuid.UUID, isPublished bool, visibility string, createdAt, updatedAt time.Time) Course {
+	return Course{
+		ID: id, Title: title, TargetLanguageID: targetLangID, UiLanguageID: uiLangID,
+		OwnerID: ownerID, IsPublished: isPublished, Visibility: visibility,
+		CreatedAt: createdAt, UpdatedAt: updatedAt,
+	}
+}
+
+func courseFromCreate(row query.CreateCourseRow) Course {
+	return courseFromRow(row.ID, row.Title, row.TargetLanguageID, row.UiLanguageID, row.OwnerID, row.IsPublished, row.Visibility, row.CreatedAt, row.UpdatedAt)
+}
+
+func courseFromGet(row query.GetCourseByIDRow) Course {
+	return courseFromRow(row.ID, row.Title, row.TargetLanguageID, row.UiLanguageID, row.OwnerID, row.IsPublished, row.Visibility, row.CreatedAt, row.UpdatedAt)
+}
+
+func courseFromList(row query.ListCoursesByOwnerRow) Course {
+	return courseFromRow(row.ID, row.Title, row.TargetLanguageID, row.UiLanguageID, row.OwnerID, row.IsPublished, row.Visibility, row.CreatedAt, row.UpdatedAt)
+}
+
+func courseFromUpdate(row query.UpdateCourseRow) Course {
+	return courseFromRow(row.ID, row.Title, row.TargetLanguageID, row.UiLanguageID, row.OwnerID, row.IsPublished, row.Visibility, row.CreatedAt, row.UpdatedAt)
+}
+
+func courseFromPublish(row query.PublishCourseRow) Course {
+	return courseFromRow(row.ID, row.Title, row.TargetLanguageID, row.UiLanguageID, row.OwnerID, row.IsPublished, row.Visibility, row.CreatedAt, row.UpdatedAt)
 }
 
 func (s *ContentService) ListCourses(ctx context.Context, ownerID uuid.UUID) ([]CourseView, error) {
@@ -24,7 +65,7 @@ func (s *ContentService) ListCourses(ctx context.Context, ownerID uuid.UUID) ([]
 		if err != nil {
 			return nil, err
 		}
-		out = append(out, CourseView{Course: row, InviteCode: code})
+		out = append(out, CourseView{Course: courseFromList(row), InviteCode: code})
 	}
 	return out, nil
 }
@@ -41,18 +82,26 @@ func (s *ContentService) GetCourse(ctx context.Context, courseID, userID uuid.UU
 	if err != nil {
 		return CourseView{}, err
 	}
-	return CourseView{Course: row, InviteCode: code}, nil
+	return CourseView{Course: courseFromGet(row), InviteCode: code}, nil
 }
 
-func (s *ContentService) CreateCourse(ctx context.Context, ownerID uuid.UUID, title string, targetLangID, uiLangID uuid.UUID) (CourseView, error) {
+func (s *ContentService) CreateCourse(ctx context.Context, ownerID uuid.UUID, title string, targetLangID, uiLangID uuid.UUID, visibility *string) (CourseView, error) {
 	if title == "" {
 		return CourseView{}, domain.ErrValidation
+	}
+	if visibility != nil && !domain.ValidCourseVisibility(*visibility) {
+		return CourseView{}, domain.ErrValidation
+	}
+	vis := domain.CourseVisibilityInviteOnly
+	if visibility != nil {
+		vis = *visibility
 	}
 	row, err := s.q.CreateCourse(ctx, query.CreateCourseParams{
 		Title:            title,
 		TargetLanguageID: targetLangID,
 		UiLanguageID:     uiLangID,
 		OwnerID:          ownerID,
+		Visibility:       vis,
 	})
 	if err != nil {
 		return CourseView{}, err
@@ -68,12 +117,15 @@ func (s *ContentService) CreateCourse(ctx context.Context, ownerID uuid.UUID, ti
 	if err != nil {
 		return CourseView{}, err
 	}
-	return CourseView{Course: row, InviteCode: invite.Code}, nil
+	return CourseView{Course: courseFromCreate(row), InviteCode: invite.Code}, nil
 }
 
 func (s *ContentService) PatchCourse(ctx context.Context, courseID, userID uuid.UUID, isAdmin bool, params query.UpdateCourseParams) (CourseView, error) {
 	if err := s.assertCourseOwner(ctx, courseID, userID, isAdmin); err != nil {
 		return CourseView{}, err
+	}
+	if params.Visibility != nil && !domain.ValidCourseVisibility(*params.Visibility) {
+		return CourseView{}, domain.ErrValidation
 	}
 	params.ID = courseID
 	row, err := s.q.UpdateCourse(ctx, params)
@@ -84,7 +136,7 @@ func (s *ContentService) PatchCourse(ctx context.Context, courseID, userID uuid.
 	if err != nil {
 		return CourseView{}, err
 	}
-	return CourseView{Course: row, InviteCode: code}, nil
+	return CourseView{Course: courseFromUpdate(row), InviteCode: code}, nil
 }
 
 func (s *ContentService) DeleteCourse(ctx context.Context, courseID, userID uuid.UUID, isAdmin bool) error {
@@ -106,7 +158,7 @@ func (s *ContentService) PublishCourse(ctx context.Context, courseID, userID uui
 	if err != nil {
 		return CourseView{}, err
 	}
-	return CourseView{Course: row, InviteCode: code}, nil
+	return CourseView{Course: courseFromPublish(row), InviteCode: code}, nil
 }
 
 func (s *ContentService) GetInviteCode(ctx context.Context, courseID, userID uuid.UUID, isAdmin bool) (string, error) {

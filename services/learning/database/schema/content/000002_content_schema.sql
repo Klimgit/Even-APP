@@ -7,6 +7,7 @@ CREATE TABLE courses (
     ui_language_id     UUID NOT NULL,
     owner_id           UUID NOT NULL,
     is_published       BOOLEAN NOT NULL,
+    visibility         TEXT NOT NULL,
     created_at         TIMESTAMPTZ NOT NULL,
     updated_at         TIMESTAMPTZ NOT NULL
 );

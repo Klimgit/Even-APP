@@ -50,10 +50,6 @@ func (r *ContentReader) ListPublishedCourses(ctx context.Context) ([]domain.Cour
 	}
 	out := make([]domain.CourseView, 0, len(rows))
 	for _, row := range rows {
-		inviteCode := ""
-		if row.InviteCode != nil {
-			inviteCode = *row.InviteCode
-		}
 		out = append(out, domain.CourseView{
 			ID: row.ID, Title: row.Title,
 			TargetLanguageID: row.TargetLanguageID,
@@ -62,7 +58,7 @@ func (r *ContentReader) ListPublishedCourses(ctx context.Context) ([]domain.Cour
 			UILanguageID:     row.UiLanguageID,
 			OwnerID:          row.OwnerID,
 			IsPublished:      row.IsPublished,
-			InviteCode:       inviteCode,
+			Visibility:       row.Visibility,
 		})
 	}
 	return out, nil
@@ -209,6 +205,7 @@ func mapCourseIDRow(row contentquery.GetCourseByIDRow) domain.CourseView {
 		UILanguageID:     row.UiLanguageID,
 		OwnerID:          row.OwnerID,
 		IsPublished:      row.IsPublished,
+		Visibility:       row.Visibility,
 	}
 }
 
@@ -221,6 +218,7 @@ func mapCourseInviteRow(row contentquery.GetCourseByInviteCodeRow) domain.Course
 		UILanguageID:     row.UiLanguageID,
 		OwnerID:          row.OwnerID,
 		IsPublished:      row.IsPublished,
+		Visibility:       row.Visibility,
 	}
 }
 

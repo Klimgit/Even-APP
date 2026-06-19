@@ -10,6 +10,7 @@ SELECT
     c.ui_language_id,
     c.owner_id,
     c.is_published,
+    c.visibility,
     ic.code AS invite_code
 FROM courses c
 JOIN course_invite_codes ic ON ic.course_id = c.id
@@ -25,10 +26,9 @@ SELECT
     c.ui_language_id,
     c.owner_id,
     c.is_published,
-    ic.code AS invite_code
+    c.visibility
 FROM courses c
-LEFT JOIN course_invite_codes ic ON ic.course_id = c.id
-WHERE c.is_published = true
+WHERE c.is_published = true AND c.visibility = 'public'
 ORDER BY c.updated_at DESC;
 
 -- name: CountPublishedCourses :one

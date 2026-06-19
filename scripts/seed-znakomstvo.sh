@@ -202,6 +202,12 @@ if not course.get("is_published"):
     if code != 200:
         raise SystemExit(f"publish course → {code} {resp}")
 
+code, course = req("GET", f"/api/v1/teacher/courses/{course_id}")
+if course.get("visibility") != "public":
+    code, resp = req("PATCH", f"/api/v1/teacher/courses/{course_id}", {"visibility": "public"})
+    if code != 200:
+        raise SystemExit(f"set course public → {code} {resp}")
+
 code, invite = req("GET", f"/api/v1/teacher/courses/{course_id}/invite-code")
 if code != 200:
     raise SystemExit(f"invite code → {code} {invite}")

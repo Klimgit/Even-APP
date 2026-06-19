@@ -90,7 +90,7 @@ func (h *HTTPHandler) CreateTeacherCourse(ctx context.Context, req *http_v1.Crea
 	if err != nil {
 		return nil, err
 	}
-	row, err := h.svc.CreateCourse(ctx, t.UserID, req.Title, req.TargetLanguageID, req.UILanguageID)
+	row, err := h.svc.CreateCourse(ctx, t.UserID, req.Title, req.TargetLanguageID, req.UILanguageID, createCourseVisibility(req))
 	if err != nil {
 		return nil, err
 	}
@@ -125,6 +125,10 @@ func (h *HTTPHandler) PatchTeacherCourse(ctx context.Context, req *http_v1.Patch
 	}
 	if v, ok := req.UILanguageID.Get(); ok {
 		p.UiLanguageID = &v
+	}
+	if v, ok := req.Visibility.Get(); ok {
+		vis := string(v)
+		p.Visibility = &vis
 	}
 	row, err := h.svc.PatchCourse(ctx, params.CourseId, t.UserID, t.IsAdmin, p)
 	if err != nil {
@@ -523,4 +527,12 @@ func (h *HTTPHandler) GetTeacherStudentProgress(ctx context.Context, params http
 	}
 	out := mapStudentProgress(row)
 	return &out, nil
+}
+
+func createCourseVisibility(req *http_v1.CreateCourseRequest) *string {
+	if v, ok := req.Visibility.Get(); ok {
+		s := string(v)
+		return &s
+	}
+	return nil
 }

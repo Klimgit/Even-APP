@@ -15,6 +15,7 @@ type CourseView struct {
 	UILanguageID     uuid.UUID `json:"ui_language_id"`
 	OwnerID          uuid.UUID `json:"owner_id"`
 	IsPublished      bool      `json:"is_published"`
+	Visibility       string    `json:"visibility,omitempty"`
 	InviteCode       string    `json:"invite_code,omitempty"`
 }
 

@@ -10,17 +10,6 @@ import (
 	"github.com/google/uuid"
 )
 
-type Course struct {
-	ID               uuid.UUID
-	Title            string
-	TargetLanguageID uuid.UUID
-	UiLanguageID     uuid.UUID
-	OwnerID          uuid.UUID
-	IsPublished      bool
-	CreatedAt        time.Time
-	UpdatedAt        time.Time
-}
-
 type CourseInviteCode struct {
 	CourseID  uuid.UUID
 	Code      string
