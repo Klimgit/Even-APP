@@ -47,11 +47,10 @@ dependencies:
   motion_toast: ^2.10.0
   cloud_firestore: ^5.0.2
   cached_network_image: ^3.4.0
-  google_fonts: ^6.2.1
+  google_fonts: ^6.3.0
   flutter_staggered_animations: ^1.1.1
   animations: ^2.0.11
   timeline_tile: ^2.0.0
-  icons_plus: ^5.0.0
   firebase_storage: ^12.2.0
   video_player: ^2.9.1
   chewie: ^1.8.4

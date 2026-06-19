@@ -31,6 +31,17 @@ sqlc-all:
       (cd "services/$svc/database" && sqlc generate)
     done
 
+# Regenerate ogen HTTP stubs (internal/gen/http is gitignored; run before docker build if handlers fail)
+swagger-all:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    export PATH="$(go env GOPATH)/bin:$PATH"
+    command -v ogen >/dev/null || go install github.com/ogen-go/ogen/cmd/ogen@v1.18.0
+    for svc in auth media lexicon content learning; do
+      echo "→ swagger $svc"
+      just -f "services/$svc/Justfile" swagger
+    done
+
 build-all: sqlc-all
     go build -o bin/api-gateway ./services/api-gateway/cmd
     go build -o bin/auth ./services/auth/cmd
@@ -92,7 +103,7 @@ mobile-bootstrap:
     @chmod +x scripts/flutter-bootstrap.sh && ./scripts/flutter-bootstrap.sh
 
 mobile-pub-get:
-    cd apps/mobile && flutter pub get
+    cd frontend/flutter && flutter pub get
 
 mobile-web:
     @chmod +x scripts/mobile-web.sh && ./scripts/mobile-web.sh
@@ -102,10 +113,10 @@ mobile-web-chrome:
     FLUTTER_WEB_DEVICE=chrome ./scripts/mobile-web.sh
 
 mobile-run:
-    cd apps/mobile && flutter run
+    cd frontend/flutter && flutter run
 
 mobile-test:
-    cd apps/mobile && flutter test
+    cd frontend/flutter && flutter test
 
 # --- Colleague UI (frontend/flutter — Even-APP Go API) ---
 
