@@ -12,6 +12,7 @@ import (
 	libjwt "github.com/even-app/even-app/libs/jwt"
 	"github.com/even-app/even-app/services/auth/internal/domain"
 	"github.com/even-app/even-app/services/auth/internal/gen/query"
+	"github.com/even-app/even-app/services/auth/internal/repository"
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
 	"golang.org/x/crypto/bcrypt"
@@ -21,10 +22,11 @@ type AuthService struct {
 	q          *query.Queries
 	jwt        *libjwt.Manager
 	refreshTTL time.Duration
+	stats      *repository.PlatformStatsReader
 }
 
-func NewAuthService(q *query.Queries, jwt *libjwt.Manager, refreshTTL time.Duration) *AuthService {
-	return &AuthService{q: q, jwt: jwt, refreshTTL: refreshTTL}
+func NewAuthService(q *query.Queries, jwt *libjwt.Manager, refreshTTL time.Duration, stats *repository.PlatformStatsReader) *AuthService {
+	return &AuthService{q: q, jwt: jwt, refreshTTL: refreshTTL, stats: stats}
 }
 
 func (s *AuthService) Register(ctx context.Context, email, password, role string, displayName *string) (*domain.AuthOutcome, error) {

@@ -601,7 +601,7 @@ components:
 
     ProgressSummary:
       type: object
-      required: [enrolled_courses, dictionary_words, review_due, completed_blocks]
+      required: [enrolled_courses, dictionary_words, review_due, completed_blocks, completed_lessons]
       properties:
         enrolled_courses:
           type: integer
@@ -611,6 +611,28 @@ components:
           type: integer
         completed_blocks:
           type: integer
+        completed_lessons:
+          type: integer
+
+    ResolvedMedia:
+      type: object
+      required: [id, url, display_name, mime_type, media_kind, scope]
+      properties:
+        id:
+          type: string
+          format: uuid
+        url:
+          type: string
+        display_name:
+          type: string
+        mime_type:
+          type: string
+        media_kind:
+          type: string
+          enum: [image, audio, video]
+        scope:
+          type: string
+          enum: [platform, teacher]
 
     ReviewSessionResponse:
       type: object
@@ -781,6 +803,10 @@ components:
           type: object
           additionalProperties:
             $ref: "#/components/schemas/ResolvedLexeme"
+        resolved_media:
+          type: object
+          additionalProperties:
+            $ref: "#/components/schemas/ResolvedMedia"
         sections:
           type: array
           items:

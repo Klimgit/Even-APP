@@ -16,12 +16,16 @@ func Logging(log *slog.Logger, next http.Handler) http.Handler {
 		start := time.Now()
 		ww := &statusWriter{ResponseWriter: w, status: http.StatusOK}
 		next.ServeHTTP(ww, r)
-		log.Info("request",
+		args := []any{
 			"method", r.Method,
 			"path", r.URL.Path,
 			"status", ww.status,
 			"duration_ms", time.Since(start).Milliseconds(),
-		)
+		}
+		if id, ok := RequestIDFromContext(r.Context()); ok {
+			args = append(args, "request_id", id)
+		}
+		log.Info("request", args...)
 	})
 }
 

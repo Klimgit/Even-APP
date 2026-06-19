@@ -28,6 +28,52 @@ paths:
         default:
           $ref: "#/components/responses/DefaultError"
 
+  /api/v1/teacher/block-types/{blockType}/favorite:
+    post:
+      operationId: addTeacherBlockTypeFavorite
+      tags: [Teacher, BlockTypes]
+      summary: Mark block type as favorite for current teacher
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: blockType
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "204":
+          description: No Content
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        default:
+          $ref: "#/components/responses/DefaultError"
+    delete:
+      operationId: removeTeacherBlockTypeFavorite
+      tags: [Teacher, BlockTypes]
+      summary: Remove block type from favorites
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: blockType
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "204":
+          description: No Content
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        default:
+          $ref: "#/components/responses/DefaultError"
+
   /api/v1/teacher/courses:
     get:
       operationId: listTeacherCourses

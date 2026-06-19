@@ -11,11 +11,13 @@ import (
 const DefaultHTTPPort = 8081
 
 type Config struct {
-	Base        libconfig.Base
-	DatabaseURL string
-	JWTSecret   string
-	AccessTTL   time.Duration
-	RefreshTTL  time.Duration
+	Base                libconfig.Base
+	DatabaseURL         string
+	ContentDatabaseURL  string
+	LearningDatabaseURL string
+	JWTSecret           string
+	AccessTTL           time.Duration
+	RefreshTTL          time.Duration
 }
 
 func Load() (Config, error) {
@@ -40,11 +42,13 @@ func Load() (Config, error) {
 		return Config{}, err
 	}
 	return Config{
-		Base:        base,
-		DatabaseURL: dbURL,
-		JWTSecret:   jwt,
-		AccessTTL:   access,
-		RefreshTTL:  refresh,
+		Base:                base,
+		DatabaseURL:         dbURL,
+		ContentDatabaseURL:  os.Getenv("CONTENT_DATABASE_URL"),
+		LearningDatabaseURL: os.Getenv("LEARNING_DATABASE_URL"),
+		JWTSecret:           jwt,
+		AccessTTL:           access,
+		RefreshTTL:          refresh,
 	}, nil
 }
 

@@ -5,6 +5,8 @@ import (
 	"net/http/httputil"
 	"net/url"
 	"strings"
+
+	httpmw "github.com/even-app/even-app/libs/http/middleware"
 )
 
 // Mount registers a reverse proxy for paths with the given prefix.
@@ -14,6 +16,13 @@ func Mount(mux *http.ServeMux, prefix, targetBase string) error {
 		return err
 	}
 	proxy := httputil.NewSingleHostReverseProxy(target)
+	origDirector := proxy.Director
+	proxy.Director = func(req *http.Request) {
+		origDirector(req)
+		if id, ok := httpmw.RequestIDFromContext(req.Context()); ok {
+			req.Header.Set("X-Request-Id", id)
+		}
+	}
 	mux.Handle(prefix, proxy)
 	return nil
 }
@@ -25,6 +34,13 @@ func MountPattern(mux *http.ServeMux, pattern, targetBase string) error {
 		return err
 	}
 	proxy := httputil.NewSingleHostReverseProxy(target)
+	origDirector := proxy.Director
+	proxy.Director = func(req *http.Request) {
+		origDirector(req)
+		if id, ok := httpmw.RequestIDFromContext(req.Context()); ok {
+			req.Header.Set("X-Request-Id", id)
+		}
+	}
 	mux.Handle(pattern, proxy)
 	return nil
 }

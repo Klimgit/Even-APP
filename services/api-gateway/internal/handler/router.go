@@ -38,6 +38,9 @@ func New(cfg config.Config, jwtMgr *libjwt.Manager) (http.Handler, error) {
 	if err := proxy.MountPattern(mux, "/api/v1/platform/users", authBase); err != nil {
 		return nil, err
 	}
+	if err := proxy.MountPattern(mux, "/api/v1/platform/stats", authBase); err != nil {
+		return nil, err
+	}
 	if err := proxy.Mount(mux, "/api/v1/teacher/media/", mediaBase); err != nil {
 		return nil, err
 	}
@@ -115,5 +118,5 @@ func New(cfg config.Config, jwtMgr *libjwt.Manager) (http.Handler, error) {
 		return gwready.CheckBackends(ctx, backends)
 	})
 
-	return middleware.CORS(gwmw.RequireJWT(jwtMgr)(mux)), nil
+	return middleware.RequestID(middleware.CORS(gwmw.RequireJWT(jwtMgr)(mux))), nil
 }

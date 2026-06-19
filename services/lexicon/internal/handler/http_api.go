@@ -633,6 +633,42 @@ func (h *HTTPHandler) GetTeacherLexemeUsage(ctx context.Context, params http_v1.
 	return &http_v1.LexemeUsageResponse{LexemeID: params.LexemeId, Usages: items}, nil
 }
 
+func (h *HTTPHandler) ImportPlatformLexicon(ctx context.Context, req *http_v1.ImportLexiconRequest, params http_v1.ImportPlatformLexiconParams) (http_v1.ImportPlatformLexiconRes, error) {
+	if err := h.requireAdmin(ctx); err != nil {
+		return nil, err
+	}
+	claims, _ := middleware.ClaimsFromContext(ctx)
+	items := make([]service.CreateLexemeInput, 0, len(req.Items))
+	for _, item := range req.Items {
+		in := service.CreateLexemeInput{Lemma: item.Lemma, CreatedBy: &claims.UserID}
+		if v, ok := item.PartOfSpeech.Get(); ok {
+			in.PartOfSpeech = &v
+		}
+		if v, ok := item.Notes.Get(); ok {
+			in.Notes = &v
+		}
+		for _, t := range item.Translations {
+			in.Translations = append(in.Translations, struct {
+				TargetLanguageID uuid.UUID
+				Text             string
+			}{
+				TargetLanguageID: t.TargetLanguageID,
+				Text:             t.Text,
+			})
+		}
+		items = append(items, in)
+	}
+	result, err := h.svc.ImportLexemes(ctx, params.Code, items)
+	if err != nil {
+		return nil, err
+	}
+	return &http_v1.ImportLexiconResponse{
+		Created: result.Created,
+		Skipped: result.Skipped,
+		Failed:  result.Failed,
+	}, nil
+}
+
 func notFound(msg string) *http_v1.ErrorResponse {
 	r := errBody(msg)
 	return &r

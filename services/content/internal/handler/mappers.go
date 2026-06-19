@@ -101,14 +101,15 @@ func mapBlock(row query.LessonBlock) http_v1.LessonBlock {
 	return out
 }
 
-func mapBlockTypes(cats []domain.BlockTypeCategory) []http_v1.BlockTypeCategory {
+func mapBlockTypes(cats []domain.BlockTypeCategory, favorites map[string]struct{}) []http_v1.BlockTypeCategory {
 	out := make([]http_v1.BlockTypeCategory, len(cats))
 	for i, cat := range cats {
 		types := make([]http_v1.BlockTypeInfo, len(cat.Types))
 		for j, t := range cat.Types {
+			_, isFav := favorites[t.BlockType]
 			info := http_v1.BlockTypeInfo{
 				BlockType: t.BlockType, Title: t.Title,
-				IsGradable: t.IsGradable, IsFavorite: false,
+				IsGradable: t.IsGradable, IsFavorite: isFav,
 			}
 			if t.Description != "" {
 				info.Description = http_v1.NewOptString(t.Description)

@@ -182,6 +182,7 @@ Gateway: `/api/v1/platform/users` → auth (не lexicon).
 | Метод | Путь | Auth | Статус |
 |-------|------|------|--------|
 | GET | `/platform/users` | admin | 200 `{ items, total }` |
+| GET | `/platform/stats` | admin | 200 cross-DB aggregates |
 | PATCH | `/platform/users/{userId}` | admin | 200 `UserDTO` |
 
 Query GET: `?q=`, `?role=`, `?page=`, `?limit=`.
@@ -197,7 +198,7 @@ Query GET: `?q=`, `?role=`, `?page=`, `?limit=`.
 | Languages | `GET/POST/PATCH /platform/languages`, alphabet CRUD, reorder | admin |
 | Grammar | `GET/POST /platform/languages/{code}/grammar-topics`, `PATCH/DELETE /platform/grammar-topics/{id}` | admin |
 | Sounds | `GET/POST/PATCH/DELETE /platform/.../sounds`, letter links | admin |
-| Lexicon | `GET/POST /platform/languages/{code}/lexicon`, lexeme/forms/translations/media CRUD | admin |
+| Lexicon | `GET/POST /platform/languages/{code}/lexicon`, `POST .../lexicon/import`, lexeme/forms/translations/media CRUD | admin |
 
 **Проверка:** `just verify-api` (секции 4–8).
 
@@ -237,7 +238,7 @@ Gateway: `/api/v1/teacher/*` (кроме media/lexicon picker) → content. ~29 
 
 | Группа | Пути | Auth |
 |--------|------|------|
-| Block types | `GET /teacher/block-types` | teacher |
+| Block types | `GET /teacher/block-types` (+ `is_favorite`), `POST/DELETE .../favorite` | teacher |
 | Courses | CRUD + publish, lessons CRUD + publish | owner |
 | Sections/blocks | CRUD, reorder | owner |
 | Coverage | `/teacher/courses/{id}/lexicon`, by-lesson, forms-coverage | owner |
@@ -257,15 +258,15 @@ Gateway: `/api/v1/courses/`, `/lessons/`, `/progress/`, `/review/`, `/dictionary
 | GET | `/courses/public` | public (optional JWT) | 200 published catalog |
 | POST | `/courses/join` | student | 201 |
 | GET | `/courses`, `/courses/{id}`, `/courses/{id}/lessons`, `/courses/{id}/outline` | enrollment | 200 (`target_language` filled) |
-| GET | `/lessons/{id}`, `/lessons/{id}/flow` | enrollment | 200 (`resolved_lexemes` on lesson) |
+| GET | `/lessons/{id}`, `/lessons/{id}/flow` | enrollment | 200 (`resolved_lexemes`, `resolved_media` on lesson) |
 | POST | `/progress/blocks/{id}/attempt` | enrollment | 200 (11 gradable types) |
 | GET | `/progress/lessons/{id}` | enrollment | 200 |
-| GET | `/progress/summary` | JWT | 200 aggregated stats |
+| GET | `/progress/summary` | JWT | 200 (`completed_lessons`, `completed_blocks`, …) |
 | GET | `/review` | JWT | 200 |
 | POST | `/review/session` | JWT | 200 start review session |
 | GET | `/dictionary` | JWT | 200 |
 
-Learning читает опубликованные уроки из `even_content` через `CONTENT_DATABASE_URL` (snapshots при join) и языки/лексемы из `even_lexicon` через `LEXICON_DATABASE_URL`.
+Learning читает опубликованные уроки из `even_content` через `CONTENT_DATABASE_URL` (snapshots при join), языки/лексемы из `even_lexicon` через `LEXICON_DATABASE_URL`, media URLs через `MEDIA_DATABASE_URL`.
 
 **Seed + e2e:** `just seed-znakomstvo`, `just verify-api` (секция 15).
 
@@ -275,12 +276,16 @@ Learning читает опубликованные уроки из `even_content
 
 | Фича | Статус |
 |------|--------|
-| Grammar topics CRUD | ✅ platform admin (`/platform/languages/{code}/grammar-topics`) |
+| Grammar topics CRUD | ✅ platform admin |
 | `POST /review/session` | ✅ |
 | Email enroll `POST /teacher/students` | ✅ |
-| Block config validation | ✅ on create/patch block |
-| Block-type favorites | не в OpenAPI |
+| Block config validation | ✅ required keys per block type on create/patch |
+| Block-type favorites | ✅ `POST/DELETE /teacher/block-types/{blockType}/favorite` |
+| Bulk lexicon import | ✅ `POST /platform/languages/{code}/lexicon/import` |
+| `GET /platform/stats` | ✅ cross-DB (auth + content + learning) |
+| Extended block types in catalog | ✅ preview types in `GET /teacher/block-types` (grammar_table, reading, …) |
 | Manual enrollments (admin) | не в OpenAPI |
-| Strict JSON schema validation для block `config` | частично (required keys per type) |
-| Bulk lexicon import, audit log, `GET /platform/stats` | не в OpenAPI |
+| Audit log | не в OpenAPI |
+| Strict JSON Schema validation для block `config` | частично (required keys per type) |
+| `time_spent_seconds` в progress summary | нужна миграция + tracking |
 

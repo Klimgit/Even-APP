@@ -76,7 +76,7 @@ func mapOutlineBlock(b service.OutlineBlock) http_v1.CourseOutlineBlock {
 	return out
 }
 
-func mapLesson(s domain.LessonSnapshot, lexemes map[uuid.UUID]repository.LexemeView) http_v1.Lesson {
+func mapLesson(s domain.LessonSnapshot, lexemes map[uuid.UUID]repository.LexemeView, media map[uuid.UUID]repository.MediaView) http_v1.Lesson {
 	sections := make([]http_v1.LessonSection, 0, len(s.Sections))
 	blocksBySection := map[string][]http_v1.LessonBlock{}
 	orphanBlocks := make([]http_v1.LessonBlock, 0)
@@ -109,6 +109,26 @@ func mapLesson(s domain.LessonSnapshot, lexemes map[uuid.UUID]repository.LexemeV
 	}
 	if resolved := mapResolvedLexemes(lexemes); resolved != nil {
 		out.ResolvedLexemes = http_v1.NewOptLessonResolvedLexemes(resolved)
+	}
+	if resolvedMedia := mapResolvedMedia(media); resolvedMedia != nil {
+		out.ResolvedMedia = http_v1.NewOptLessonResolvedMedia(resolvedMedia)
+	}
+	return out
+}
+
+func mapResolvedMedia(items map[uuid.UUID]repository.MediaView) http_v1.LessonResolvedMedia {
+	if len(items) == 0 {
+		return nil
+	}
+	out := make(http_v1.LessonResolvedMedia, len(items))
+	for id, m := range items {
+		item := http_v1.ResolvedMedia{
+			ID: m.ID, URL: repository.MediaRefURL(m.Scope, m.ID),
+			DisplayName: m.DisplayName, MimeType: m.MimeType,
+			MediaKind: http_v1.ResolvedMediaMediaKind(m.MediaKind),
+			Scope:     http_v1.ResolvedMediaScope(m.Scope),
+		}
+		out[id.String()] = item
 	}
 	return out
 }

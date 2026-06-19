@@ -20,10 +20,11 @@ type LearningService struct {
 	q       *query.Queries
 	content *repository.ContentReader
 	lexicon *repository.LexiconReader
+	media   *repository.MediaReader
 }
 
-func NewLearningService(db *pgxpool.Pool, content *repository.ContentReader, lexicon *repository.LexiconReader) *LearningService {
-	return &LearningService{db: db, q: query.New(db), content: content, lexicon: lexicon}
+func NewLearningService(db *pgxpool.Pool, content *repository.ContentReader, lexicon *repository.LexiconReader, media *repository.MediaReader) *LearningService {
+	return &LearningService{db: db, q: query.New(db), content: content, lexicon: lexicon, media: media}
 }
 
 type JoinResult struct {
@@ -725,10 +726,11 @@ func (s *LearningService) ListPublicCourses(ctx context.Context) ([]PublicCourse
 }
 
 type ProgressSummary struct {
-	EnrolledCourses int
-	DictionaryWords int
-	ReviewDue       int
-	CompletedBlocks int
+	EnrolledCourses  int
+	DictionaryWords  int
+	ReviewDue        int
+	CompletedBlocks  int
+	CompletedLessons int
 }
 
 func (s *LearningService) GetProgressSummary(ctx context.Context, userID uuid.UUID) (ProgressSummary, error) {
@@ -737,10 +739,11 @@ func (s *LearningService) GetProgressSummary(ctx context.Context, userID uuid.UU
 		return ProgressSummary{}, err
 	}
 	return ProgressSummary{
-		EnrolledCourses: int(row.EnrolledCourses),
-		DictionaryWords: int(row.DictionaryWords),
-		ReviewDue:       int(row.ReviewDue),
-		CompletedBlocks: int(row.CompletedBlocks),
+		EnrolledCourses:  int(row.EnrolledCourses),
+		DictionaryWords:  int(row.DictionaryWords),
+		ReviewDue:        int(row.ReviewDue),
+		CompletedBlocks:  int(row.CompletedBlocks),
+		CompletedLessons: int(row.CompletedLessons),
 	}, nil
 }
 
@@ -779,6 +782,18 @@ func (s *LearningService) LexemeLookup(ctx context.Context, snap *domain.LessonS
 		return nil
 	}
 	out, err := s.lexicon.LexemesByIDs(ctx, ids)
+	if err != nil {
+		return nil
+	}
+	return out
+}
+
+func (s *LearningService) MediaLookup(ctx context.Context, snap *domain.LessonSnapshot) map[uuid.UUID]repository.MediaView {
+	ids := collectMediaIDs(snap)
+	if len(ids) == 0 || !s.media.Available() {
+		return nil
+	}
+	out, err := s.media.MediaByIDs(ctx, ids)
 	if err != nil {
 		return nil
 	}
@@ -835,6 +850,49 @@ func walkLexemeIDs(v any, seen map[uuid.UUID]struct{}) {
 	case []any:
 		for _, item := range t {
 			walkLexemeIDs(item, seen)
+		}
+	}
+}
+
+func collectMediaIDs(snap *domain.LessonSnapshot) []uuid.UUID {
+	if snap == nil {
+		return nil
+	}
+	seen := make(map[uuid.UUID]struct{})
+	for _, b := range snap.Blocks {
+		collectMediaIDsFromConfig(b.Config, seen)
+	}
+	out := make([]uuid.UUID, 0, len(seen))
+	for id := range seen {
+		out = append(out, id)
+	}
+	return out
+}
+
+func collectMediaIDsFromConfig(cfg json.RawMessage, seen map[uuid.UUID]struct{}) {
+	var raw any
+	if err := json.Unmarshal(cfg, &raw); err != nil {
+		return
+	}
+	walkMediaIDs(raw, seen)
+}
+
+func walkMediaIDs(v any, seen map[uuid.UUID]struct{}) {
+	switch t := v.(type) {
+	case map[string]any:
+		for k, val := range t {
+			if k == "media_asset_id" || k == "mediaAssetId" {
+				if s, ok := val.(string); ok {
+					if id, err := uuid.Parse(s); err == nil {
+						seen[id] = struct{}{}
+					}
+				}
+			}
+			walkMediaIDs(val, seen)
+		}
+	case []any:
+		for _, item := range t {
+			walkMediaIDs(item, seen)
 		}
 	}
 }

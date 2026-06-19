@@ -59,10 +59,20 @@ func main() {
 		lexiconPool = repository.NewLexiconReader(lp)
 	}
 
+	var mediaPool *repository.MediaReader
+	if cfg.HasMediaDB() {
+		mp, err := postgres.NewPool(ctx, cfg.MediaDatabaseURL)
+		if err != nil {
+			log.Fatalf("media database: %v", err)
+		}
+		defer mp.Close()
+		mediaPool = repository.NewMediaReader(mp)
+	}
+
 	jwtMgr := libjwt.NewManager(cfg.JWTSecret, cfg.AccessTTL())
 	ready := func(ctx context.Context) error { return pool.Ping(ctx) }
 
-	learnSvc := service.NewLearningService(pool, contentPool, lexiconPool)
+	learnSvc := service.NewLearningService(pool, contentPool, lexiconPool, mediaPool)
 	httpHandler := learnhandler.NewHTTPHandler(learnSvc)
 	secHandler := learnhandler.NewSecurityHandler(jwtMgr)
 

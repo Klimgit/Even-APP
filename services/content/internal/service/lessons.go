@@ -2,7 +2,6 @@ package service
 
 import (
 	"context"
-	"encoding/json"
 
 	"github.com/even-app/even-app/services/content/internal/domain"
 	"github.com/even-app/even-app/services/content/internal/gen/query"
@@ -259,20 +258,7 @@ func (s *ContentService) PatchBlock(ctx context.Context, blockID, userID uuid.UU
 }
 
 func validateBlockInput(blockType string, config []byte) error {
-	if blockType == "" {
-		return domain.ErrValidation
-	}
-	if !domain.IsKnownBlockType(blockType) {
-		return domain.ErrValidation
-	}
-	if len(config) == 0 {
-		return nil
-	}
-	var obj map[string]json.RawMessage
-	if err := json.Unmarshal(config, &obj); err != nil {
-		return domain.ErrValidation
-	}
-	return nil
+	return domain.ValidateBlockConfig(blockType, config)
 }
 
 func (s *ContentService) DeleteBlock(ctx context.Context, blockID, userID uuid.UUID, isAdmin bool) error {

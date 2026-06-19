@@ -17,7 +17,9 @@ import (
 	http_v1 "github.com/even-app/even-app/services/auth/internal/gen/http/v1"
 	"github.com/even-app/even-app/services/auth/internal/gen/query"
 	authhandler "github.com/even-app/even-app/services/auth/internal/handler"
+	"github.com/even-app/even-app/services/auth/internal/repository"
 	"github.com/even-app/even-app/services/auth/internal/service"
+	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/joho/godotenv"
 )
 
@@ -43,7 +45,25 @@ func main() {
 	ready := func(ctx context.Context) error { return pool.Ping(ctx) }
 
 	querier := query.New(pool)
-	authSvc := service.NewAuthService(querier, jwtMgr, cfg.RefreshTTL)
+	var contentPool, learningPool *pgxpool.Pool
+	if cfg.ContentDatabaseURL != "" {
+		cp, err := postgres.NewPool(ctx, cfg.ContentDatabaseURL)
+		if err != nil {
+			log.Fatalf("content database: %v", err)
+		}
+		defer cp.Close()
+		contentPool = cp
+	}
+	if cfg.LearningDatabaseURL != "" {
+		lp, err := postgres.NewPool(ctx, cfg.LearningDatabaseURL)
+		if err != nil {
+			log.Fatalf("learning database: %v", err)
+		}
+		defer lp.Close()
+		learningPool = lp
+	}
+	statsReader := repository.NewPlatformStatsReader(contentPool, learningPool)
+	authSvc := service.NewAuthService(querier, jwtMgr, cfg.RefreshTTL, statsReader)
 	httpHandler := authhandler.NewHTTPHandler(authSvc)
 	secHandler := authhandler.NewSecurityHandler(jwtMgr)
 

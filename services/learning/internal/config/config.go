@@ -14,6 +14,7 @@ type Config struct {
 	DatabaseURL        string
 	ContentDatabaseURL string
 	LexiconDatabaseURL string
+	MediaDatabaseURL   string
 	JWTSecret          string
 }
 
@@ -32,13 +33,19 @@ func Load() (Config, error) {
 	}
 	contentURL := os.Getenv("CONTENT_DATABASE_URL")
 	lexiconURL := os.Getenv("LEXICON_DATABASE_URL")
+	mediaURL := os.Getenv("MEDIA_DATABASE_URL")
 	return Config{
 		Base:               base,
 		DatabaseURL:        dbURL,
 		ContentDatabaseURL: contentURL,
 		LexiconDatabaseURL: lexiconURL,
+		MediaDatabaseURL:   mediaURL,
 		JWTSecret:          jwt,
 	}, nil
+}
+
+func (c Config) HasMediaDB() bool {
+	return c.MediaDatabaseURL != ""
 }
 
 func (c Config) HasLexiconDB() bool {

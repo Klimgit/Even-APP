@@ -82,3 +82,16 @@ sql:
         emit_sql_as_comment: true
         emit_pointers_for_null_types: true
         query_parameter_limit: 0
+  - engine: "postgresql"
+    queries: "./queries/media/"
+    schema: "./schema/media/"
+    gen:
+      go:
+        package: "mediaquery"
+        out: "../internal/gen/mediaquery/"
+        sql_package: "pgx/v5"
+        sql_driver: "github.com/jackc/pgx/v5"
+        omit_unused_structs: true
+        emit_sql_as_comment: true
+        emit_pointers_for_null_types: true
+        query_parameter_limit: 0

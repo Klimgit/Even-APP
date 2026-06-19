@@ -135,10 +135,11 @@ func (h *HTTPHandler) GetProgressSummary(ctx context.Context) (http_v1.GetProgre
 		return nil, err
 	}
 	return &http_v1.ProgressSummary{
-		EnrolledCourses: summary.EnrolledCourses,
-		DictionaryWords: summary.DictionaryWords,
-		ReviewDue:       summary.ReviewDue,
-		CompletedBlocks: summary.CompletedBlocks,
+		EnrolledCourses:  summary.EnrolledCourses,
+		DictionaryWords:  summary.DictionaryWords,
+		ReviewDue:        summary.ReviewDue,
+		CompletedBlocks:  summary.CompletedBlocks,
+		CompletedLessons: summary.CompletedLessons,
 	}, nil
 }
 
@@ -192,7 +193,7 @@ func (h *HTTPHandler) GetLesson(ctx context.Context, params http_v1.GetLessonPar
 		}
 		return nil, err
 	}
-	out := mapLesson(*snap, h.svc.LexemeLookup(ctx, snap))
+	out := mapLesson(*snap, h.svc.LexemeLookup(ctx, snap), h.svc.MediaLookup(ctx, snap))
 	return &out, nil
 }
 

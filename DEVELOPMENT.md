@@ -217,6 +217,7 @@ just run-auth-local                              # foreground, Ctrl+C для о�
 | **content** | `LEARNING_DATABASE_URL` | список учеников, прогресс, enroll по invite/email |
 | **content** | `AUTH_DATABASE_URL` | lookup user по email для `POST /teacher/students` |
 | **lexicon** | `CONTENT_DATABASE_URL` | `GET /teacher/lexemes/{id}/usage` — scan block configs |
+| **auth** | `CONTENT_DATABASE_URL`, `LEARNING_DATABASE_URL` | `GET /platform/stats` — published courses, active enrollments |
 
 Языки дублируются в `even_lexicon` и `even_media`. После bootstrap: `just seed-languages` (или `scripts/seed-languages.sh`) — создаёт evn/ru в lexicon через API и синхронизирует строки в media DB.
 
@@ -225,6 +226,19 @@ just run-auth-local                              # foreground, Ctrl+C для о�
 | Переменная | Описание |
 |------------|----------|
 | `CORS_ALLOWED_ORIGINS` | Список origin через запятую (`http://127.0.0.1:5174,http://localhost:5173`). Пусто = `*` (локальная разработка). |
+
+### Production checklist (staging / prod)
+
+Перед деплоем проверьте:
+
+| Область | Переменные / действия |
+|---------|----------------------|
+| **Secrets** | `JWT_SECRET` — уникальный длинный секрет; `POSTGRES_PASSWORD`; `S3_ACCESS_KEY` / `S3_SECRET_KEY` (не minio defaults) |
+| **DSN** | Все `*_DATABASE_URL` для каждого сервиса; cross-DB URL в compose (`auth`, `content`, `learning`, `lexicon`) |
+| **CORS** | `CORS_ALLOWED_ORIGINS` на gateway — явный allowlist origin Flutter web / admin (не `*`) |
+| **S3** | `S3_PUBLIC_ENDPOINT` — URL, доступный клиенту для presigned links |
+| **Observability** | Gateway propagates `X-Request-Id` к upstream; structured logs включают `request_id` |
+| **OpenAPI** | `GET /api/v1/openapi.yaml` на gateway содержит merged paths (`/courses/public`, `/progress/summary`, `/platform/stats`, …) |
 
 На хосте в DSN всегда `localhost:5432`. Внутри Docker compose подставляет `postgres:5432` сам.
 
@@ -810,7 +824,7 @@ JWT middleware в gateway проверяет Bearer на всех маршрут
 |-------|------------|
 | `libs/config` | `LoadBase`, `LoadS3`, `MustGetenv` |
 | `libs/core/logger` | JSON slog |
-| `libs/http/middleware` | logging, recovery, CORS |
+| `libs/http/middleware` | logging, recovery, CORS, request ID (`X-Request-Id`) |
 | `libs/http/server` | `Run`, `RegisterHealth`, `RegisterReady` |
 | `libs/postgres` | pgx pool из `DATABASE_URL` |
 

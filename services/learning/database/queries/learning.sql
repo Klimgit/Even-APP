@@ -161,7 +161,29 @@ SELECT
     (SELECT COUNT(*)::int FROM course_enrollments ce WHERE ce.user_id = $1 AND ce.status = 'active') AS enrolled_courses,
     (SELECT COUNT(*)::int FROM user_vocabulary uv WHERE uv.user_id = $1) AS dictionary_words,
     (SELECT COUNT(*)::int FROM user_review_items uri WHERE uri.user_id = $1 AND uri.status = 'pending' AND uri.due_at <= now()) AS review_due,
-    (SELECT COUNT(*)::int FROM user_block_progress ubp WHERE ubp.user_id = $1 AND ubp.status = 'completed') AS completed_blocks;
+    (SELECT COUNT(*)::int FROM user_block_progress ubp WHERE ubp.user_id = $1 AND ubp.status = 'completed') AS completed_blocks,
+    (SELECT COUNT(*)::int
+     FROM published_lesson_snapshots pls
+     JOIN course_enrollments ce ON ce.course_id = pls.course_id AND ce.user_id = $1 AND ce.status = 'active'
+     WHERE (
+         SELECT COUNT(*)::int
+         FROM jsonb_array_elements(pls.snapshot->'blocks') AS elem
+         WHERE COALESCE((elem->>'is_gradable')::bool, false) = true
+     ) > 0
+     AND (
+         SELECT COUNT(*) FILTER (WHERE ubp.status = 'completed')::int
+         FROM user_block_progress ubp
+         WHERE ubp.user_id = $1
+           AND ubp.lesson_block_id IN (
+               SELECT (elem->>'id')::uuid
+               FROM jsonb_array_elements(pls.snapshot->'blocks') AS elem
+               WHERE COALESCE((elem->>'is_gradable')::bool, false) = true
+           )
+     ) = (
+         SELECT COUNT(*)::int
+         FROM jsonb_array_elements(pls.snapshot->'blocks') AS elem
+         WHERE COALESCE((elem->>'is_gradable')::bool, false) = true
+     )) AS completed_lessons;
 
 -- name: ListEnrollmentsByCourse :many
 SELECT user_id, course_id, status, enrolled_at, enrolled_by

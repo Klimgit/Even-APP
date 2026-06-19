@@ -29,9 +29,9 @@ var gradableBlockTypes = map[string]struct{}{
 	"listen_sentence_type":       {},
 }
 
-// IsKnownBlockType reports whether blockType is in the MVP catalog.
+// IsKnownBlockType reports whether blockType is in the MVP + Phase 2 catalog.
 func IsKnownBlockType(blockType string) bool {
-	for _, cat := range MVPBlockTypeCatalog() {
+	for _, cat := range FullBlockTypeCatalog() {
 		for _, t := range cat.Types {
 			if t.BlockType == blockType {
 				return true
@@ -86,4 +86,36 @@ func MVPBlockTypeCatalog() []BlockTypeCategory {
 			},
 		},
 	}
+}
+
+// Phase2BlockTypeCatalog returns preview block types not yet fully supported in the editor.
+func Phase2BlockTypeCatalog() []BlockTypeCategory {
+	return []BlockTypeCategory{
+		{
+			ID:    "grammar",
+			Title: "Грамматика (Phase 2)",
+			Types: []BlockTypeInfo{
+				{BlockType: "grammar_table", Title: "Грамматическая таблица", Description: "Phase 2", IsGradable: false},
+				{BlockType: "grammar_exercise", Title: "Грамматическое упражнение", Description: "Phase 2", IsGradable: true},
+			},
+		},
+		{
+			ID:    "reading",
+			Title: "Чтение (Phase 2)",
+			Types: []BlockTypeInfo{
+				{BlockType: "reading_passage", Title: "Текст для чтения", Description: "Phase 2", IsGradable: false},
+				{BlockType: "reading_comprehension", Title: "Понимание текста", Description: "Phase 2", IsGradable: true},
+			},
+		},
+	}
+}
+
+// FullBlockTypeCatalog returns MVP + Phase 2 preview types for the editor palette.
+func FullBlockTypeCatalog() []BlockTypeCategory {
+	mvp := MVPBlockTypeCatalog()
+	phase2 := Phase2BlockTypeCatalog()
+	out := make([]BlockTypeCategory, 0, len(mvp)+len(phase2))
+	out = append(out, mvp...)
+	out = append(out, phase2...)
+	return out
 }

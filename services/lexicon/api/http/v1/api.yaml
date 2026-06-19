@@ -843,6 +843,47 @@ paths:
         default:
           $ref: "#/components/responses/DefaultError"
 
+  /api/v1/platform/languages/{code}/lexicon/import:
+    post:
+      operationId: importPlatformLexicon
+      tags: [PlatformLexicon]
+      summary: Bulk import lexemes from JSON (platform admin)
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: code
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ImportLexiconRequest"
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ImportLexiconResponse"
+        "401":
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "403":
+          description: Platform admin required
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        default:
+          $ref: "#/components/responses/DefaultError"
+
   /api/v1/platform/lexemes/{lexemeId}:
     get:
       operationId: getPlatformLexeme
@@ -1894,6 +1935,26 @@ components:
           type: array
           items:
             $ref: "#/components/schemas/CreateLexemeTranslationInput"
+
+    ImportLexiconRequest:
+      type: object
+      required: [items]
+      properties:
+        items:
+          type: array
+          items:
+            $ref: "#/components/schemas/CreateLexemeRequest"
+
+    ImportLexiconResponse:
+      type: object
+      required: [created, skipped, failed]
+      properties:
+        created:
+          type: integer
+        skipped:
+          type: integer
+        failed:
+          type: integer
 
     CreateLexemeTranslationInput:
       type: object

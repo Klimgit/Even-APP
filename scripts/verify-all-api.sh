@@ -30,6 +30,15 @@ for url in "$GW/health" "$GW/api/v1/ready" "$GW/api/v1/gateway/status" \
   c=$(code "$url"); expect 200 "$c" "GET $url"
 done
 c=$(code "$GW/api/v1/openapi.yaml"); [[ "$c" == "200" ]] && pass "GET openapi.yaml → 200" || fail "openapi → $c"
+curl -sf "$GW/api/v1/openapi.yaml" -o /tmp/verify-openapi.yaml
+for path in \
+  "/api/v1/courses/public:" \
+  "/api/v1/progress/summary:" \
+  "/api/v1/platform/stats:" \
+  "/api/v1/platform/languages/{code}/lexicon/import:" \
+  "/api/v1/teacher/block-types/{blockType}/favorite:"; do
+  grep -q "$path" /tmp/verify-openapi.yaml && pass "openapi contains $path" || fail "openapi missing $path"
+done
 
 echo ""
 echo "=== 2. Auth ==="
@@ -160,6 +169,12 @@ TOPIC_ID=$(python3 -c "import json; print(json.load(open('$BODY'))['id'])")
 c=$(code -H "Authorization: Bearer $TOKEN" "$GW/api/v1/platform/languages/$V_CODE/grammar-topics"); expect 200 "$c" "GET grammar topics"
 python3 -c "import json; d=json.load(open('$BODY')); assert len(d)>=1" || fail "grammar topics empty"
 pass "grammar topics list"
+c=$(code -H "Authorization: Bearer $TOKEN" -X POST "$GW/api/v1/platform/languages/$V_CODE/lexicon/import" \
+  -H 'Content-Type: application/json' \
+  -d "{\"items\":[{\"lemma\":\"import-$RANDOM\",\"translations\":[{\"target_language_id\":\"$RU_LEX_ID\",\"text\":\"test\"}]}]}")
+expect 200 "$c" "POST lexicon import"
+python3 -c "import json; d=json.load(open('$BODY')); assert d.get('created',0)>=1" || fail "import created=0"
+pass "lexicon bulk import"
 c=$(code -H "Authorization: Bearer $TOKEN" -X PATCH "$GW/api/v1/platform/grammar-topics/$TOPIC_ID" \
   -H 'Content-Type: application/json' -d '{"title":"Cases updated"}'); expect 200 "$c" "PATCH grammar topic"
 c=$(code -H "Authorization: Bearer $TOKEN" -X DELETE "$GW/api/v1/platform/grammar-topics/$TOPIC_ID"); expect 204 "$c" "DELETE grammar topic"
@@ -194,6 +209,9 @@ c=$(code -H "Authorization: Bearer $STOKEN" "$GW/api/v1/platform/languages"); ex
 echo ""
 echo "=== 11. Platform users ==="
 c=$(code -H "Authorization: Bearer $TOKEN" "$GW/api/v1/platform/users?limit=5"); expect 200 "$c" "GET /platform/users"
+c=$(code -H "Authorization: Bearer $TOKEN" "$GW/api/v1/platform/stats"); expect 200 "$c" "GET /platform/stats"
+python3 -c "import json; d=json.load(open('$BODY')); assert d.get('users',{}).get('total',0)>=1 and 'published_courses' in d" || fail "platform stats shape"
+pass "platform stats"
 c=$(code -H "Authorization: Bearer $TOKEN" -X PATCH "$GW/api/v1/platform/users/$USER_ID" \
   -H 'Content-Type: application/json' -d '{"display_name":"Platform Admin"}'); expect 200 "$c" "PATCH /platform/users/{id}"
 c=$(code -H "Authorization: Bearer $STOKEN" "$GW/api/v1/platform/users"); expect 403 "$c" "student platform/users"
@@ -235,6 +253,16 @@ echo "=== 14. Content teacher ==="
 c=$(code -H "Authorization: Bearer $TOKEN" "$GW/api/v1/teacher/block-types"); expect 200 "$c" "GET teacher/block-types"
 python3 -c "import json; d=json.load(open('$BODY')); assert len(d)>=2" || fail "block-types categories"
 pass "block-types catalog"
+c=$(code -H "Authorization: Bearer $TOKEN" -X POST "$GW/api/v1/teacher/block-types/vocabulary_set/favorite"); expect 204 "$c" "POST block-type favorite"
+c=$(code -H "Authorization: Bearer $TOKEN" "$GW/api/v1/teacher/block-types"); expect 200 "$c" "GET block-types after favorite"
+python3 -c "
+import json
+d=json.load(open('$BODY'))
+found=any(t.get('block_type')=='vocabulary_set' and t.get('is_favorite') for c in d for t in c.get('types',[]))
+assert found, 'is_favorite not set'
+" || fail "block-type is_favorite"
+pass "block-type favorites"
+c=$(code -H "Authorization: Bearer $TOKEN" -X DELETE "$GW/api/v1/teacher/block-types/vocabulary_set/favorite"); expect 204 "$c" "DELETE block-type favorite"
 
 echo ""
 echo "=== 15. Seed «Знакомство» + learning e2e ==="
@@ -260,6 +288,8 @@ c=$(code -H "Authorization: Bearer $JTOKEN" "$GW/api/v1/courses"); expect 200 "$
 python3 -c "import json; d=json.load(open('$BODY')); assert d and d[0].get('target_language',{}).get('code')" || fail "target_language empty"
 pass "courses target_language populated"
 c=$(code -H "Authorization: Bearer $JTOKEN" "$GW/api/v1/progress/summary"); expect 200 "$c" "GET /progress/summary"
+python3 -c "import json; d=json.load(open('$BODY')); assert 'completed_lessons' in d" || fail "progress summary missing completed_lessons"
+pass "progress summary completed_lessons"
 c=$(code -H "Authorization: Bearer $JTOKEN" -X POST "$GW/api/v1/review/session" \
   -H 'Content-Type: application/json' -d '{}')
 [[ "$c" == "200" || "$c" == "204" ]] && pass "POST /review/session → $c" || fail "POST /review/session expected 200 or 204 got $c"
@@ -278,10 +308,11 @@ d=json.load(open('$BODY'))
 ids=[lid for s in d.get('sections',[]) for b in s.get('blocks',[]) for lid in (b.get('config') or {}).get('lexeme_ids') or []]
 assert ids, 'lesson has no lexeme_ids in blocks'
 resolved=d.get('resolved_lexemes') or {}
-if resolved:
-    assert any(i in resolved for i in ids), 'resolved_lexemes missing snapshot ids'
-" || fail "lesson lexeme payload"
-pass "lesson lexeme_ids in blocks (resolved_lexemes when lexicon rows exist)"
+assert resolved, 'resolved_lexemes missing'
+assert all(i in resolved for i in ids), f'resolved_lexemes missing ids: {ids}'
+assert all(resolved[i].get('lemma') for i in ids if i in resolved), 'lemma empty'
+" || fail "lesson resolved_lexemes"
+pass "lesson resolved_lexemes populated"
 c=$(code -H "Authorization: Bearer $JTOKEN" "$GW/api/v1/lessons/$ZNAKOMSTVO_LESSON_ID/flow"); expect 200 "$c" "GET /lessons/{id}/flow"
 c=$(code -H "Authorization: Bearer $JTOKEN" -X POST "$GW/api/v1/progress/blocks/$ZNAKOMSTVO_GRADABLE_BLOCK_ID/attempt" \
   -H 'Content-Type: application/json' \
