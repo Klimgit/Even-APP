@@ -2,7 +2,10 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 
+import 'package:online_cource_app/api/api_client.dart';
+import 'package:online_cource_app/controllers/api_auth_controller.dart';
 import 'package:online_cource_app/controllers/auth_controller.dart';
+import 'package:online_cource_app/Login/login_page.dart';
 import 'package:online_cource_app/theme/app_theme.dart';
 
 /// Teacher / admin workspace.
@@ -49,6 +52,16 @@ class _TeacherDashboardState extends State<TeacherDashboard> {
     );
   }
 
+  Future<void> _logout() async {
+    if (kUseApiAuth) {
+      await Get.find<ApiAuthController>().logout();
+    } else {
+      await _auth.signOutUsers();
+    }
+    // Login pushed this screen with offAll, so navigate back explicitly.
+    Get.offAll(() => const LoginPage());
+  }
+
   // ---------------------------------------------------------------------------
   // Top bar
   // ---------------------------------------------------------------------------
@@ -75,7 +88,7 @@ class _TeacherDashboardState extends State<TeacherDashboard> {
           PopupMenuButton<String>(
             offset: const Offset(0, 48),
             onSelected: (value) {
-              if (value == 'logout') _auth.signOutUsers();
+              if (value == 'logout') _logout();
             },
             itemBuilder: (context) => const [
               PopupMenuItem(value: 'logout', child: Text('Выйти')),
